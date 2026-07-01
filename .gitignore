@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Data cache (parquet files are fetched on demand)
+etf-strategies/cache/*.parquet
+etf-strategies/cache/etf_names.json
+
+# Generated reports & charts (reproducible via CLI)
+etf-strategies/equity_curves.png
+etf-strategies/drawdowns.png
+etf-strategies/03_ETF策略回测报告.md
+
+# Temporary scripts
+_*.py
+
+# OS
+.DS_Store
+Thumbs.db
