@@ -144,6 +144,98 @@ def _fn_signal():
     pause()
 
 
+def _fn_learn():
+    """查看策略详细介绍。"""
+    from strategy_kb import KB
+    from daily_signal import STRAT_MAP
+
+    options = []
+    for sid, (sname, _) in STRAT_MAP.items():
+        options.append((f"{sid}  {sname}", sid))
+    options.append(("← 返回主菜单", None))
+
+    choice = menu("📚 策略学习 — 选择策略查看详情", options)
+    if choice is None:
+        return
+
+    kb = KB.get(choice, {})
+    if not kb:
+        _clear()
+        print(f"\n  ❌ 未找到 {choice} 的知识库条目")
+        pause()
+        return
+
+    _clear()
+    print(f"""
+  {'='*60}
+    {choice} {kb.get('name', '')}  [{kb.get('category', '')}]
+  {'='*60}
+
+  📖 策略简介
+  {'─'*40}
+  {kb.get('intro', '')}
+
+  🎯 择股逻辑
+  {'─'*40}
+  {kb.get('stock_selection', '')}
+
+  ⏱️ 择时逻辑
+  {'─'*40}
+  {kb.get('market_timing', '')}
+
+  📐 使用因子
+  {'─'*40}
+  {kb.get('factors', '')}
+
+  🔄 调仓节奏
+  {'─'*40}
+  {kb.get('rebalance', '')}
+
+  ✅ 优势
+  {'─'*40}
+  {kb.get('strengths', '')}
+
+  ⚠️ 劣势
+  {'─'*40}
+  {kb.get('weaknesses', '')}
+
+  ⚙️ 回测参数
+  {'─'*40}""")
+    for k, v in kb.get("backtest", {}).items():
+        print(f"  {k}: {v}")
+
+    pause()
+
+
+def _fn_report():
+    """生成策略一年回测HTML报告。"""
+    from daily_signal import STRAT_MAP
+    from html_report import generate_report
+
+    options = []
+    for sid, (sname, _) in STRAT_MAP.items():
+        options.append((f"{sid}  {sname}", (sid, sname)))
+    options.append(("← 返回主菜单", None))
+
+    choice = menu("📄 生成一年回测报告 — 选择策略", options)
+    if choice is None:
+        return
+
+    sid, sname = choice
+    _, strat = STRAT_MAP[sid]
+
+    _clear()
+    print(f"  ⏳ 正在生成 {sid} {sname} 的一年回测报告...\n")
+    print(f"  📡 拉取近一年行情数据...")
+    try:
+        filepath = generate_report(sid, strat)
+        print(f"  ✅ 报告已生成: {filepath}")
+    except Exception as e:
+        print(f"\n  ❌ 报告生成失败: {e}")
+        print("  请检查网络连接（需访问东财 push2his API）")
+    pause()
+
+
 def _fn_backtest():
     """运行全量回测。"""
     _clear()
@@ -161,6 +253,8 @@ def _fn_backtest():
 MAIN_MENU = [
     ("📋 列出所有策略       — 查看已维护的 11 个策略", _fn_list),
     ("📊 查看每日信号       — 查看策略今日买卖操作",  _fn_signal),
+    ("📚 策略学习           — 查看策略原理/因子/择时", _fn_learn),
+    ("📄 一年回测报告       — 生成HTML报告（含走势图）", _fn_report),
     ("🚀 运行全量回测       — 生成回测报告+图表",   _fn_backtest),
     ("🚪 退出",              None),
 ]
@@ -182,6 +276,14 @@ def _cmd_dispatch():
     p_sig.add_argument("--all", action="store_true")
 
     p_bt = sub.add_parser("backtest", help="运行全量回测")
+
+    p_learn = sub.add_parser("learn", help="查看策略详细介绍")
+    p_learn.add_argument("strategy", nargs="?", default=None,
+                         help="策略编号 (S1~S11)，不填则列出可用策略")
+
+    p_rpt = sub.add_parser("report", help="生成策略一年回测HTML报告")
+    p_rpt.add_argument("strategy", nargs="?", default=None,
+                       help="策略编号 (S1~S11)，不填则列出可用策略")
 
     args = parser.parse_args()
 
@@ -206,6 +308,28 @@ def _cmd_dispatch():
                 print(f"\n❌ 信号生成失败: {e}")
         else:
             print("可用策略: " + ", ".join(STRAT_MAP.keys()))
+    elif args.command == "learn":
+        _fn_learn()
+    elif args.command == "report":
+        if args.strategy:
+            sid = args.strategy.upper()
+            if sid not in STRAT_MAP:
+                print(f"❌ 未知策略: {args.strategy}, 可用: {', '.join(STRAT_MAP)}")
+                return
+            sname, strat = STRAT_MAP[sid]
+            from html_report import generate_report
+            print(f"⏳ 正在生成 {sid} {sname} 的一年回测报告...")
+            filepath = generate_report(sid, strat)
+            print(f"✅ 报告已生成: {filepath}")
+        else:
+            from html_report import generate_report
+            for sid, (sname, strat) in STRAT_MAP.items():
+                try:
+                    print(f"⏳ {sid} {sname}...")
+                    fp = generate_report(sid, strat)
+                    print(f"  ✅ {fp}")
+                except Exception as e:
+                    print(f"  ❌ {e}")
     elif args.command == "backtest":
         _fn_backtest()
     else:

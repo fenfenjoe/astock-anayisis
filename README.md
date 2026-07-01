@@ -12,9 +12,11 @@ cd etf-strategies
 # 交互式 CLI（推荐）— 箭头键选择功能，回车执行
 python cli.py
 
-# 也可以直接调用独立脚本
+# 也可以直接调用独立脚本或命令行参数
 python list_strategies.py           # 列出所有策略
 python daily_signal.py S4           # 查看 S4 今日信号
+python cli.py learn S4              # 查看 S4 策略详细介绍
+python cli.py report S4             # 生成 S4 一年回测HTML报告
 python run_backtest.py              # 运行全量回测
 ```
 
@@ -69,7 +71,37 @@ MAIN_MENU = [
 
 新功能会自动出现在交互菜单中，无需修改参数解析逻辑。
 
-> 也可以命令行传参调用（兼容旧用法）：`python cli.py list` / `python cli.py signal S4` / `python cli.py backtest`
+> 也可以命令行传参调用（兼容旧用法）：`python cli.py list` / `python cli.py signal S4` / `python cli.py learn S4` / `python cli.py report S4` / `python cli.py backtest`
+
+---
+
+## 策略学习 (`learn`)
+
+查看任意策略的详细介绍：择股逻辑、择时方法、使用因子、优势劣势、回测参数（滑点/佣金/信号滞后等）。
+
+```bash
+python cli.py learn S4       # 查看 S4 多资产动量轮动的完整介绍
+python cli.py learn S10      # 查看 S10 低波动因子的完整介绍
+```
+
+知识库覆盖全部 11 个策略，详见 `strategy_kb.py`。
+
+---
+
+## 一年回测报告 (`report`)
+
+选择策略，拉取近一年真实行情，运行回测，生成包含以下内容的 HTML 报告：
+
+- **回测指标**：年化收益、波动率、夏普、最大回撤、日胜率
+- **收盘价走势图**：每个 ETF 的收盘价折线，**持仓期间标为红色线段**，非持仓为灰色
+- **调仓历史表**：每次权重变动 >1% 的日期、操作、持仓变化
+
+```bash
+python cli.py report S4      # 生成 S4 的一年回测HTML报告
+python cli.py report --all   # 生成全部 11 个策略的报告
+```
+
+报告输出到 `etf-strategies/report/{策略名}-{时间戳}.html`，用浏览器打开即可查看。
 
 ---
 
@@ -166,6 +198,8 @@ etf-strategies/
 ├── run_backtest.py               # 全量回测入口
 ├── list_strategies.py            # 策略列表脚本
 ├── daily_signal.py               # 每日买卖信号脚本
+├── strategy_kb.py                # 策略知识库（11个策略详解）
+├── html_report.py                # HTML报告生成器（一年回测+走势图）
 ├── backtest/                     # 回测核心包
 │   ├── engine.py                 # 向量化回测引擎（信号滞后+成本）
 │   ├── data.py                   # 数据层（东财K线+parquet缓存）
@@ -188,6 +222,7 @@ etf-strategies/
 │       └── bollinger.py          # S11 布林带均值回归
 ├── tests/                        # Pytest 测试套件（26个）
 ├── cache/                        # K线数据 parquet 缓存
+├── report/                       # 生成的HTML回测报告
 └── *.md                          # 回测报告 + 调研报告
 ```
 

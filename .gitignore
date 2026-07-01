@@ -35,9 +35,7 @@ etf-strategies/cache/*.parquet
 etf-strategies/cache/etf_names.json
 
 # Generated reports & charts (reproducible via CLI)
-etf-strategies/equity_curves.png
-etf-strategies/drawdowns.png
-etf-strategies/03_ETF策略回测报告.md
+etf-strategies/report/*.html
 
 # Temporary scripts
 _*.py
