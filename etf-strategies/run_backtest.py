@@ -17,6 +17,8 @@ from backtest.strategies.three_factor_momentum import ThreeFactorMomentum
 from backtest.strategies.industry_momentum import IndustryMomentum
 from backtest.strategies.low_vol import LowVol
 from backtest.strategies.bollinger import Bollinger
+from backtest.strategies.sentiment_momentum import SentimentMomentum
+from backtest.strategies.multi_factor import MultiFactor
 from backtest.reporting import plot_equity_curves, plot_drawdowns, render_markdown_report
 
 START, END = "2012-05-28", "2026-07-01"
@@ -47,6 +49,8 @@ def main():
         ("S9_行业动量轮动",         IndustryMomentum(lookback=60, top_n=3)),
         ("S10_低波动因子",          LowVol(window=60, top_n=3)),
         ("S11_布林带均值回归",       Bollinger(etf="510300", cash="511880", ma_period=20, sigma=2.0)),
+        ("S12_量价情绪多因子",       SentimentMomentum(lookback=20, top_n=1)),
+        ("S13_多因子综合打分",       MultiFactor(lookback=60, top_n=3)),
     ]
 
     # 逐策略加载各自资产（资产上市时间不同，各自对齐避免截断）

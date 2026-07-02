@@ -28,6 +28,8 @@ from backtest.strategies.three_factor_momentum import ThreeFactorMomentum
 from backtest.strategies.industry_momentum import IndustryMomentum
 from backtest.strategies.low_vol import LowVol
 from backtest.strategies.bollinger import Bollinger
+from backtest.strategies.sentiment_momentum import SentimentMomentum
+from backtest.strategies.multi_factor import MultiFactor
 
 # ── 策略注册表 ──
 STRAT_MAP = {
@@ -42,6 +44,8 @@ STRAT_MAP = {
     "S9": ("行业动量轮动",         IndustryMomentum(lookback=60, top_n=3)),
     "S10": ("低波动因子",          LowVol(window=60, top_n=3)),
     "S11": ("布林带均值回归",       Bollinger(etf="510300", cash="511880", ma_period=20, sigma=2.0)),
+    "S12": ("量价情绪多因子",       SentimentMomentum(lookback=20, top_n=1)),
+    "S13": ("多因子综合打分",       MultiFactor(lookback=60, top_n=3)),
 }
 
 # ── ETF 名称映射（静态 + API 缓存） ──

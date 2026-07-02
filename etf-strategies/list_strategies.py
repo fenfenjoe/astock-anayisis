@@ -14,6 +14,8 @@ from backtest.strategies.three_factor_momentum import ThreeFactorMomentum
 from backtest.strategies.industry_momentum import IndustryMomentum
 from backtest.strategies.low_vol import LowVol
 from backtest.strategies.bollinger import Bollinger
+from backtest.strategies.sentiment_momentum import SentimentMomentum
+from backtest.strategies.multi_factor import MultiFactor
 
 # 策略注册表 — 新增策略在这里加一行即可
 STRATEGIES = [
@@ -28,6 +30,8 @@ STRATEGIES = [
     IndustryMomentum,
     LowVol,
     Bollinger,
+    SentimentMomentum,
+    MultiFactor,
 ]
 
 

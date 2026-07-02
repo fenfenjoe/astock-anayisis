@@ -1,13 +1,18 @@
 # AStock Analysis — A股ETF量化策略回测系统
 
-A 股 ETF 策略研发与回测框架。内置 11 个覆盖动量/趋势/配置/风控/多因子的策略，提供**零依赖交互式 CLI**（箭头键选择菜单）。
+A 股 ETF 策略研发与回测框架。内置 13 个覆盖动量/趋势/配置/风控/多因子/量价情绪的 ETF 轮动策略，提供**零依赖交互式 CLI**（箭头键选择菜单），支持每日信号、策略学习、一年回测 HTML 报告。
 
 ---
 
 ## 快速开始
 
 ```bash
-cd etf-strategies
+# 克隆仓库
+git clone https://github.com/fenfenjoe/astock-anayisis.git
+cd astock-anayisis/etf-strategies
+
+# 安装依赖
+pip install pandas numpy matplotlib requests
 
 # 交互式 CLI（推荐）— 箭头键选择功能，回车执行
 python cli.py
@@ -34,7 +39,7 @@ python cli.py
   🏦 AStock ETF 策略管理
   ==================================================
 
-  ▶  📋 列出所有策略       — 查看已维护的 11 个策略
+  ▶  📋 列出所有策略       — 查看已维护的 13 个策略
      📊 查看每日信号       — 查看策略今日买卖操作
      🚀 运行全量回测       — 生成回测报告+图表
      🚪 退出
@@ -50,7 +55,7 @@ python cli.py
 **功能流程：**
 1. **列出所有策略** → 直接展示策略表格，按任意键返回
 2. **查看每日信号** → 弹出策略列表（含"全部策略"选项）→ 选中后拉取实时数据展示信号
-3. **运行全量回测** → 执行 11 个策略的历史回测，生成报告和图表
+3. **运行全量回测** → 执行 13 个策略的历史回测，生成报告和图表
 4. **退出** → 清除屏幕退出
 
 ### 新增功能
@@ -84,7 +89,7 @@ python cli.py learn S4       # 查看 S4 多资产动量轮动的完整介绍
 python cli.py learn S10      # 查看 S10 低波动因子的完整介绍
 ```
 
-知识库覆盖全部 11 个策略，详见 `strategy_kb.py`。
+知识库覆盖全部 13 个策略，详见 `strategy_kb.py`。
 
 ---
 
@@ -98,7 +103,7 @@ python cli.py learn S10      # 查看 S10 低波动因子的完整介绍
 
 ```bash
 python cli.py report S4      # 生成 S4 的一年回测HTML报告
-python cli.py report --all   # 生成全部 11 个策略的报告
+python cli.py report --all   # 生成全部 13 个策略的报告
 ```
 
 报告输出到 `etf-strategies/report/{策略名}-{时间戳}.html`，用浏览器打开即可查看。
@@ -126,7 +131,7 @@ python list_strategies.py
 | S4_多资产动量轮动 | MomentumRotation | 518880, 513100, 159915, 510180 | lookback=25 | 年化收益×R²打分轮动 |
 | ... | ... | ... | ... | ... |
 
-共 8 个策略
+共 13 个策略
 ```
 
 **新增策略时**，在 `list_strategies.py` 的 `STRATEGIES` 列表中加一行类引用即可自动发现。
@@ -185,8 +190,8 @@ python run_backtest.py
 
 产出文件：
 - `03_ETF策略回测报告.md` — Markdown 回测报告（指标表 + 图表）
-- `equity_curves.png` — 8条策略净值曲线对比
-- `drawdowns.png` — 8条策略回撤曲线对比
+- `equity_curves.png` — 13条策略净值曲线对比
+- `drawdowns.png` — 13条策略回撤曲线对比
 
 ---
 
@@ -198,7 +203,7 @@ etf-strategies/
 ├── run_backtest.py               # 全量回测入口
 ├── list_strategies.py            # 策略列表脚本
 ├── daily_signal.py               # 每日买卖信号脚本
-├── strategy_kb.py                # 策略知识库（11个策略详解）
+├── strategy_kb.py                # 策略知识库（13个策略详解）
 ├── html_report.py                # HTML报告生成器（一年回测+走势图）
 ├── backtest/                     # 回测核心包
 │   ├── engine.py                 # 向量化回测引擎（信号滞后+成本）
@@ -207,7 +212,7 @@ etf-strategies/
 │   ├── cost.py                   # 交易成本模型
 │   ├── metrics.py                # 绩效指标（年化/夏普/回撤/Calmar）
 │   ├── reporting.py              # 报告生成（matplotlib+markdown）
-│   └── strategies/               # 策略实现（11个）
+│   └── strategies/               # 策略实现（13个）
 │       ├── base.py               # 策略基类
 │       ├── buy_hold.py           # S1 买入持有
 │       ├── dual_momentum.py      # S2 双动量
@@ -219,8 +224,10 @@ etf-strategies/
 │       ├── three_factor_momentum.py  # S8 三因子动量轮动
 │       ├── industry_momentum.py  # S9 行业动量轮动
 │       ├── low_vol.py            # S10 低波动因子
-│       └── bollinger.py          # S11 布林带均值回归
-├── tests/                        # Pytest 测试套件（26个）
+│       ├── bollinger.py          # S11 布林带均值回归
+│       ├── sentiment_momentum.py # S12 量价情绪多因子
+│       └── multi_factor.py       # S13 多因子综合打分
+├── tests/                        # Pytest 测试套件
 ├── cache/                        # K线数据 parquet 缓存
 ├── report/                       # 生成的HTML回测报告
 └── *.md                          # 回测报告 + 调研报告
@@ -243,6 +250,8 @@ etf-strategies/
 | S9 | 行业动量轮动 | 2.95% | 0.14 | -46.03% | 月末 |
 | S10 | 低波动因子 | 10.89% | **1.39** | **-9.68%** | 月末 |
 | S11 | 布林带均值回归 | 7.93% | 0.47 | -34.05% | 每周 |
+| S12 | 量价情绪多因子 | 14.85% | 0.82 | -30.57% | 每日 |
+| S13 | 多因子综合打分 | 2.16% | 0.11 | -40.49% | 月末 |
 
 > 回测窗口：各策略资产对齐后窗口不同（2012~2026），详见 `03_ETF策略回测报告.md`。
 > ⚠️ 回测好≠实盘好。上述收益含过拟合风险，不构成投资建议。

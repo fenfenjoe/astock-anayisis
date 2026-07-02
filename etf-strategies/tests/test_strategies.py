@@ -13,6 +13,8 @@ from backtest.strategies.three_factor_momentum import ThreeFactorMomentum
 from backtest.strategies.industry_momentum import IndustryMomentum
 from backtest.strategies.low_vol import LowVol
 from backtest.strategies.bollinger import Bollinger
+from backtest.strategies.sentiment_momentum import SentimentMomentum
+from backtest.strategies.multi_factor import MultiFactor
 
 
 def _prices(up_a=True, n=300):
@@ -318,6 +320,45 @@ def test_bollinger_reduces_at_upper_band():
     w = s.generate(p)
     # 快速上涨后应持有较少股票（减仓）
     assert w["510300"].iloc[-1] < 0.8  # 至少减了一些仓
+
+
+# ── S12 Sentiment Momentum ──
+
+def test_sentiment_momentum_weights_sum_to_one():
+    p = _prices_multi(n=120)
+    s = SentimentMomentum(lookback=20, top_n=1)
+    w = s.generate(p)
+    valid = w.iloc[50:]
+    rowsums = valid.sum(axis=1)
+    assert ((rowsums - 1.0).abs() < 1e-6).all()
+
+
+def test_sentiment_momentum_has_cash_column():
+    p = _prices_multi(n=120)
+    s = SentimentMomentum(lookback=20, top_n=1)
+    w = s.generate(p)
+    assert "511880" in w.columns  # cash column
+
+
+# ── S13 Multi-Factor ──
+
+def test_multi_factor_weights_sum_to_one():
+    p = _prices_multi(n=120)
+    s = MultiFactor(lookback=60, top_n=2, etf_pool=["518880", "513100", "159915", "510180"])
+    w = s.generate(p)
+    valid = w.iloc[80:]
+    rowsums = valid.sum(axis=1)
+    assert ((rowsums - 1.0).abs() < 1e-6).all()
+
+
+def test_multi_factor_top_n_held():
+    p = _prices_multi(n=120)
+    s = MultiFactor(lookback=60, top_n=2,
+                    etf_pool=["518880", "513100", "159915", "510180"])
+    w = s.generate(p)
+    valid = w.iloc[80:]
+    nonzero = (valid.iloc[-1] > 0).sum()
+    assert nonzero <= 3  # top_n + cash at most
 
 
 # ── Cross-strategy invariants ──
