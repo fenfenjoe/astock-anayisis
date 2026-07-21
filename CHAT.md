@@ -1,5 +1,11 @@
-1. 我想对全市场ETF做打分排名，但是要筛选，请过滤掉流动性较差的ETF，然后计算ETF之间的相关性，相关性太高的则只保留其中
-一只。当然这只是大概的方案，请去学习如何构建ETF池，结合我的方案来进行。学习完后，请构建好ETF池，并将构建过程以报告形式
-描述出来。
+✅ 已完成 (2026-07-21)
 
-2. 然后将ETF池融入到每日工作.md中
+1. **BUG自动修复**: `etf-strategies/automation/prompts/bug_auto_fix.md` — 每小时 :07 执行
+   - `auto_fix_eligible=true` → 自动修复 → 测试通过→FIXED，失败→MANUAL_REVIEW
+   - `auto_fix_eligible=false` → 标记 MANUAL_REVIEW，展现在 `BUG_INDEX.md` "⚠️ 待人工审核" 区域
+   - 报告归档: `bugs/archive/AUTO_FIX_REPORT_*.md`
+
+2. **优化需求Steering**: 
+   - ETF策略: `etf-strategies/automation/steering/` — 按 `REQ_TEMPLATE.md` 创建需求，自动化任务自动读取
+   - 每日复盘: `my_doc/每日复盘/harness/automation/steering/` — 同上
+   - 状态流: OPEN → IN_PROGRESS (自动) → ADOPTED/REJECTED/IMPLEMENTED (人工确认)
