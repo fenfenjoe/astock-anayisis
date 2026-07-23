@@ -47,8 +47,7 @@ class MultiFactor(Strategy):
 
         warmup = self.lookback
         if warmup > 0:
-            w_eq = 1.0 / (n_assets + 1)
-            weights.iloc[:warmup, :n_assets] = w_eq
+            weights.iloc[:warmup, :n_assets] = 1.0 / n_assets
             weights.iloc[:warmup, weights.columns.get_loc(self.cash)] = 0.0
 
         for i in range(warmup, n_days):

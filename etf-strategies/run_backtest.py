@@ -19,6 +19,11 @@ from backtest.strategies.low_vol import LowVol
 from backtest.strategies.bollinger import Bollinger
 from backtest.strategies.sentiment_momentum import SentimentMomentum
 from backtest.strategies.multi_factor import MultiFactor
+from backtest.strategies.adaptive_momentum import AdaptiveMomentum
+from backtest.strategies.rsrs_momentum import TrendFilterMomentum
+from backtest.strategies.canary_defense import CanaryDefense, CanaryDefenseDaily
+from backtest.strategies.rsrs_reversal_momentum import RsrsReversalMomentum
+from backtest.strategies.low_correlation_rotation import LowCorrelationRotation
 from backtest.reporting import plot_equity_curves, plot_drawdowns, render_markdown_report
 
 START, END = "2012-05-28", "2026-07-01"
@@ -51,6 +56,12 @@ def main():
         ("S11_布林带均值回归",       Bollinger(etf="510300", cash="511880", ma_period=20, sigma=2.0)),
         ("S12_量价情绪多因子",       SentimentMomentum(lookback=20, top_n=1)),
         ("S13_多因子综合打分",       MultiFactor(lookback=60, top_n=3)),
+        ("S14_动态波动率调整动量",     AdaptiveMomentum(lb_min=15, lb_max=120, top_n=2)),
+        ("S15_趋势过滤动量增强",       TrendFilterMomentum(ma_long=200, ma_short=20, top_n=2)),
+        ("S16_金丝雀防御动量",         CanaryDefense(mom_lookback=25, top_n=2)),
+        ("S17_金丝雀防御动量_日频",     CanaryDefenseDaily(mom_lookback=25, top_n=2)),
+        ("S18_RSRS增强反转动量",      RsrsReversalMomentum()),
+        ("S19_低相关ETF轮动",         LowCorrelationRotation()),
     ]
 
     # 逐策略加载各自资产（资产上市时间不同，各自对齐避免截断）

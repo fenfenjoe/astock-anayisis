@@ -1,0 +1,82 @@
+# 策略发现数据源配置
+# 用于 strategy_scan_weekly.md 自动扫描时的搜索参数
+
+platforms:
+  joinquant:
+    name: 聚宽
+    base_url: https://www.joinquant.com
+    searchable: true
+    requires_login: true
+    search_keywords:
+      - "ETF 轮动 策略"
+      - "动量 多因子 年化"
+      - "低波动 夏普"
+      - "行业轮动 回测"
+    content_type: community_post
+
+  bigquant:
+    name: BigQuant
+    base_url: https://bigquant.com
+    searchable: true
+    requires_login: false
+    search_keywords:
+      - "ETF策略 回测 年化"
+      - "AI选股 ETF"
+    content_type: platform_strategy
+
+  github:
+    name: GitHub
+    base_url: https://github.com
+    searchable: true
+    requires_login: false
+    search_keywords:
+      - "ETF 轮动 策略 源码 年化 夏普"
+      - "A-share quantitative strategy ETF"
+      - "量化交易 ETF momentum rotation"
+    known_repos:
+      - "HiRenyi/EasyQuant"
+      - "thuquant/awesome-quant"
+    content_type: repository
+
+  zhihu:
+    name: 知乎
+    base_url: https://www.zhihu.com
+    searchable: true
+    requires_login: false
+    search_keywords:
+      - "量化策略 ETF 回测 实战"
+      - "A股 ETF 动量轮动 策略 代码"
+    content_type: article
+
+  csdn:
+    name: CSDN
+    base_url: https://www.csdn.net
+    searchable: true
+    requires_login: false
+    search_keywords:
+      - "ETF量化策略 Python代码"
+      - "ETF轮动策略 回测框架"
+
+# 评估阈值（交通灯体系）
+evaluation:
+  green:
+    annual_return_min: 0.15
+    annual_return_max: 0.50
+    sharpe_min: 0.8
+    sharpe_max: 2.0
+    backtest_years_min: 5
+    max_drawdown_max: -0.30
+    max_params: 4
+    code_available: true
+  yellow:
+    annual_return_max: 1.0
+    sharpe_max: 3.5
+    backtest_years_min: 3
+    max_drawdown_max: -0.50
+    max_params: 8
+  red:
+    description: "超出绿灯/黄灯范围 → 跳过"
+
+# 去重阈值
+dedup:
+  logic_overlap_threshold: 0.8  # >80%逻辑重叠 → 视为重复

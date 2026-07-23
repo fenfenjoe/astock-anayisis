@@ -147,12 +147,19 @@
 
 ## 七、自动化迭代系统（Claude Code Loop）
 
-本项目为 `etf-strategies` 和 `每日复盘` 两个项目构建了自动化迭代层，基于 Claude Code `CronCreate` + prompts 实现。
+本项目为 `etf-strategies` 和 `每日复盘` 两个项目构建了自动化迭代层，基于 Claude Code `/loop` + Python 调度器实现。
 
 ### 7.1 架构概览
 
 ```
 自动化层（本section定义）
+├── .claude/scripts/
+│   ├── task_schedule.json         #   13条任务调度定义（时间/星期/交易日等）
+│   ├── task_scheduler.py          #   Python调度器（时间匹配+幂等+交易日判断）
+│   └── scheduler_state.json       #   运行时幂等状态（自动创建）
+├── .claude/prompts/
+│   ├── loop_runner.md             #   每7分钟迭代的元prompt
+│   └── setup_loop.md              #   一次性设置指南
 ├── etf-strategies/automation/     # ETF策略自动化
 │   ├── prompts/                   #   巡检+发现prompts
 │   ├── config/                    #   正确性定义+发现源配置
@@ -164,56 +171,58 @@
     └── logs/                      #   执行日志
 ```
 
-### 7.2 etf-strategies 自动化调度
+**核心机制**：一个 `/loop 7m /clear && 执行 loop_runner.md` 替代全部 CronCreate 定时任务。每次迭代先 `/clear` 清空上下文，Python 调度器判断是否有到期任务，有则执行，无则跳过。**零上下文累积**。
 
-| 任务 | 频率 | Prompt | 用途 |
-|------|------|--------|------|
-| 代码巡检 | 每日 02:00 | `bug_inspect_code.md` | 静态分析+注册一致性+测试覆盖率 |
-| 逻辑巡检 | 每周日 02:00 | `bug_inspect_logic.md` | KB vs 代码对齐+边界条件+跨策略一致性 |
-| 数据质量 | 交易日 08:00 | `bug_inspect_data.md` | 缓存新鲜度+除权检测+跨源验证 |
-| 策略发现 | 每周六 10:00 | `strategy_scan_weekly.md` | 各平台搜索→筛选→去重→输出候选 |
-| **BUG自动修复** | **每小时 :07** | `bug_auto_fix.md` | 扫描OPEN BUG → AUTO_FIX修复 → MANUAL_REVIEW标记 → 生成报告 |
+**调度精度**：7 分钟间隔 + 7 分钟窗口，每个任务在目标时间后 0~7 分钟内触发。全部 13 条任务定义见 `.claude/scripts/task_schedule.json`。
 
-**BUG 管理**：巡检Prompt负责发现+记录（`bugs/open/BUG-{NNN}.md`），并标记 `auto_fix_eligible`。自动修复任务（`bug_auto_fix.md`，每小时 :07）扫描 OPEN BUG：
-- `auto_fix_eligible=true` → 自动修复 → 测试通过则 FIXED，失败则升级为 MANUAL_REVIEW
-- `auto_fix_eligible=false` → 标记 MANUAL_REVIEW，展现在 `BUG_INDEX.md` "⚠️ 待人工审核" 区域
-- MANUAL_REVIEW BUG 需人工执行 `bug_fix_template.md` 修复流程
-- 采用 Git 分支 `bugfix/BUG-{NNN}-{desc}` + 规范commit
-- BUG 生命周期：OPEN → (自动修复) → FIXED / MANUAL_REVIEW → IN_PROGRESS → FIXED → VERIFIED
+### 7.2 全部 13 条任务调度
 
-**策略发现**：绿灯候选自动转化 → `strategy_convert_backtest.md` 创建策略文件+测试+注册+回测→报告。黄灯候选进入 `candidate_queue.json` 排队。
+| task_id | 时间 | 星期 | 需交易日 | Prompt |
+|---------|------|------|---------|--------|
+| morning_analysis | 09:07 | 一~五 | ✓ | `auto_morning_analysis.md` |
+| intraday_0940 | 09:40 | 一~五 | ✓ | `auto_intraday_check.md` |
+| intraday_1000 | 10:00 | 一~五 | ✓ | `auto_intraday_check.md` |
+| intraday_1030 | 10:30 | 一~五 | ✓ | `auto_intraday_check.md` |
+| intraday_1100 | 11:00 | 一~五 | ✓ | `auto_intraday_check.md` |
+| intraday_1330 | 13:30 | 一~五 | ✓ | `auto_intraday_check.md` |
+| intraday_1400 | 14:00 | 一~五 | ✓ | `auto_intraday_check.md` |
+| intraday_1430 | 14:30 | 一~五 | ✓ | `auto_intraday_check.md` |
+| evening_review | 15:52 | 一~五 | ✓ | `auto_evening_review.md` |
+| bug_auto_fix | 每小时:07 (9-18) | 一~五 | ✗ | `bug_auto_fix.md` |
+| bug_inspect_data | 12:07 | 一~五 | ✗ | `bug_inspect_data.md` |
+| bug_inspect_code | 12:17 | 一~五 | ✗ | `bug_inspect_code.md` |
+| bug_inspect_logic | 12:23 | 周一 | ✗ | `bug_inspect_logic.md` |
+| strategy_scan_weekly | 12:37 | 周二 | ✗ | `strategy_scan_weekly.md` |
+| experience_health | 12:47 | 周三 | ✗ | `auto_experience_health.md` |
+| weekly_portfolio | 13:17 | 周四 | ✗ | `auto_weekly_portfolio.md` |
 
-**正确性定义**：`etf-strategies/automation/config/correctness_definitions.yaml` 定义了 engine/data/metrics/strategies/registration/dashboard 六组件的预期行为，巡检时逐条验证。
+> 修改调度：编辑 `.claude/scripts/task_schedule.json`，下次迭代即生效。
 
-### 7.2.1 优化需求 Steering
+### 7.3 启动与停止
 
-用户可通过 `etf-strategies/automation/steering/` 注入优化需求，把控自动化迭代方向。
+**启动**（每次 Claude Code 启动后手动执行一次）：
 
-- **创建需求**：在 `steering/open/` 下按 `REQ_TEMPLATE.md` 模板创建 `REQ-{NNN}.md`，并在 `REQ_INDEX.md` 中登记
-- **自动集成**：巡检/修复/发现任务执行时自动读取 `steering/open/` 中待处理需求，纳入工作范围
-- **状态管理**：OPEN → IN_PROGRESS (自动化任务自动推进) → ADOPTED/REJECTED/IMPLEMENTED (用户人工确认)
+```
+/loop 7m /clear && 执行 .claude/prompts/loop_runner.md
+```
 
-每日复盘项目同样有独立的 steering 目录：`my_doc/每日复盘/harness/automation/steering/`。
+SessionStart hook 会在启动时提醒此命令。
 
-### 7.3 每日复盘自动化调度
+**停止**：`Ctrl+C` 或回复 `stop`。
 
-| 任务 | 频率 | Prompt | 用途 |
-|------|------|--------|------|
-| 早盘分析 | 交易日 07:55 | `auto_morning_analysis.md` | 取数→研判→信号→早盘报告 |
-| 盘中检查 | 交易日 10:30/13:30/14:45 | `auto_intraday_check.md` | 验证信号触发→扫描新信号→更新信号文件 |
-| 收盘复盘 | 交易日 15:45 | `auto_evening_review.md` | 盘面复盘→逐仓评估→预测对比→经验沉淀→生成次日staging→归档 |
-| 周度回顾 | 周六 10:00 | `auto_weekly_portfolio.md` | 周P&L+预测准确率+量化vs实际对比 |
-| 经验健康 | 周日 09:00 | `auto_experience_health.md` | 大小控制+重复检测+矛盾检测+过时检测 |
+**管理**：详见 `.claude/prompts/setup_loop.md`。
+- 查看状态：`python .claude/scripts/task_scheduler.py --status`
+- 强制重跑：删除 `scheduler_state.json` 中对应 key
 
-**流水线协调**：`task_state.json` 是跨任务协调中枢，确保幂等（同一天重复触发自动退出）和流水线感知（早盘→盘中→复盘 共享状态）。
+### 7.4 与 CronCreate 旧方案的对比
 
-**交易日历**：`trading_calendar.py` 判断是否为交易日，支持节假日/调休/盘中时间窗口检测。
-
-### 7.4 cron 持久化策略
-
-CronCreate `durable: true` 写入 `.claude/scheduled_tasks.json`，重启恢复，但有 **7 天自动过期**限制。
-
-**解决方案**：在 `.claude/settings.json` 配置 `onSessionStart` hook，每次启动 Claude Code 时自动重建所有定时任务。只要中途启动过 Claude Code（基本每天用），定时任务就永远是新鲜的。
+| 特性 | CronCreate (旧) | /loop + /clear (新) |
+|------|----------------|---------------------|
+| 上下文 | 每次累积，越跑越长 | 每次 /clear 重置，零累积 |
+| Token | 越晚任务越贵 | 每次固定 ~400 tokens 开销 |
+| 持久化 | durable=true 写磁盘 | session-only，重启手动启动 |
+| 管理 | 13 个独立 CronCreate | 1 个 task_schedule.json |
+| 过期 | 7 天自动过期需重建 | 无过期概念 |
 
 ### 7.5 关键纪律
 
@@ -222,4 +231,15 @@ CronCreate `durable: true` 写入 `.claude/scheduled_tasks.json`，重启恢复�
 - **Generator-Evaluator 分离不变**：自动复盘仍然严格执行"早盘预测 vs 复盘评估"的对抗审查
 - **失败透明**：所有自动化任务写入执行日志（`automation/logs/`），失败不静默
 - **交易日优先**：所有盘中/盘前/盘后自动化任务首先检查是否为交易日，非交易日自动跳过
+- **幂等双保险**：调度器 `scheduler_state.json` + 任务 prompt 内部 `task_state.json` 各自独立检查，防止重复执行
+
+### 7.6 优化需求 Steering
+
+用户可通过 `etf-strategies/automation/steering/` 注入优化需求，把控自动化迭代方向。
+
+- **创建需求**：在 `steering/open/` 下按 `REQ_TEMPLATE.md` 模板创建 `REQ-{NNN}.md`，并在 `REQ_INDEX.md` 中登记
+- **自动集成**：巡检/修复/发现任务执行时自动读取 `steering/open/` 中待处理需求，纳入工作范围
+- **状态管理**：OPEN → IN_PROGRESS (自动化任务自动推进) → ADOPTED/REJECTED/IMPLEMENTED (用户人工确认)
+
+每日复盘项目同样有独立的 steering 目录：`my_doc/每日复盘/harness/automation/steering/`。
 

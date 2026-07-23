@@ -40,7 +40,7 @@ class SentimentMomentum(Strategy):
 
         warmup = max(self.lookback, 30)  # 成交量需要更长的回看期
         if warmup > 0:
-            weights.iloc[:warmup] = 1.0 / (n_assets + 1)
+            weights.iloc[:warmup, :n_assets] = 1.0 / n_assets
             weights.iloc[:warmup, weights.columns.get_loc(self.cash)] = 0.0
 
         for i in range(warmup, n_days):

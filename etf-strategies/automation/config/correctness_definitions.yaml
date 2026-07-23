@@ -1,0 +1,172 @@
+# =============================================================================
+# 正确性定义文件 — 每个组件先定义"正确行为"，再检验实现是否符合
+# 用于 bug_inspect_code.md 和 bug_inspect_logic.md 自动巡检
+# =============================================================================
+
+# 版本: v1.0
+# 最后更新: 2026-07-21
+
+# --- 回测引擎 (backtest/engine.py) ---
+engine:
+  - id: ENG-001
+    statement: "信号滞后为恰好 1 个交易日"
+    verification: "held_weights[t] == target_weights[t-1] for all t > 0 (by construction in engine)"
+    test: "tests/test_engine.py::test_signal_lag"
+    severity: CRITICAL
+
+  - id: ENG-002
+    statement: "NAV 起始值为 1.0 且永不为负"
+    verification: "nav.iloc[0] == 1.0 and (nav > 0).all()"
+    test: "tests/test_engine.py::test_nav_positive"
+    severity: CRITICAL
+
+  - id: ENG-003
+    statement: "成本扣除 = 佣金率 0.025%(最低5元) + 滑点 0.01%，ETF免印花税"
+    verification: "单边费率 == 0.00035，反映在每日收益率中"
+    test: "tests/test_cost.py"
+    severity: HIGH
+
+  - id: ENG-004
+    statement: "换手率计算正确：turnover = sum(abs(weight_diff)) 每次调仓"
+    verification: "turnover >= 0, turnover <= 2 (全仓切换=2)"
+    test: "tests/test_engine.py"
+    severity: MEDIUM
+
+# --- 数据层 (backtest/data.py) ---
+data:
+  - id: DAT-001
+    statement: "get_kline 返回价格按日期升序排列，无重复索引"
+    verification: "df.index.is_monotonic_increasing and not df.index.duplicated().any()"
+    test: "tests/test_data.py::test_kline_order"
+    severity: CRITICAL
+
+  - id: DAT-002
+    statement: "load_prices 对多资产对齐后 dropna，任意行有 NaN 则剔除该行"
+    verification: "not prices.isna().any().any() (after alignment)"
+    test: "tests/test_data.py::test_load_prices_alignment"
+    severity: HIGH
+
+  - id: DAT-003
+    statement: "API 调用失败时降级到 parquet 缓存，两者均失败才抛 RuntimeError"
+    verification: "先尝试 API → 再读缓存 → 都没有才 raise"
+    test: "tests/test_data.py::test_cache_fallback"
+    severity: HIGH
+
+  - id: DAT-004
+    statement: "东财 API 请求间隔 ≥ 1s（串行限流），批量场景 ≥ 1.5s"
+    verification: "EM_MIN_INTERVAL = 1.0，存在 time.sleep 调用"
+    test: "tests/test_em_client.py"
+    severity: MEDIUM
+
+  - id: DAT-005
+    statement: "parquet 缓存路径统一在 cache/ 目录下，不散落各处"
+    verification: "所有缓存文件路径包含 cache/ 前缀"
+    severity: LOW
+
+# --- 指标计算 (backtest/metrics.py) ---
+metrics:
+  - id: MET-001
+    statement: "年化收益率公式: (final_nav)^(252/总交易日数) - 1"
+    verification: "ann_ret = nav.iloc[-1] ** (252 / len(nav)) - 1"
+    test: "tests/test_metrics.py::test_annual_return"
+    severity: CRITICAL
+
+  - id: MET-002
+    statement: "夏普比率使用年化波动率（日收益率 std * sqrt(252)），非原始波动率"
+    verification: "ann_vol = daily_returns.std() * np.sqrt(252); sharpe = ann_ret / ann_vol"
+    test: "tests/test_metrics.py::test_sharpe"
+    severity: CRITICAL
+
+  - id: MET-003
+    statement: "最大回撤 = min(nav / nav.cummax() - 1)，取最小值（最负值），非最大值"
+    verification: "max_dd = (nav / nav.cummax() - 1).min()，结果为负数"
+    test: "tests/test_metrics.py::test_max_drawdown"
+    severity: HIGH
+
+  - id: MET-004
+    statement: "Calmar 比率 = 年化收益率 / abs(最大回撤)"
+    verification: "calmar = annual_return / abs(max_drawdown)"
+    test: "tests/test_metrics.py"
+    severity: MEDIUM
+
+  - id: MET-005
+    statement: "胜率 = 日收益 > 0 的天数 / 总交易日数"
+    verification: "win_rate = (daily_returns > 0).sum() / len(daily_returns)"
+    test: "tests/test_metrics.py"
+    severity: MEDIUM
+
+  - id: MET-006
+    statement: "超额收益 = 策略年化收益率 - 基准年化收益率"
+    verification: "excess = strategy_annual_return - benchmark_annual_return"
+    test: "tests/test_metrics.py"
+    severity: LOW
+
+# --- 策略基类 (backtest/strategies/base.py) ---
+strategies:
+  - id: STR-001
+    statement: "每个策略的 generate() 返回权重 DataFrame，每行权重之和 ≈ 1.0（或全部为 0 = 空仓）"
+    verification: "abs(weights.sum(axis=1) - 1.0).max() < 0.01 or abs(weights.sum(axis=1)).max() < 0.01"
+    test: "tests/test_strategies.py (per-strategy weight sum test)"
+    severity: CRITICAL
+
+  - id: STR-002
+    statement: "generate() 必须为输入 prices 的每个日期生成权重"
+    verification: "len(weights) == len(prices) and weights.index.equals(prices.index)"
+    test: "tests/test_strategies.py (per-strategy date alignment test)"
+    severity: CRITICAL
+
+  - id: STR-003
+    statement: "无未来数据泄露: 今天权重仅依赖今天及之前的价格"
+    verification: "由引擎的 target_weights.shift(1) 保障，策略 generate() 内部不访问未来数据"
+    test: "tests/test_engine.py::test_signal_lag"
+    severity: CRITICAL
+
+  - id: STR-004
+    statement: "warmup 期间（数据不足回看期时）应返回全零权重或等权"
+    verification: "warmup 长度 = max(lookback_period)，warmup 内 weights.sum(axis=1) == 0 or 1"
+    test: "tests/test_strategies.py (per-strategy warmup test)"
+    severity: MEDIUM
+
+  - id: STR-005
+    statement: "get_diagnostics() 返回 dict 包含 parameters、scores、holdings 三个 key"
+    verification: "all(k in diag for k in ['parameters', 'scores', 'holdings'])"
+    severity: LOW
+
+# --- 策略注册一致性 (跨文件检查) ---
+registration:
+  - id: REG-001
+    statement: "backtest/strategies/*.py 中所有 Strategy 子类均在 run_backtest.py 中 import 并实例化"
+    verification: "grep Strategy 子类名 → 确认在 run_backtest.py 中存在"
+    severity: HIGH
+
+  - id: REG-002
+    statement: "所有策略均在 daily_signal.py 的 STRAT_MAP 中注册"
+    verification: "grep daily_signal.py → 确认所有策略 ID (S1-S19) 存在映射"
+    severity: HIGH
+
+  - id: REG-003
+    statement: "所有策略均在 list_strategies.py 的 STRATEGIES 列表中注册"
+    verification: "grep list_strategies.py → 确认所有策略类名存在"
+    severity: MEDIUM
+
+  - id: REG-004
+    statement: "所有策略在 strategy_kb.py 的 KB dict 中有对应条目"
+    verification: "grep strategy_kb.py KB dict keys → 匹配所有策略 ID"
+    severity: MEDIUM
+
+# --- Dashboard 健康 (dashboard/) ---
+dashboard:
+  - id: DASH-001
+    statement: "FastAPI 应用启动后 /api/auth/login 返回 200（含错误信息表示正常路由）"
+    verification: "curl http://localhost:8000/api/auth/login -X POST → HTTP 响应"
+    severity: MEDIUM
+
+  - id: DASH-002
+    statement: "SQLite 数据库所有 7 张表存在且可查询"
+    verification: "sqlite3 → .tables → kline_daily, strategy_metrics, daily_signals, strategy_kb, backtest_nav, users, metadata"
+    severity: HIGH
+
+  - id: DASH-003
+    statement: "JWT token 生成/验证流程完整: login → token → 访问受保护端点"
+    verification: "curl /api/auth/login → 获取 token → curl /api/strategies -H 'Authorization: Bearer {token}' → 200"
+    severity: HIGH

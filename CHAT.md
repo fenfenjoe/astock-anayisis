@@ -1,11 +1,9 @@
-✅ 已完成 (2026-07-21)
+请对`复盘分析`进行优化：
 
-1. **BUG自动修复**: `etf-strategies/automation/prompts/bug_auto_fix.md` — 每小时 :07 执行
-   - `auto_fix_eligible=true` → 自动修复 → 测试通过→FIXED，失败→MANUAL_REVIEW
-   - `auto_fix_eligible=false` → 标记 MANUAL_REVIEW，展现在 `BUG_INDEX.md` "⚠️ 待人工审核" 区域
-   - 报告归档: `bugs/archive/AUTO_FIX_REPORT_*.md`
+1. 我今天进行了调仓（180ETF->黄金ETF），但是复盘报告没有展示出来，持仓还是旧的持仓
+2. 关于电网设备ETF的减仓线，这个压力位已经连续2日都是1.62了，这个价位是怎么计算的？是否每日都会不一样？
+3. `reports/20260722/每日信号.md`明明有这个文件，但是复盘报告却说不存在
+4. 今日早盘分析也已经执行，但是却说早盘分析未执行
+5. 八、持仓变更 是有变更的，但却显示没有变更
 
-2. **优化需求Steering**: 
-   - ETF策略: `etf-strategies/automation/steering/` — 按 `REQ_TEMPLATE.md` 创建需求，自动化任务自动读取
-   - 每日复盘: `my_doc/每日复盘/harness/automation/steering/` — 同上
-   - 状态流: OPEN → IN_PROGRESS (自动) → ADOPTED/REJECTED/IMPLEMENTED (人工确认)
+请找出上面问题出现的原因，给出修复方案，修复成功后重新生成今天的复盘分析

@@ -1,5 +1,18 @@
 {
   "enabledPlugins": {
     "superpowers@claude-plugins-official": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"[automation] 启动自动化循环: /loop 7m /clear && 执行 .claude/prompts/loop_runner.md（13任务: ETFx5 + 复盘x8，详见 .claude/prompts/setup_loop.md）\""
+          }
+        ]
+      }
+    ]
   }
 }

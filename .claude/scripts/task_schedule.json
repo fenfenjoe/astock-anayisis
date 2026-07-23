@@ -1,0 +1,153 @@
+{
+  "_schema": "1.0",
+  "_description": "Task schedule definitions for /loop architecture. All times CST (UTC+8). days_of_week: 0=Mon 6=Sun. Edit this file to add/remove/modify tasks — next loop iteration picks up changes.",
+  "_loop_interval_minutes": 7,
+  "tasks": [
+    {
+      "task_id": "morning_analysis",
+      "target_time": "09:07",
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": true,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_morning_analysis.md",
+      "window_minutes": 7,
+      "description": "早盘分析"
+    },
+    {
+      "task_id": "intraday_0940",
+      "target_time": "09:40",
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": true,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_intraday_check.md",
+      "window_minutes": 7,
+      "description": "盘中检查 09:40"
+    },
+    {
+      "task_id": "intraday_1000",
+      "target_time": "10:00",
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": true,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_intraday_check.md",
+      "window_minutes": 7,
+      "description": "盘中检查 10:00"
+    },
+    {
+      "task_id": "intraday_1030",
+      "target_time": "10:30",
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": true,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_intraday_check.md",
+      "window_minutes": 7,
+      "description": "盘中检查 10:30"
+    },
+    {
+      "task_id": "intraday_1100",
+      "target_time": "11:00",
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": true,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_intraday_check.md",
+      "window_minutes": 7,
+      "description": "盘中检查 11:00"
+    },
+    {
+      "task_id": "intraday_1330",
+      "target_time": "13:30",
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": true,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_intraday_check.md",
+      "window_minutes": 7,
+      "description": "盘中检查 13:30"
+    },
+    {
+      "task_id": "intraday_1400",
+      "target_time": "14:00",
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": true,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_intraday_check.md",
+      "window_minutes": 7,
+      "description": "盘中检查 14:00"
+    },
+    {
+      "task_id": "intraday_1430",
+      "target_time": "14:30",
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": true,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_intraday_check.md",
+      "window_minutes": 7,
+      "description": "盘中检查 14:30"
+    },
+    {
+      "task_id": "evening_review",
+      "target_time": "15:52",
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": true,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_evening_review.md",
+      "window_minutes": 7,
+      "description": "收盘复盘"
+    },
+    {
+      "task_id": "bug_auto_fix",
+      "hourly": true,
+      "target_minute": 7,
+      "hourly_range": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": false,
+      "prompt_file": "etf-strategies/automation/prompts/bug_auto_fix.md",
+      "window_minutes": 7,
+      "description": "BUG自动修复 (每小时 :07)"
+    },
+    {
+      "task_id": "bug_inspect_data",
+      "target_time": "12:07",
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": false,
+      "prompt_file": "etf-strategies/automation/prompts/bug_inspect_data.md",
+      "window_minutes": 7,
+      "description": "数据质量巡检"
+    },
+    {
+      "task_id": "bug_inspect_code",
+      "target_time": "12:17",
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": false,
+      "prompt_file": "etf-strategies/automation/prompts/bug_inspect_code.md",
+      "window_minutes": 7,
+      "description": "代码巡检"
+    },
+    {
+      "task_id": "bug_inspect_logic",
+      "target_time": "12:23",
+      "days_of_week": [0],
+      "trading_day_required": false,
+      "prompt_file": "etf-strategies/automation/prompts/bug_inspect_logic.md",
+      "window_minutes": 7,
+      "description": "逻辑巡检 (每周一)"
+    },
+    {
+      "task_id": "strategy_scan_weekly",
+      "target_time": "12:37",
+      "days_of_week": [1],
+      "trading_day_required": false,
+      "prompt_file": "etf-strategies/automation/prompts/strategy_scan_weekly.md",
+      "window_minutes": 7,
+      "description": "策略发现 (每周二)"
+    },
+    {
+      "task_id": "experience_health",
+      "target_time": "12:47",
+      "days_of_week": [2],
+      "trading_day_required": false,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_experience_health.md",
+      "window_minutes": 7,
+      "description": "经验库健康 (每周三)"
+    },
+    {
+      "task_id": "weekly_portfolio",
+      "target_time": "13:17",
+      "days_of_week": [3],
+      "trading_day_required": false,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_weekly_portfolio.md",
+      "window_minutes": 7,
+      "description": "周度组合回顾 (每周四)"
+    }
+  ]
+}

@@ -43,5 +43,3 @@ _*.py
 # OS
 .DS_Store
 Thumbs.db
-
-my_doc

@@ -195,6 +195,71 @@ python run_backtest.py
 
 ---
 
+## Web Dashboard
+
+基于 **FastAPI + SQLite + ECharts** 构建的量化策略 Web Dashboard，提供可视化的策略管理、信号查看和回测分析界面，作为 CLI 工具的图形化补充。
+
+### 启动
+
+```bash
+cd etf-strategies
+
+# 安装额外依赖
+pip install fastapi uvicorn
+
+# 启动 Dashboard（默认端口 8000）
+python dashboard/app.py
+```
+
+启动后访问 **http://localhost:8000** 即可打开 Dashboard。
+
+> 首次启动会自动初始化 SQLite 数据库、同步策略定义、预热信号缓存，耗时约 10~30 秒。
+> 可通过环境变量 `DASHBOARD_PORT` 自定义端口。
+
+### 功能概览
+
+| 模块 | 功能 | 说明 |
+|------|------|------|
+| **策略全景表** | 17 个策略的绩效指标对比 | 年化收益 / 夏普 / 最大回撤 / Calmar / 日胜率 / 换手率 / 超额收益，支持点击排序 |
+| **策略详情** | 策略知识库 + 绩效指标 | 择股逻辑 / 择时方法 / 因子说明 / 优劣势 / 来源链接 |
+| **每日信号** | 各策略今日买卖建议 | 🟢买入 / 🔴卖出 / ⚪持有，含目标权重和变动幅度 |
+| **权益曲线** | 全量回测净值对比图 | ECharts 交互式多策略叠加折线图 + 回撤曲线 |
+| **调仓历史** | 最近 10 次调仓明细 | 每次调仓的 ETF 权重变动一览 |
+| **打分曲线** | 动量/多因子打分过程可视化 | S4/S8/S12~S17 的打分因子动态曲线，展示策略内部决策过程 |
+| **策略源码** | 在线查看策略 Python 源代码 | 无需切换编辑器即可了解策略实现细节 |
+| **单策略回测** | 按需运行单个策略回测 | 结果即时写入数据库并刷新全景表指标 |
+| **HTML 报告** | 一键生成一年回测 HTML 报告 | 含收盘价走势图（持仓标红）+ 调仓历史表 |
+| **K线同步** | 增量刷新 ETF K线数据 | 自动检测缺失日期，仅拉取增量，写入 SQLite 缓存 |
+
+### 架构
+
+```
+dashboard/
+├── app.py                    # FastAPI 后端（30+ API 端点）
+├── db.py                     # SQLite 持久化层（6 张表，含完整 Schema 注释）
+├── sync.py                   # 数据同步（K线增量/信号生成/回测NAV）
+├── templates/
+│   └── dashboard.html        # 前端单页应用
+├── static/
+│   ├── css/dashboard.css     # 样式表
+│   └── js/dashboard.js       # 前端逻辑（ECharts 图表渲染 + 状态管理）
+└── data/
+    └── cache.db              # SQLite 数据库文件（自动创建，WAL 模式）
+```
+
+**数据库表设计：**
+
+| 表名 | 用途 | 数据量 |
+|------|------|--------|
+| `kline_daily` | ETF K线日数据缓存（OHLCV），按 code+date 去重 | ~87,500 行 |
+| `strategy_metrics` | 策略回测绩效指标（年化/夏普/回撤/Calmar/胜率/换手） | 17 行 |
+| `daily_signals` | 每日交易信号快照（BUY/SELL/HOLD + 权重变动） | ~64 行/天 |
+| `strategy_kb` | 策略知识库（择股/择时/因子/优劣势/来源/执行流程） | 17 行 |
+| `backtest_nav` | 权益曲线净值数据（周频采样，供 ECharts 渲染） | ~11,200 行 |
+| `metadata` | 系统元数据（种子标记等 key-value） | <10 行 |
+
+**数据流：** 启动时自动种子化策略定义 → K线增量同步至 SQLite → 信号/回测结果写入 SQLite → API 从 SQLite 读取 → 前端 ECharts 渲染图表。
+
 ## 项目结构
 
 ```
@@ -203,8 +268,15 @@ etf-strategies/
 ├── run_backtest.py               # 全量回测入口
 ├── list_strategies.py            # 策略列表脚本
 ├── daily_signal.py               # 每日买卖信号脚本
-├── strategy_kb.py                # 策略知识库（13个策略详解）
+├── strategy_kb.py                # 策略知识库（17个策略详解）
 ├── html_report.py                # HTML报告生成器（一年回测+走势图）
+├── dashboard/                    # Web Dashboard（FastAPI + SQLite + ECharts）
+│   ├── app.py                    #   后端 API 服务
+│   ├── db.py                     #   SQLite 持久化层
+│   ├── sync.py                   #   数据同步模块
+│   ├── templates/                #   前端模板
+│   ├── static/                   #   静态资源（CSS/JS）
+│   └── data/                     #   SQLite 数据库
 ├── backtest/                     # 回测核心包
 │   ├── engine.py                 # 向量化回测引擎（信号滞后+成本）
 │   ├── data.py                   # 数据层（东财K线+parquet缓存）
@@ -212,7 +284,7 @@ etf-strategies/
 │   ├── cost.py                   # 交易成本模型
 │   ├── metrics.py                # 绩效指标（年化/夏普/回撤/Calmar）
 │   ├── reporting.py              # 报告生成（matplotlib+markdown）
-│   └── strategies/               # 策略实现（13个）
+│   └── strategies/               # 策略实现（17个）
 │       ├── base.py               # 策略基类
 │       ├── buy_hold.py           # S1 买入持有
 │       ├── dual_momentum.py      # S2 双动量
@@ -226,7 +298,10 @@ etf-strategies/
 │       ├── low_vol.py            # S10 低波动因子
 │       ├── bollinger.py          # S11 布林带均值回归
 │       ├── sentiment_momentum.py # S12 量价情绪多因子
-│       └── multi_factor.py       # S13 多因子综合打分
+│       ├── multi_factor.py       # S13 多因子综合打分
+│       ├── adaptive_momentum.py  # S14 动态波动率调整动量
+│       ├── rsrs_momentum.py      # S15 趋势过滤动量增强
+│       └── canary_defense.py     # S16/S17 金丝雀防御动量
 ├── tests/                        # Pytest 测试套件
 ├── cache/                        # K线数据 parquet 缓存
 ├── report/                       # 生成的HTML回测报告

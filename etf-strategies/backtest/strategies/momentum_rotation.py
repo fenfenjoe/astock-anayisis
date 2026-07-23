@@ -71,3 +71,48 @@ class MomentumRotation(Strategy):
 
         # 每日调仓 — 不做 resample，引擎 shift(1) 处理滞后
         return weights
+
+    def get_diagnostics(self, prices):
+        """返回最新的各ETF动量分解：年化收益、R²、综合得分。"""
+        import numpy as np
+        w = self.generate(prices)
+        latest = w.iloc[-1]
+        holdings = {str(c): round(float(latest.get(c, 0)), 4)
+                    for c in self.assets if latest.get(c, 0) > 0.001}
+
+        # 计算最新一期的各ETF动量分解
+        n_days = len(prices)
+        i = n_days - 1  # 最新一天
+        window = prices.iloc[i - self.lookback + 1: i + 1]
+
+        score_details = {}
+        scores = {}
+        for etf in self.etf_pool:
+            closes = window[etf].values
+            y = np.log(closes)
+            x = np.arange(len(y))
+            slope, intercept = np.polyfit(x, y, 1)
+            ann_ret = np.exp(slope * 250) - 1
+            y_pred = slope * x + intercept
+            ss_res = np.sum((y - y_pred) ** 2)
+            ss_tot = (len(y) - 1) * np.var(y, ddof=1) if len(y) > 1 else 1e-12
+            r_sq = 1 - ss_res / ss_tot if ss_tot > 1e-12 else 0.0
+            score = ann_ret * r_sq
+            scores[etf] = round(float(score), 6)
+            score_details[etf] = {
+                "ann_return": round(float(ann_ret), 6),
+                "r_squared": round(float(r_sq), 4),
+                "score": round(float(score), 6),
+            }
+
+        return {
+            "strategy_id": self.__class__.__name__,
+            "latest_date": str(w.index[-1].date()),
+            "parameters": {
+                "回看窗口(天)": self.lookback,
+                "持仓数量(top_n)": self.top_n,
+            },
+            "scores": scores,
+            "score_details": score_details,  # 新增：年化收益+R²+得分明细
+            "holdings": holdings,
+        }

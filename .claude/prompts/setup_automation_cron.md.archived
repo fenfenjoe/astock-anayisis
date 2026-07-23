@@ -1,0 +1,103 @@
+# 自动化定时任务注册
+
+> 触发: onSessionStart hook（每次 Claude Code 启动时自动执行）
+> 用途: 注册所有 CronCreate durable 任务，绕过 7 天过期限制
+
+---
+
+## 调度原则
+
+- **复盘分析类**：保持工作日盘中时段（早盘/盘中/收盘复盘）
+- **非复盘分析类**：工作日午间闲时（12:00-13:30）
+- **周末不安排**：所有任务仅工作日执行
+
+---
+
+## 步骤 0：清理现有任务（防重复）
+
+先用 `CronList` 获取全部已有任务，对每个任务 ID 调用 `CronDelete` 删除。确保每次执行都是干净重建。
+
+---
+
+## 步骤 1：创建新任务
+
+### etf-strategies 自动化（5个，均为闲时）
+
+1. **BUG自动修复** — 工作日 9:00-18:00 每小时 :07 CST
+   ```
+   CronCreate(cron="7 9-18 * * 1-5", prompt="执行 etf-strategies/automation/prompts/bug_auto_fix.md", durable=true)
+   ```
+
+2. **数据质量** — 工作日 12:07 CST
+   ```
+   CronCreate(cron="7 12 * * 1-5", prompt="执行 etf-strategies/automation/prompts/bug_inspect_data.md", durable=true)
+   ```
+
+3. **代码巡检** — 工作日 12:17 CST
+   ```
+   CronCreate(cron="17 12 * * 1-5", prompt="执行 etf-strategies/automation/prompts/bug_inspect_code.md", durable=true)
+   ```
+
+4. **逻辑巡检** — 每周一 12:23 CST
+   ```
+   CronCreate(cron="23 12 * * 1", prompt="执行 etf-strategies/automation/prompts/bug_inspect_logic.md", durable=true)
+   ```
+
+5. **策略发现** — 每周二 12:37 CST
+   ```
+   CronCreate(cron="37 12 * * 2", prompt="执行 etf-strategies/automation/prompts/strategy_scan_weekly.md", durable=true)
+   ```
+
+### 每日复盘自动化（8个，分析类保持盘中时段）
+
+6. **早盘分析** — 交易日 09:07 CST（周一至周五，prompt内部检查交易日）
+   ```
+   CronCreate(cron="7 9 * * 1-5", prompt="执行 my_doc/每日复盘/harness/automation/prompts/auto_morning_analysis.md", durable=true)
+   ```
+
+7. **盘中检查#0** — 交易日 10:03 CST（开盘30分钟后首次验证）
+   ```
+   CronCreate(cron="3 10 * * 1-5", prompt="执行 my_doc/每日复盘/harness/automation/prompts/auto_intraday_check.md", durable=true)
+   ```
+
+8. **盘中检查#1** — 交易日 10:37 CST
+   ```
+   CronCreate(cron="37 10 * * 1-5", prompt="执行 my_doc/每日复盘/harness/automation/prompts/auto_intraday_check.md", durable=true)
+   ```
+
+9. **盘中检查#2** — 交易日 13:37 CST
+   ```
+   CronCreate(cron="37 13 * * 1-5", prompt="执行 my_doc/每日复盘/harness/automation/prompts/auto_intraday_check.md", durable=true)
+   ```
+
+10. **收盘前检查** — 交易日 14:52 CST
+    ```
+    CronCreate(cron="52 14 * * 1-5", prompt="执行 my_doc/每日复盘/harness/automation/prompts/auto_intraday_check.md", durable=true)
+    ```
+
+11. **收盘复盘** — 交易日 15:52 CST
+    ```
+    CronCreate(cron="52 15 * * 1-5", prompt="执行 my_doc/每日复盘/harness/automation/prompts/auto_evening_review.md", durable=true)
+    ```
+
+12. **经验库健康** — 每周三 12:47 CST
+    ```
+    CronCreate(cron="47 12 * * 3", prompt="执行 my_doc/每日复盘/harness/automation/prompts/auto_experience_health.md", durable=true)
+    ```
+
+13. **周度组合回顾** — 每周四 13:17 CST
+    ```
+    CronCreate(cron="17 13 * * 4", prompt="执行 my_doc/每日复盘/harness/automation/prompts/auto_weekly_portfolio.md", durable=true)
+    ```
+
+---
+
+## 输出
+
+完成后输出简短确认：
+```
+已清理 N 个旧任务，重新注册完成: 13/13
+- etf-strategies: 5 (BUG自动修复/数据质量/代码巡检/逻辑巡检/策略发现)
+- 每日复盘: 8 (早盘/盘中x4/复盘/经验健康/周度)
+下次过期检查: {7天后日期}
+```

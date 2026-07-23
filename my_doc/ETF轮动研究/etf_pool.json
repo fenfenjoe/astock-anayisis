@@ -1,0 +1,443 @@
+{
+  "build_time": "2026-07-02 00:00",
+  "methodology": {
+    "step1_liquidity": "基金规模>=2亿 & 日均成交额>=1000万 & 排除债券/货币/联接",
+    "step2_correlation": "60日日收益率相关性>0.85的只保留流动性最优1只",
+    "step3_classification": "按宽基/行业/跨境/商品/策略分类"
+  },
+  "total_all": 1272,
+  "after_liquidity": 790,
+  "final_pool": 67,
+  "categories": {
+    "宽基-创业板": [
+      {
+        "code": "588000",
+        "name": "科创50ETF华夏",
+        "amount_wan": 1006554.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159381",
+        "name": "创业板人工智能ETF华夏",
+        "amount_wan": 49265.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "588120",
+        "name": "科创100ETF国泰",
+        "amount_wan": 13526.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159971",
+        "name": "创业板ETF富国",
+        "amount_wan": 10263.0,
+        "fund_size_yi": 0.0
+      }
+    ],
+    "行业-科技": [
+      {
+        "code": "159516",
+        "name": "半导体设备ETF国泰",
+        "amount_wan": 906037.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "560780",
+        "name": "半导体设备ETF广发",
+        "amount_wan": 173671.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159530",
+        "name": "机器人ETF易方达",
+        "amount_wan": 167769.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159852",
+        "name": "软件ETF嘉实",
+        "amount_wan": 38489.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "512930",
+        "name": "AI人工智能ETF平安",
+        "amount_wan": 28073.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159507",
+        "name": "通信ETF广发",
+        "amount_wan": 10480.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159145",
+        "name": "工业软件ETF广发",
+        "amount_wan": 1332.0,
+        "fund_size_yi": 0.0
+      }
+    ],
+    "宽基-大盘": [
+      {
+        "code": "510300",
+        "name": "沪深300ETF华泰柏瑞",
+        "amount_wan": 652031.0,
+        "fund_size_yi": 0.0
+      }
+    ],
+    "行业-金融": [
+      {
+        "code": "512880",
+        "name": "证券ETF国泰",
+        "amount_wan": 384898.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "512800",
+        "name": "银行ETF华宝",
+        "amount_wan": 165550.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "510230",
+        "name": "金融ETF国泰",
+        "amount_wan": 12597.0,
+        "fund_size_yi": 0.0
+      }
+    ],
+    "宽基-中小盘": [
+      {
+        "code": "510500",
+        "name": "中证500ETF南方",
+        "amount_wan": 339021.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "563300",
+        "name": "中证2000ETF华泰柏瑞",
+        "amount_wan": 72982.0,
+        "fund_size_yi": 0.0
+      }
+    ],
+    "其他": [
+      {
+        "code": "159206",
+        "name": "卫星ETF永赢",
+        "amount_wan": 224050.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159992",
+        "name": "创新药ETF银华",
+        "amount_wan": 147567.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159326",
+        "name": "电网设备ETF华夏",
+        "amount_wan": 111700.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159869",
+        "name": "游戏ETF华夏",
+        "amount_wan": 93735.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "512690",
+        "name": "酒ETF鹏华",
+        "amount_wan": 60612.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "588010",
+        "name": "科创新材料ETF博时",
+        "amount_wan": 49400.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "516150",
+        "name": "稀土ETF嘉实",
+        "amount_wan": 38964.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159201",
+        "name": "自由现金流ETF华夏",
+        "amount_wan": 35530.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159865",
+        "name": "养殖ETF国泰",
+        "amount_wan": 32533.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159667",
+        "name": "工业母机ETF国泰",
+        "amount_wan": 32118.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "560280",
+        "name": "工程机械ETF广发",
+        "amount_wan": 23842.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159766",
+        "name": "旅游ETF富国",
+        "amount_wan": 15206.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "561380",
+        "name": "电网设备ETF国泰",
+        "amount_wan": 13557.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159663",
+        "name": "机床ETF华夏",
+        "amount_wan": 13288.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "516780",
+        "name": "稀土ETF华泰柏瑞",
+        "amount_wan": 12573.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "517120",
+        "name": "创新药ETF华泰柏瑞",
+        "amount_wan": 10149.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "560710",
+        "name": "船舶ETF富国",
+        "amount_wan": 6483.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159697",
+        "name": "石油ETF鹏华",
+        "amount_wan": 5311.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159698",
+        "name": "粮食ETF鹏华",
+        "amount_wan": 3954.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "516620",
+        "name": "影视ETF国泰",
+        "amount_wan": 2386.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159666",
+        "name": "交通运输ETF华夏",
+        "amount_wan": 2003.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "562850",
+        "name": "央企能源ETF嘉实",
+        "amount_wan": 1964.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159151",
+        "name": "食品ETF华夏",
+        "amount_wan": 1330.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "560000",
+        "name": "智能电车ETF浦银",
+        "amount_wan": 0.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "560650",
+        "name": "核心50ETF民生加银",
+        "amount_wan": 0.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "510010",
+        "name": "180治理ETF交银",
+        "amount_wan": 0.0,
+        "fund_size_yi": 0.0
+      }
+    ],
+    "策略": [
+      {
+        "code": "510880",
+        "name": "红利ETF华泰柏瑞",
+        "amount_wan": 147111.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159263",
+        "name": "价值ETF易方达",
+        "amount_wan": 27313.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "512040",
+        "name": "价值100ETF富国",
+        "amount_wan": 19588.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159758",
+        "name": "红利质量ETF华夏",
+        "amount_wan": 5876.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159905",
+        "name": "红利ETF工银",
+        "amount_wan": 3537.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "560700",
+        "name": "央企红利ETF广发",
+        "amount_wan": 1518.0,
+        "fund_size_yi": 0.0
+      }
+    ],
+    "行业-周期": [
+      {
+        "code": "515220",
+        "name": "煤炭ETF国泰",
+        "amount_wan": 137888.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "512400",
+        "name": "有色金属ETF南方",
+        "amount_wan": 120827.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159870",
+        "name": "化工ETF鹏华",
+        "amount_wan": 79405.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159611",
+        "name": "电力ETF广发",
+        "amount_wan": 52988.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "515210",
+        "name": "钢铁ETF国泰",
+        "amount_wan": 10286.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "516970",
+        "name": "基建ETF广发",
+        "amount_wan": 5032.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159745",
+        "name": "建材ETF国泰",
+        "amount_wan": 3604.0,
+        "fund_size_yi": 0.0
+      }
+    ],
+    "行业-新能源": [
+      {
+        "code": "159755",
+        "name": "电池ETF广发",
+        "amount_wan": 53146.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "515790",
+        "name": "光伏ETF华泰柏瑞",
+        "amount_wan": 36640.0,
+        "fund_size_yi": 0.0
+      }
+    ],
+    "行业-军工": [
+      {
+        "code": "512710",
+        "name": "军工龙头ETF富国",
+        "amount_wan": 43000.0,
+        "fund_size_yi": 0.0
+      }
+    ],
+    "商品": [
+      {
+        "code": "517520",
+        "name": "黄金股ETF永赢",
+        "amount_wan": 39002.0,
+        "fund_size_yi": 0.0
+      }
+    ],
+    "跨境": [
+      {
+        "code": "513630",
+        "name": "港股低波红利ETF摩根",
+        "amount_wan": 30145.0,
+        "fund_size_yi": 0.0
+      }
+    ],
+    "行业-地产": [
+      {
+        "code": "512200",
+        "name": "房地产ETF南方",
+        "amount_wan": 11370.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159707",
+        "name": "地产ETF华宝",
+        "amount_wan": 5726.0,
+        "fund_size_yi": 0.0
+      }
+    ],
+    "行业-消费": [
+      {
+        "code": "159883",
+        "name": "医疗器械ETF永赢",
+        "amount_wan": 7346.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "560080",
+        "name": "中药ETF汇添富",
+        "amount_wan": 6941.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "159996",
+        "name": "家电ETF国泰",
+        "amount_wan": 4859.0,
+        "fund_size_yi": 0.0
+      },
+      {
+        "code": "516110",
+        "name": "汽车ETF国泰",
+        "amount_wan": 4264.0,
+        "fund_size_yi": 0.0
+      }
+    ]
+  }
+}

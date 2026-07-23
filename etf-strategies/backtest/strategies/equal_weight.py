@@ -24,6 +24,8 @@ class EqualWeight(Strategy):
 
     def generate(self, prices):
         n = len(self.assets)
+        if n == 0:
+            return pd.DataFrame(index=prices.index)
         weights = pd.DataFrame(1.0 / n, index=prices.index, columns=self.assets)
         # 季末再平衡：取每季度最后交易日信号，向前填充
         quarterly = weights.resample("QE").last()

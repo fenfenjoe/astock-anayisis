@@ -251,7 +251,7 @@ def _fn_backtest():
 # ═══════════════════════════════════════════════════════════════
 
 MAIN_MENU = [
-    ("📋 列出所有策略       — 查看已维护的 11 个策略", _fn_list),
+    ("📋 列出所有策略       — 查看已维护的 16 个策略", _fn_list),
     ("📊 查看每日信号       — 查看策略今日买卖操作",  _fn_signal),
     ("📚 策略学习           — 查看策略原理/因子/择时", _fn_learn),
     ("📄 一年回测报告       — 生成HTML报告（含走势图）", _fn_report),
@@ -288,7 +288,9 @@ def _cmd_dispatch():
     args = parser.parse_args()
 
     if args.command == "list":
-        _fn_list()
+        from list_strategies import list_strategies
+        _clear()
+        list_strategies(markdown=not args.plain)
     elif args.command == "signal":
         if args.all:
             for sid, (sname, strat) in STRAT_MAP.items():

@@ -1,0 +1,70 @@
+{
+  "_schema": "1.1",
+  "_description": "每日复盘自动化流水线的跨任务协调状态。早盘→盘中(4次)→复盘 共享此文件，确保幂等和流水线感知。",
+  "_updated": "2026-07-22",
+  "date": "2026-07-22",
+  "trading_day": true,
+  "tasks": {
+    "morning_analysis": {
+      "status": "completed",
+      "executed_at": "2026-07-22T09:10:00",
+      "reports_generated": [
+        "早盘报告.md",
+        "每日信号.md"
+      ],
+      "signal_count": 8,
+      "p0_signals": 4,
+      "p1_signals": 1,
+      "p2_signals": 3,
+      "errors": [],
+      "warnings": []
+    },
+    "intraday_1003": {
+      "status": "not_yet",
+      "executed_at": null,
+      "triggers_found": 0,
+      "new_signals": 0,
+      "market_snapshot": {}
+    },
+    "intraday_1037": {
+      "status": "not_yet",
+      "executed_at": null,
+      "triggers_found": 0,
+      "new_signals": 0,
+      "market_snapshot": {}
+    },
+    "intraday_1337": {
+      "status": "not_yet",
+      "executed_at": null,
+      "triggers_found": 0,
+      "new_signals": 0,
+      "market_snapshot": {}
+    },
+    "intraday_1452": {
+      "status": "not_yet",
+      "executed_at": null,
+      "triggers_found": 0,
+      "new_signals": 0,
+      "market_snapshot": {}
+    },
+    "evening_review": {
+      "status": "completed",
+      "executed_at": "2026-07-22T16:28:00",
+      "reports_generated": [
+        "复盘报告.md"
+      ],
+      "staging_generated": true,
+      "experience_updated": true,
+      "portfolio_synced": true,
+      "errors": [],
+      "warnings": [],
+      "_note": "v2修正版"
+    }
+  },
+  "pipeline_health": {
+    "morning_missing": false,
+    "staging_missing_for_tomorrow": false,
+    "consecutive_failures": 0,
+    "last_successful_cycle": "2026-07-22"
+  }
+}

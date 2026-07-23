@@ -1,0 +1,5 @@
+{
+  "_description": "策略发现候选队列 —— 绿灯直接转化，黄灯排队等待下次扫描时重新评估",
+  "candidates": [],
+  "last_updated": null
+}

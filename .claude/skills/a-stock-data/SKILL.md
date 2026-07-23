@@ -267,9 +267,9 @@ def tdx_client(market='std'):
 ```python
 def get_prefix(code: str) -> str:
     """6位代码 → 市场前缀"""
-    if code.startswith(("6", "9")):
+    if code.startswith(("5", "6", "9")):
         return "sh"
-    elif code.startswith("8"):
+    elif code.startswith(("4", "8")):
         return "bj"
     else:
         return "sz"
@@ -407,9 +407,9 @@ def tencent_quote(codes: list[str]) -> dict[str, dict]:
     """
     prefixed = []
     for c in codes:
-        if c.startswith(("6", "9")):
+        if c.startswith(("5", "6", "9")):
             prefixed.append(f"sh{c}")
-        elif c.startswith("8"):
+        elif c.startswith(("4", "8")):
             prefixed.append(f"bj{c}")
         else:
             prefixed.append(f"sz{c}")
@@ -2395,7 +2395,7 @@ import pandas as pd
 def full_valuation(code: str) -> dict:
     """单票完整估值分析"""
     # 1. 腾讯实时行情
-    prefix = "sh" if code.startswith(("6","9")) else ("bj" if code.startswith("8") else "sz")
+    prefix = "sh" if code.startswith(("5","6","9")) else ("bj" if code.startswith(("4","8")) else "sz")
     url = f"https://qt.gtimg.cn/q={prefix}{code}"
     req = urllib.request.Request(url)
     req.add_header("User-Agent", "Mozilla/5.0")
@@ -2646,3 +2646,38 @@ export IWENCAI_API_KEY="your_key_here"
 ---
 
 > 📦 https://github.com/simonlin1212/a-stock-data — Star ⭐ 是最好的支持
+### Q: ETF 价格出现大幅跳变（如一天内从 2.70 变成 1.33）？
+
+A: **大概率是 ETF 份额合并/拆分事件。** A股 ETF 发生份额调整时（如 2 份并 1 份），价格会按比例跳变（翻倍或腰斩），这不是真实涨跌。检测方法：
+
+```python
+def detect_etf_corp_action(code: str, price_today: float, close_yesterday: float,
+                           threshold: float = 0.15) -> dict | None:
+    """
+    检测 ETF 是否发生了份额调整。
+    threshold: 价格跳变阈值（默认15%，正常ETF单日涨跌不应超过此值）
+    返回 None = 无异常；返回 dict = 检测到可能的份额调整
+    """
+    ratio = price_today / close_yesterday if close_yesterday else 1
+    if 1 - threshold <= ratio <= 1 + threshold:
+        return None  # 正常范围
+    # 估算调整比例（取整到常见比例: 1.5:1, 2:1, 3:1, 4:1, 5:1）
+    common_ratios = [1.5, 2, 3, 4, 5]
+    best_r = min(common_ratios, key=lambda r: abs(ratio - 1/r))
+    return {
+        "detected": True,
+        "price_jump": round((ratio - 1) * 100, 1),
+        "likely_action": f"份额合并 {best_r}:1" if ratio < 0.85
+                    else f"份额拆分 1:{best_r}",
+        "adj_factor": 1 / best_r if ratio < 0.85 else best_r,
+        "warning": "早盘与收盘数据不在同一份额基础上，不可直接比较价格。"
+    }
+
+# 用法示例
+corp = detect_etf_corp_action("512480", price_today=1.331, close_yesterday=1.350)
+if corp:
+    print(f"⚠️  {corp['warning']} 疑似{corp['likely_action']}")
+    # 不复用跨除权日的价格进行涨跌幅计算或V型反转判断
+```
+
+> **纪律：** 复盘或跨日比较 ETF 价格时，若某 ETF 单日涨跌幅绝对值 >15%（或价格跳变 >15%），优先排查份额调整公告，不要直接用于日内反转或涨跌归因分析。确认是份额调整后，应向前复权所有历史价格再进行比较。

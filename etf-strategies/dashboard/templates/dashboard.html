@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AStock ETF 量化策略 Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/dashboard.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+  if (typeof echarts === 'undefined') {
+    document.write('<script src="https://unpkg.com/echarts@5.5.0/dist/echarts.min.js"><\/script>');
+  }
+</script>
+<script>
+  window.addEventListener('load', function() {
+    if (typeof echarts === 'undefined') {
+      var banner = document.createElement('div');
+      banner.style.cssText = 'background:#5c3a1e;color:#ffb74d;padding:8px 16px;text-align:center;font-size:0.8rem;position:sticky;top:0;z-index:9999';
+      banner.textContent = '⚠️ 图表组件加载失败，请检查网络后刷新页面';
+      document.body.insertBefore(banner, document.body.firstChild);
+    }
+  });
+</script>
+</head>
+<body>
+
+<!-- ═══ LOGIN OVERLAY ═══ -->
+<div class="login-overlay" id="login-overlay">
+  <div class="login-card">
+    <div class="login-header">
+      <h1 class="login-title">AStock ETF</h1>
+      <p class="login-subtitle">量化策略 Dashboard</p>
+    </div>
+    <form class="login-form" id="login-form" onsubmit="return false;">
+      <input class="login-input" type="text" id="login-username"
+             autocomplete="username" placeholder="用户名" autofocus>
+      <input class="login-input" type="password" id="login-password"
+             autocomplete="current-password" placeholder="密码">
+      <div class="login-error" id="login-error" style="display:none"></div>
+      <button class="login-btn" type="submit" id="login-btn" onclick="handleLogin()">
+        登 录
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ═══ APP MAIN (hidden until authenticated) ═══ -->
+<div id="app-main">
+
+<!-- Background Texture Layer -->
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+
+<!-- ═══ HEADER ═══ -->
+<header class="header">
+  <div class="header-left">
+    <h1 class="header-title">🏦 AStock ETF <span class="header-accent">量化策略</span></h1>
+    <span class="header-badge">Dashboard v2.1</span>
+  </div>
+  <div class="header-right">
+    <span class="header-user" id="header-user">—</span>
+    <button class="btn btn-sm" onclick="handleLogout()" title="退出登录">🚪</button>
+    <span class="header-clock" id="header-clock">—</span>
+    <button class="btn btn-primary" onclick="refreshAll()" title="刷新所有数据">
+      <span class="btn-icon">🔄</span> 刷新数据
+    </button>
+    <button class="btn btn-accent" onclick="triggerBacktest()" title="运行全量回测（耗时较长）">
+      <span class="btn-icon">🚀</span> 运行回测
+    </button>
+  </div>
+</header>
+
+<!-- ═══ KPI CARDS ═══ -->
+<section class="kpi-grid" id="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-label">策略总数</div>
+    <div class="kpi-value" id="kpi-total">—</div>
+    <div class="kpi-sub" id="kpi-total-sub">加载中...</div>
+  </div>
+  <div class="kpi-card kpi-positive">
+    <div class="kpi-label">最优夏普</div>
+    <div class="kpi-value" id="kpi-best-sharpe">—</div>
+    <div class="kpi-sub" id="kpi-best-sharpe-sub">—</div>
+  </div>
+  <div class="kpi-card kpi-positive">
+    <div class="kpi-label">最优年化</div>
+    <div class="kpi-value" id="kpi-best-ann">—</div>
+    <div class="kpi-sub" id="kpi-best-ann-sub">—</div>
+  </div>
+  <div class="kpi-card kpi-warning">
+    <div class="kpi-label">最低回撤</div>
+    <div class="kpi-value" id="kpi-best-dd">—</div>
+    <div class="kpi-sub" id="kpi-best-dd-sub">—</div>
+  </div>
+</section>
+
+<!-- ═══ MAIN CONTENT: Strategy Table (full width) ═══ -->
+<main class="main-grid">
+  <section class="panel panel-table" id="panel-table">
+    <div class="panel-header">
+      <h2 class="panel-title">📊 策略全景</h2>
+      <span class="legend-inline panel-legend">
+        <span class="dot dot-green"></span> 年化≥20% / 夏普≥1.0
+        <span class="dot dot-yellow"></span> 中等
+        <span class="dot dot-red"></span> 偏低
+        <span class="dot dot-muted"></span> 待回测
+      </span>
+      <div class="panel-controls">
+        <select class="select-mini" id="category-filter" onchange="renderTable()">
+          <option value="all">全部类别</option>
+          <option value="被动投资">被动投资</option>
+          <option value="动量">动量</option>
+          <option value="趋势">趋势</option>
+          <option value="因子">因子</option>
+          <option value="资产配置">资产配置</option>
+          <option value="风控">风控</option>
+          <option value="多因子">多因子</option>
+          <option value="行业">行业</option>
+          <option value="均值回归">均值回归</option>
+        </select>
+        <select class="select-mini" id="sort-field" onchange="renderTable()">
+          <option value="id">默认排序</option>
+          <option value="ann_val">年化收益</option>
+          <option value="sharpe">夏普比率</option>
+          <option value="dd_val">最大回撤</option>
+          <option value="calmar">Calmar</option>
+        </select>
+        <button class="btn-icon-only" onclick="toggleSortOrder()" title="切换升降序" id="btn-sort-order">↓</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="strategy-table">
+        <thead>
+          <tr>
+            <th class="col-id sortable" data-field="id">编号 <span class="sort-arrow"></span></th>
+            <th class="col-name">策略名称</th>
+            <th class="col-cat">类别</th>
+            <th class="col-num sortable" data-field="ann_val">年化 <span class="sort-arrow"></span></th>
+            <th class="col-num sortable" data-field="sharpe">夏普 <span class="sort-arrow"></span></th>
+            <th class="col-num sortable" data-field="dd_val">最大回撤 <span class="sort-arrow"></span></th>
+            <th class="col-num">Calmar</th>
+            <th class="col-win">回测窗口</th>
+            <th class="col-act">操作</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <tr><td colspan="9" class="loading-cell">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-footer">
+      <span id="table-count">—</span>
+    </div>
+  </section>
+</main>
+
+<!-- ═══ DETAIL PANEL: Strategy Detail (KB + Signal) ═══ -->
+<section class="panel panel-detail" id="panel-detail" style="display:none;">
+  <div class="panel-header">
+    <h2 class="panel-title" id="detail-title">📋 策略详情</h2>
+    <button class="btn-icon-only" onclick="closeDetail()" title="关闭">✕</button>
+  </div>
+
+  <!-- Tab bar: KB first, Signal second -->
+  <div class="tab-bar">
+    <button class="tab active" data-tab="tab-kb" onclick="switchTab('tab-kb')">📚 简介</button>
+    <button class="tab" data-tab="tab-signal" onclick="switchTab('tab-signal')">📡 今日信号</button>
+    <button class="tab" data-tab="tab-rebalances" onclick="switchTab('tab-rebalances')">🔄 调仓记录</button>
+    <button class="tab" data-tab="tab-report" onclick="switchTab('tab-report')">📊 回测报告</button>
+    <button class="tab" data-tab="tab-source" onclick="switchTab('tab-source')">📝 策略源码</button>
+  </div>
+
+  <!-- KB Tab (first, active by default) -->
+  <div class="tab-content active" id="tab-kb">
+    <div id="kb-content"><p class="muted">请先选择策略</p></div>
+  </div>
+
+  <!-- Signal Tab (second) -->
+  <div class="tab-content" id="tab-signal">
+    <div id="signal-content"><p class="muted">请先选择策略</p></div>
+  </div>
+
+  <!-- Rebalance History Tab -->
+  <div class="tab-content" id="tab-rebalances">
+    <div id="rebalances-content"><p class="muted">请先选择策略</p></div>
+  </div>
+
+  <!-- Backtest Report Tab (process description + diagnostics + scoring chart) -->
+  <div class="tab-content" id="tab-report">
+    <div id="report-content"><p class="muted">请先选择策略</p></div>
+  </div>
+
+  <!-- Source Code Tab -->
+  <div class="tab-content" id="tab-source">
+    <div id="source-content"><p class="muted">请先选择策略</p></div>
+  </div>
+</section>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+</div><!-- /#app-main -->
+
+<!-- ═══ SCRIPTS ═══ -->
+<script src="/static/js/auth.js"></script>
+<script src="/static/js/dashboard.js"></script>
+</body>
+</html>

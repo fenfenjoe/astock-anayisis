@@ -30,6 +30,11 @@ from backtest.strategies.low_vol import LowVol
 from backtest.strategies.bollinger import Bollinger
 from backtest.strategies.sentiment_momentum import SentimentMomentum
 from backtest.strategies.multi_factor import MultiFactor
+from backtest.strategies.adaptive_momentum import AdaptiveMomentum
+from backtest.strategies.rsrs_momentum import TrendFilterMomentum
+from backtest.strategies.canary_defense import CanaryDefense, CanaryDefenseDaily
+from backtest.strategies.rsrs_reversal_momentum import RsrsReversalMomentum
+from backtest.strategies.low_correlation_rotation import LowCorrelationRotation
 
 # ── 策略注册表 ──
 STRAT_MAP = {
@@ -46,6 +51,12 @@ STRAT_MAP = {
     "S11": ("布林带均值回归",       Bollinger(etf="510300", cash="511880", ma_period=20, sigma=2.0)),
     "S12": ("量价情绪多因子",       SentimentMomentum(lookback=20, top_n=1)),
     "S13": ("多因子综合打分",       MultiFactor(lookback=60, top_n=3)),
+    "S14": ("动态波动率调整动量",     AdaptiveMomentum(lb_min=15, lb_max=120, top_n=2)),
+    "S15": ("趋势过滤动量增强",       TrendFilterMomentum(ma_long=200, ma_short=20, top_n=2)),
+    "S16": ("金丝雀防御动量",         CanaryDefense(mom_lookback=25, top_n=2)),
+    "S17": ("金丝雀防御动量(日频)",     CanaryDefenseDaily(mom_lookback=25, top_n=2)),
+    "S18": ("RSRS增强反转动量",     RsrsReversalMomentum()),
+    "S19": ("低相关ETF轮动",        LowCorrelationRotation()),
 }
 
 # ── ETF 名称映射（静态 + API 缓存） ──
@@ -174,13 +185,16 @@ def generate_signal(strat_id, strat_name, strat):
     print(f"{'='*70}")
 
     # 拉数据：需要足够长的回看窗口（max 300天覆盖所有策略的 lookback）
-    lookback = max(300, getattr(strat, 'lookback', 25) + 50)
+    lookback = max(500, getattr(strat, 'lookback', 25) + 100)
     prices = load_prices(strat.assets, lookback_days=lookback)
     print(f"  数据窗口: {prices.index[0].date()} ~ {prices.index[-1].date()} "
           f"({len(prices)} 个交易日)")
 
-    # 生成目标权重
-    weights = strat.generate(prices)
+    # 生成目标权重（live=True 用于反映策略当前信号；策略自行决定如何使用该参数）
+    try:
+        weights = strat.generate(prices, live=True)
+    except TypeError:
+        weights = strat.generate(prices)
 
     # 最新一期的目标权重 = 最后一行
     today_weights = weights.iloc[-1]

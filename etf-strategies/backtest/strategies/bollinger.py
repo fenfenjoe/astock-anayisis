@@ -47,8 +47,6 @@ class Bollinger(Strategy):
         position_in_band = position_in_band.fillna(0.5)  # 默认中轨
 
         # 仓位映射：下轨=满仓(1.0)，上轨=空仓(0.0)，线性插值
-        # 更保守的做法：<0.2→满仓，>0.8→空仓，中间线性
-        stock_weight = 1.0 - position_in_band.clip(0.0, 1.0)
         # 下轨附近加重，上轨附近减仓
         stock_weight = (1.0 - position_in_band).clip(0.0, 1.0)
 
