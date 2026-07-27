@@ -3,6 +3,7 @@
 > 定时任务: A股交易日 15:45 CST | CronCreate durable
 > 依赖: 早盘报告 + 每日信号 + 盘中检查记录
 > 产出: 复盘报告 + 经验沉淀 + 次日 staging
+> **{today} 格式**: `yyyyMMdd`（如 `20260727`），所有 Python 代码中必须用 `date.today().strftime("%Y%m%d")`，禁用 `date.today().isoformat()`
 
 ---
 
@@ -160,7 +161,13 @@ for f in ['my_doc/每日复盘/reports/{today}/早盘报告.md', 'my_doc/每日�
 
 ## 第七步：信号执行复盘
 
-对 `每日信号.md` 中的每条信号：
+对 `每日信号.md` 中的每条信号进行评级，并**原地写入**以下两个节：
+
+### 7.0 写入位置
+
+- **`## 信号评价（复盘时填入）`**：填写 7.1（决策质量）+ 7.2（执行质量）的评级结果，含入场价/出场价/P&L/持有天数/紧急度校准
+- **`## 当日信号统计`**：填写 7.4 的汇总统计（含紧急度相关指标）
+- **`## 信号收益追踪（复盘时填入）`**：填写 7.6 的本日结算信号 + 累计统计（从 signal_tracking.json 聚合）
 
 ### 7.1 决策质量评级 (S/A/B/C/D/F)
 - S: 信号精准预判了市场走势，触发条件恰到好处
@@ -177,11 +184,179 @@ for f in ['my_doc/每日复盘/reports/{today}/早盘报告.md', 'my_doc/每日�
 - D: 应该执行但未执行
 - F: 不应该执行但执行了
 
-### 7.3 信号遗漏检测（四个必答问题）
-1. 今日是否有早盘分析未覆盖但实际出现的重要机会？→ 如有，为什么遗漏？
-2. 是否有盘中新发现的信号（Tier 1/Tier 2）优于早盘信号？→ 如有，早盘为什么没发现？
-3. 是否有信号触发条件设置不合理（太敏感→误触发 / 太迟钝→没触发）？
-4. P0 信号的阈值是否需要调整？
+### 7.3 信号遗漏与机会盲区检测（五个必答问题，答案必须写入复盘报告）
+
+> ⚠️ 以下五问是复盘最核心的"补盲"环节。不仅思考，**必须将答案作为独立章节写入复盘报告**（格式见复盘分析-模板.md 2c 节）。
+
+1. **机会遗漏**：今日是否有早盘分析未覆盖但实际出现的重要交易机会？（如某个板块/标的出现了入场窗口但早盘根本没有扫描到）→ 如有，为什么遗漏？是框架盲区、数据缺失、还是认知偏差？
+2. **信号遗漏**：是否存在早盘未生成但实际应生成的信号？（如某个标的盘中出现了清仓条件但早盘未生成清仓信号）→ 是否有信号方向正确却被错误取消？
+3. **盘中信号优先级**：是否有盘中新发现的信号（Tier 1/Tier 2）优于早盘 P0 信号？→ 如有，早盘为什么没发现？是否需要调整早盘信号生成的优先级逻辑？
+4. **触发条件校准**：是否有信号触发条件设置不合理（太敏感→误触发 / 太迟钝→漏触发）？P0 信号的阈值是否需要调整？
+5. **执行完整性**：信号触发记录是否完整？是否存在触发条件满足但未记录的情况？是否存在信号"已过期未执行"但实际盘中应执行的情况？
+
+### 7.4 更新 `## 当日信号统计`
+
+根据信号总表和触发记录，填充统计表：
+
+| 指标 | 填写来源 |
+|------|----------|
+| 早盘生成信号总数 | 从信号总表（操作来源="早盘分析"）计数 |
+| 盘中追加信号数 | 从信号总表（操作来源="盘中信号"）计数 |
+| 已触发 | 信号总表中状态="已触发"或"已执行"的数量 |
+| 已过期 | 信号总表中状态="已过期"的数量 |
+| 已执行 | 从信号触发记录的"用户操作"列统计"已执行"数 |
+| 已废弃 | 信号总表中状态="已废弃"或"已取消"的数量 |
+| P0执行率 | 已执行的P0信号数 / 已触发的P0信号数 |
+| 遗漏信号数 | 7.3 中识别到的遗漏信号（如有） |
+| 高紧急度触发率 | 高紧急度信号中已触发数 / 高紧急度信号总数 |
+| 低紧急度触发率 | 低紧急度信号中已触发数 / 低紧急度信号总数 |
+| 紧急度正确率 | 复盘确认紧急度分配正确的信号数 / 信号总数 |
+
+### 7.5 更新 `## 信号评价（复盘时填入）`
+
+对每条信号逐条填写评价表（v2.0 扩展列）：
+
+| 信号ID | 决策质量 | 执行质量 | 入场价 | 出场价 | P&L(元) | P&L(%) | 持有天数 | 紧急度校准 | 复盘反思 |
+|--------|:------:|:------:|--------|--------|:------:|:-----:|:------:|:--------:|----------|
+
+**填写规则：**
+- 入场价/出场价：从 signal_tracking.json 中对应信号记录获取；未触发信号填"—"
+- P&L(元)/P&L(%)：从 signal_tracking.json 中对应信号记录获取；卖出信号同时展示"已实现P&L"和"避免的损失"
+- 持有天数：触发日到结算日之间的交易日数
+- 紧急度校准：✅正确 / ⚠️偏高（过早结算）/ ⚠️偏低（追踪过长）
+
+### 7.6 更新信号追踪数据库（v2.0 新增核心步骤）
+
+> 本节将当日信号数据持久化到 `signal_tracking.json`，并结算到期的持仓信号。
+
+#### 7.6.1 读取当日信号并写入追踪库
+
+用Python脚本扫描当日信号文件，将触发/执行的信号录入追踪库：
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -c "
+import json, os, re
+from datetime import date, datetime, timedelta
+
+today = date.today().strftime("%Y%m%d")  # ⚠️ 必须用 yyyyMMdd，不能用 isoformat()！
+tracking_file = 'my_doc/每日复盘/harness/automation/config/signal_tracking.json'
+signal_file = f'my_doc/每日复盘/reports/{today}/每日信号.md'
+
+# 1. 加载追踪数据库
+with open(tracking_file, 'r', encoding='utf-8') as f:
+    db = json.load(f)
+
+existing_ids = {s['signal_id'] for s in db['signals']}
+
+# 2. 解析当日信号文件
+# 读取信号总表，提取状态为'已触发'或'已执行'的信号
+# 对每条新触发信号（不在 existing_ids 中）→ 创建记录
+# 关键字段: signal_id, ticker, trade_type, direction, priority, urgency,
+#           expected_return_date, trigger_date, entry_price, quantity, status
+
+# 3. 更新已有信号（今日有执行操作的）
+
+# 4. 写回
+with open(tracking_file, 'w', encoding='utf-8') as f:
+    json.dump(db, f, indent=2, ensure_ascii=False)
+
+print(f'信号追踪库已更新: {len(db[\"signals\"])} 条记录')
+"
+```
+
+**操作规则**：
+- 新触发信号（已触发/已执行）= 创建记录，status="triggered"或"executed"
+- 已有信号的用户操作更新（如从"已触发"→"已执行"）= 更新 status 和 status_history
+- 未触发的信号（已过期/已废弃）= 不录入追踪库（只有触发了才追踪收益）
+
+#### 7.6.2 结算到期信号
+
+扫描所有 status="open" 的信号，检查是否满足结算条件：
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -c "
+import json
+from datetime import date, datetime, timedelta
+
+today = date.today().strftime("%Y%m%d")  # ⚠️ 必须用 yyyyMMdd，不能用 isoformat()！
+tracking_file = 'my_doc/每日复盘/harness/automation/config/signal_tracking.json'
+
+with open(tracking_file, 'r', encoding='utf-8') as f:
+    db = json.load(f)
+
+# 结算规则：
+# - 高紧急度: 触发日 + 2个交易日 >= today → 自动结算
+# - 低紧急度: expected_return_date <= today → 自动结算
+# - 手动结算: 用户执行了反向操作（减仓后回补 / 加仓后卖出）
+
+for sig in db['signals']:
+    if sig['status'] not in ('open', 'triggered', 'executed', 'partial_executed'):
+        continue
+    
+    trigger_date = date.fromisoformat(sig['trigger_date'])
+    days_since = (date.today() - trigger_date).days
+    
+    should_close = False
+    close_reason = ''
+    
+    if sig['urgency'] == 'high' and days_since >= 2:
+        should_close = True
+        close_reason = '高紧急度2日自动结算'
+    elif sig['urgency'] == 'low' and sig.get('expected_return_date'):
+        exp_date = date.fromisoformat(sig['expected_return_date'])
+        if date.today() >= exp_date:
+            should_close = True
+            close_reason = f'低紧急度预期收益日{sig[\"expected_return_date\"]}到期结算'
+    
+    if should_close:
+        # 取今日收盘价作为出场价
+        # 计算 P&L
+        # 买入信号: P&L = (出场价 - 入场价) * quantity
+        # 卖出信号: P&L = (入场价 - 成本基准) * quantity, 避免损失 = (入场价 - 出场价) * quantity
+        sig['status'] = 'resolved'
+        sig['exit_date'] = today
+        sig['status_history'].append({
+            'date': today,
+            'status': 'resolved',
+            'note': close_reason
+        })
+
+# 更新聚合统计
+# 重新计算 aggregates 中的各项指标
+
+with open(tracking_file, 'w', encoding='utf-8') as f:
+    json.dump(db, f, indent=2, ensure_ascii=False)
+
+print(f'到期结算完成')
+"
+```
+
+#### 7.6.3 填充信号收益追踪章节
+
+根据 `signal_tracking.json` 的最新数据，在复盘报告中输出：
+
+```markdown
+## 信号收益追踪
+
+### 本日结算信号
+
+| 信号ID | 标的 | 类型 | 紧急度 | 入场日 | 入场价 | 出场日 | 出场价 | P&L(元) | P&L(%) | 避免损失(元) | 持有天数 |
+|--------|------|:---:|:---:|--------|--------|--------|--------|:------:|:-----:|:----------:|:------:|
+
+### 累计追踪统计
+
+| 指标 | 数值 |
+|------|:---:|
+| 累计追踪信号数 | {N} |
+| 已结算 | {N}（持仓中: {N}） |
+| 累计已实现P&L | {±XXX.XX}元 |
+| 累计避免损失 | {XXX.XX}元 |
+| 总胜率 | {XX}%（{W}/{L}） |
+| 高紧急度: 胜率 / 平均持有天数 | {XX}% / {X.X}天 |
+| 低紧急度: 胜率 / 平均持有天数 | {XX}% / {X.X}天 |
+```
 
 ---
 
@@ -261,7 +436,62 @@ for f in ['my_doc/每日复盘/reports/{today}/早盘报告.md', 'my_doc/每日�
 
 每日覆盖，包含明日复盘所需的上下文框架。
 
-### 9.3 归档今日 Staging
+### 9.3 代码-名称交叉校验（‼️ 防止 159227→恒生科技ETF 类错误）
+
+> ⚠️ staging 文件中的持仓表是 AI 手写的，可能把代码和名称搞混（如 159227 写成了"恒生科技ETF"而非"航空航天ETF"）。必须在归档前做自动化交叉校验。
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -c "
+import re, sys
+
+# 1. 读取权威持仓配置
+with open('my_doc/每日复盘/harness/config/持仓.md', 'r', encoding='utf-8') as f:
+    config = f.read()
+
+# 提取 config/持仓.md 的代码→名称映射
+code_to_name = {}
+for line in config.split('\n'):
+    parts = [p.strip() for p in line.split('|')[1:-1]]
+    if len(parts) >= 2 and parts[1].isdigit() and len(parts[1]) == 6:
+        code_to_name[parts[1]] = parts[0]
+
+print(f'权威映射 (config/持仓.md): {code_to_name}')
+
+# 2. 检查 staging 文件
+errors = []
+for staging_file in [
+    'my_doc/每日复盘/harness/staging/今日-早盘分析.md',
+    'my_doc/每日复盘/harness/staging/今日-复盘分析.md'
+]:
+    try:
+        with open(staging_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        for line in content.split('\n'):
+            parts = [p.strip() for p in line.split('|')[1:-1]]
+            if len(parts) >= 2 and parts[1].isdigit() and len(parts[1]) == 6:
+                code = parts[1]
+                name_in_staging = parts[0]
+                name_in_config = code_to_name.get(code)
+                if name_in_config and name_in_staging != name_in_config:
+                    errors.append(f'{staging_file}: 代码{code}在staging中为\"{name_in_staging}\"，但config/持仓.md中为\"{name_in_config}\"')
+    except FileNotFoundError:
+        print(f'WARNING: {staging_file} 不存在，跳过校验')
+
+if errors:
+    print(f'[FAIL] {len(errors)} code-name mismatches:')
+    for e in errors:
+        print(f'  {e}')
+    print('Fix staging file names before archiving')
+    sys.exit(1)
+else:
+    print('[PASS] All staging code-name mappings match config/持仓.md')
+" 2>&1
+```
+
+**如果校验失败**：必须修正 staging 文件中的错误名称，重新运行校验直到通过，才能继续归档。
+
+### 9.4 归档今日 Staging
 
 ```bash
 cp harness/staging/今日-早盘分析.md "harness/archive/{today}/早盘分析-staging.md"
@@ -365,7 +595,99 @@ print(f'__POSITION_CHANGE__: added={len(added)} removed={len(removed)}')
 
 ---
 
-## 第十三步：更新 task_state → completed + 写入日志
+## 第十三步：REQ 验证与闭环（v3.0 新增）
+
+> 本节闭合 REQ 生命周期的最后一环：IMPLEMENTED → 效果验证 → CLOSED。
+
+### 13.1 扫描 IMPLEMENTED REQ
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+echo "=== IMPLEMENTED REQs (每日复盘) ==="
+grep "IMPLEMENTED" "my_doc/每日复盘/harness/automation/steering/REQ_INDEX.md" || echo "无 IMPLEMENTED REQ"
+```
+
+### 13.2 逐条验证
+
+对每个 IMPLEMENTED 的 REQ：
+
+1. **读取 REQ 文件**，提取期望结果和验收标准
+2. **对照今日复盘结果**：REQ 的预期效果是否在今日数据中体现？
+   - 如 REQ-001（信号收益追踪）：signal_tracking.json 是否正确更新？复盘报告中是否展示了信号收益汇总？
+   - 如 REQ-002（信号设计质量提升）：今日信号触发率是否改善？紧急度分配是否正确？
+3. **运行关联测试**（如 REQ 处理记录中有测试用例）：
+   ```bash
+   cd E:/ideaworkspace/astock-anayisis
+   # 根据 REQ 影响范围选择测试命令
+   # 数据结构变更 → Python schema 验证
+   # Prompt 改动 → grep 验证关键字段
+   # Python 代码 → pytest
+   ```
+
+### 13.3 判定
+
+对每个 IMPLEMENTED REQ，运行测试后按以下规则判定：
+
+```bash
+cd E:/ideaworkspace/astock-anayisis/my_doc/每日复盘/harness/automation
+python -m pytest tests/test_{REQ-ID}.py -v --tb=short 2>&1
+```
+
+| 情况 | 判定 | 操作 |
+|------|:---:|------|
+| 测试通过 + 复盘数据确认效果 | ✅ 可 CLOSED | 推进到 CLOSED，记录验证结果 |
+| 测试通过但效果不明确 | ⏸️ 保持 IMPLEMENTED | 追加观察备注，设定观察截止日（+3 交易日） |
+| 测试失败或效果为负 | ❌ 需修复 | 保持 IMPLEMENTED，创建 BUG 到 `harness/automation/bugs/open/` |
+| 无测试文件 | ⚠️ 保持 IMPLEMENTED | **自动创建补测子 REQ** 写入 `steering/open/REQ-{NNN}-TEST.md`，标题"补测: {原标题}"，优先级继承原 REQ，状态 OPEN |
+
+#### 13.3.1 BUG 创建（测试失败时）
+
+当测试失败或复盘数据确认效果为负：
+1. 按 `harness/automation/bugs/BUG_TEMPLATE.md` 模板创建 BUG
+2. 写入 `harness/automation/bugs/open/BUG-{NNN}.md`
+3. BUG 中引用来源 REQ 编号（形成 REQ↔BUG 双向链接）
+4. REQ 退回 IN_PROGRESS（若实现有 bug）或保持 IMPLEMENTED（若仅需测试校准）
+
+#### 13.3.2 补测子 REQ 创建（无测试文件时）
+
+1. 复制原 REQ 文件到 `steering/open/REQ-{NNN}-TEST.md`
+2. 修改标题为 "补测: {原标题}"
+3. 状态设为 OPEN，优先级继承原 REQ
+4. 在 REQ_INDEX.md 中登记
+5. 下一次 `auto_req_implement` 会认领并执行完整的 superpowers 流程（含 TDD）
+
+### 13.4 更新 REQ 状态
+
+对推进到 CLOSED 的 REQ：
+
+1. 更新 REQ 文件：
+   ```markdown
+   - **状态**: CLOSED
+   ```
+2. 追加处理记录：
+   ```markdown
+   | {时间} | 验证→CLOSED | 测试{N}通过; 复盘确认: {简述效果}; 闭环完成 |
+   ```
+3. 更新 `REQ_INDEX.md` 状态汇总（IMPLEMENTED -1, CLOSED +1）
+
+### 13.5 已 CLOSED REQ 的效果追踪
+
+对最近 5 个交易日内 CLOSED 的 REQ，快速检查：
+- REQ 的效果是否**持续有效**（而非一次性改善后又退化）？
+- 如果退化 → 创建新 REQ，标注 "Related: {原 REQ-ID} 效果退化"
+
+### 13.6 经验沉淀
+
+如果 REQ 推进到 CLOSED，提取可复用的经验：
+```markdown
+| {时间} | 经验沉淀 | 从 {REQ-ID} 闭环中学习: {关键教训/可复用模式} |
+```
+
+将经验追加到对应的 `harness/experience/` 文件（按内容分类归属）。
+
+---
+
+## 第十四步：更新 task_state → completed + 写入日志
 
 标记 `evening_review.status` = "completed"，记录所有产出文件列表。
 
@@ -381,3 +703,4 @@ print(f'__POSITION_CHANGE__: added={len(added)} removed={len(removed)}')
 | Staging 生成失败 | 这是 CRITICAL 错误 — 次日早盘无法执行，必须输出醒目告警 |
 | 经验文件写入冲突 | 先读取最新版本，再合并写入 |
 | 持仓配置同步失败 | 保留旧配置，不覆盖，记录 error |
+| 发现系统性改善机会 | 创建 REQ 文档到 `my_doc/每日复盘/harness/automation/steering/open/REQ-{NNN}.md`，按 `steering/REQ_TEMPLATE.md` 模板（模板已内置 superpowers 开发流程：brainstorming→writing-plans→TDD→executing-plans→code-review），并在 `steering/REQ_INDEX.md` 中登记 |
