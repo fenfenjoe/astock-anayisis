@@ -154,7 +154,7 @@
 ```
 自动化层（本section定义）
 ├── .claude/scripts/
-│   ├── task_schedule.json         #   13条任务调度定义（时间/星期/交易日等）
+│   ├── task_schedule.json         #   14条任务调度定义（时间/星期/交易日等）
 │   ├── task_scheduler.py          #   Python调度器（时间匹配+幂等+交易日判断）
 │   └── scheduler_state.json       #   运行时幂等状态（自动创建）
 ├── .claude/prompts/
@@ -166,16 +166,28 @@
 │   ├── bugs/                      #   BUG跟踪（open/closed + INDEX）
 │   └── archive/                   #   历史扫描/转化报告
 └── 每日复盘/harness/automation/   # 每日复盘自动化
-    ├── prompts/                   #   早盘/盘中/复盘/周度/经验健康prompts
-    ├── config/                    #   交易日历 + 跨任务状态
+    ├── prompts/                   #   早盘/盘中/复盘/REQ实施/周度/经验健康prompts
+    ├── config/                    #   交易日历 + 跨任务状态 + signal_tracking
+    ├── steering/                  #   优化需求Steering（REQ生命周期管理）
     └── logs/                      #   执行日志
 ```
 
 **核心机制**：一个 `/loop 7m /clear && 执行 loop_runner.md` 替代全部 CronCreate 定时任务。每次迭代先 `/clear` 清空上下文，Python 调度器判断是否有到期任务，有则执行，无则跳过。**零上下文累积**。
 
-**调度精度**：7 分钟间隔 + 7 分钟窗口，每个任务在目标时间后 0~7 分钟内触发。全部 13 条任务定义见 `.claude/scripts/task_schedule.json`。
+**调度精度**：7 分钟间隔 + 7 分钟窗口，每个任务在目标时间后 0~7 分钟内触发。全部 14 条任务定义见 `.claude/scripts/task_schedule.json`。
 
-### 7.2 全部 13 条任务调度
+**闭环架构**：自动化系统形成完整的 Dev Loop：
+
+```
+问题发现 (bug_inspect/strategy_scan/evening_review/experience_health)
+  → REQ创建 (steering/open/)
+  → 自动实施 (req_implement → superpowers 5步)
+  → 效果验证 (evening_review 第十三步)
+  → CLOSED + 经验沉淀
+  → Steering健康监控 (experience_health 第五(B)步)
+```
+
+### 7.2 全部 14 条任务调度
 
 | task_id | 时间 | 星期 | 需交易日 | Prompt |
 |---------|------|------|---------|--------|
@@ -195,6 +207,7 @@
 | strategy_scan_weekly | 12:37 | 周二 | ✗ | `strategy_scan_weekly.md` |
 | experience_health | 12:47 | 周三 | ✗ | `auto_experience_health.md` |
 | weekly_portfolio | 13:17 | 周四 | ✗ | `auto_weekly_portfolio.md` |
+| req_implement | 12:57 | 一~五 | ✗ | `auto_req_implement.md` |
 
 > 修改调度：编辑 `.claude/scripts/task_schedule.json`，下次迭代即生效。
 
@@ -226,7 +239,8 @@ SessionStart hook 会在启动时提醒此命令。
 
 ### 7.5 关键纪律
 
-- **自动化不替代人类判断**：MANUAL_REVIEW BUG 必须人工确认；策略发现绿灯候选需要人工确认后才转化
+- **自动化不替代人类判断**：MANUAL_REVIEW BUG 必须人工确认；策略发现绿灯候选需要人工确认后才转化；REQ CLOSED 需要用户最终确认
+- **REQ 闭环铁律**：自动化发现的问题 → REQ 文档 → superpowers 实施 → 测试验证 → CLOSED，每一步都有对应的自动化任务驱动，不允许 REQ 创建后无人认领
 - **数据铁律不变**：自动化prompts中涉及A股数据的，必须走 `a-stock-data` skill
 - **Generator-Evaluator 分离不变**：自动复盘仍然严格执行"早盘预测 vs 复盘评估"的对抗审查
 - **失败透明**：所有自动化任务写入执行日志（`automation/logs/`），失败不静默
@@ -235,11 +249,46 @@ SessionStart hook 会在启动时提醒此命令。
 
 ### 7.6 优化需求 Steering
 
-用户可通过 `etf-strategies/automation/steering/` 注入优化需求，把控自动化迭代方向。
+用户可通过 `etf-strategies/automation/steering/` 注入优化需求，把控自动化迭代方向。自动化任务执行过程中发现的架构性改进也会自动创建 REQ 文档。
 
 - **创建需求**：在 `steering/open/` 下按 `REQ_TEMPLATE.md` 模板创建 `REQ-{NNN}.md`，并在 `REQ_INDEX.md` 中登记
 - **自动集成**：巡检/修复/发现任务执行时自动读取 `steering/open/` 中待处理需求，纳入工作范围
-- **状态管理**：OPEN → IN_PROGRESS (自动化任务自动推进) → ADOPTED/REJECTED/IMPLEMENTED (用户人工确认)
+- **状态管理**：OPEN → IN_PROGRESS (自动化任务自动推进) → IMPLEMENTED (代码已写) → CLOSED (测试通过+用户确认)；ADOPTED/REJECTED 为特殊终态
+- **开发流程（强制）**：REQ 实施**必须走 superpowers 流程** — brainstorming → writing-plans → TDD → executing-plans → code-review。禁止跳过 TDD（无测试不得推进到 CLOSED），禁止跳过 brainstorming（不假思索的实现=返工）。涉及 A 股数据的仍走 `a-stock-data` skill
 
-每日复盘项目同样有独立的 steering 目录：`my_doc/每日复盘/harness/automation/steering/`。
+每日复盘项目同样有独立的 steering 目录：`my_doc/每日复盘/harness/automation/steering/`，规则同上。
+
+**闭环驱动任务**：
+| 环节 | 自动化任务 | 说明 |
+|------|-----------|------|
+| 发现问题→REQ | `auto_evening_review` / `auto_experience_health` | 发现系统性改善机会时创建 REQ |
+| REQ 实施 | `auto_req_implement` (每日 12:57) | 扫描 OPEN REQ → superpowers 5步 → IMPLEMENTED |
+| 效果验证 | `auto_evening_review` 第十三步 | IMPLEMENTED → 测试+复盘确认 → CLOSED |
+| 健康监控 | `auto_experience_health` 第五(B)步 | 僵死/滞留/卡住检测 + 闭环率统计 |
+
+### 7.7 测试基础设施（v4.0 新增）
+
+每日复盘 harness 具有独立的测试框架，与 etf-strategies 的测试体系平行运行。
+
+**目录结构**：
+```
+harness/automation/
+├── lib/           # 可测试 Python 纯函数库
+├── tests/         # pytest 测试套件
+├── bugs/          # Harness BUG 跟踪系统
+└── pytest.ini     # 独立 pytest 配置
+```
+
+**运行测试**：
+```bash
+cd my_doc/每日复盘/harness/automation
+python -m pytest tests/ -v              # 全量
+python -m pytest tests/test_REQ_001.py -v  # 按 REQ
+```
+
+**关键纪律**：
+- REQ 实施必须通过 TDD 门禁（auto_req_implement 第 3.5 步），无测试不得推进到 IMPLEMENTED
+- Harness BUG 写入自身 `bugs/` 目录，不跨项目到 etf-strategies
+- `harness_bug_auto_fix` 调度任务（每小时 :17）自动处理可修复 BUG
+- 涉及金融计算/信号逻辑的 BUG 标记 MANUAL_REVIEW，需人工确认
 
