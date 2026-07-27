@@ -121,6 +121,159 @@ done
 
 ---
 
+## 第五(B)步：Steering 系统健康检查（v3.0 新增）
+
+> 确保 REQ 闭环系统本身不退化。僵死的 REQ = 发现了问题但无人解决。
+
+### 5B.1 读取 REQ 索引
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+echo "=== 每日复盘 Steering ==="
+cat "my_doc/每日复盘/harness/automation/steering/REQ_INDEX.md"
+echo ""
+echo "=== ETF Strategies Steering ==="
+cat "etf-strategies/automation/steering/REQ_INDEX.md"
+```
+
+### 5B.2 僵死检测
+
+| 检查项 | 阈值 | 判定 |
+|--------|------|------|
+| OPEN 超过 7 天未推进 | >7 天 | ⚠️ 僵死 — 标记 "需人工关注或关闭" |
+| IN_PROGRESS 超过 3 天 | >3 天 | ⚠️ 滞留 — 可能实施受阻 |
+| IMPLEMENTED 超过 5 天未 CLOSED | >5 天 | ⚠️ 卡住 — 可能缺测试或验证 |
+| OPEN 数量 > 5 | >5 | ⚠️ 积压 — 创建速度 > 实施速度 |
+
+### 5B.3 闭环率统计
+
+统计最近 30 天的 REQ 流转：
+
+```
+创建总数: {N}
+→ 仍 OPEN: {n}
+→ IN_PROGRESS: {n}
+→ IMPLEMENTED: {n}
+→ CLOSED: {n}
+→ REJECTED: {n}
+
+闭环率 = CLOSED / (创建总数 - 仍 OPEN) × 100%
+```
+
+| 闭环率 | 评估 |
+|--------|------|
+| >70% | ✅ 健康 |
+| 40-70% | ⚠️ 需关注 |
+| <40% | ❌ 严重积压 |
+
+### 5B.4 目录完整性
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+# 检查 steering 目录结构
+for dir in "my_doc/每日复盘/harness/automation/steering" "etf-strategies/automation/steering"; do
+  echo "=== $dir ==="
+  ls -la "$dir/" 2>/dev/null || echo "DIR MISSING"
+  ls -la "$dir/open/" 2>/dev/null || echo "open/ MISSING"
+done
+
+# 交叉校验: REQ_INDEX.md 中的 REQ 是否都有对应文件
+echo "=== 交叉校验 ==="
+python -c "
+import os, re
+
+for steering_dir in [
+    'my_doc/每日复盘/harness/automation/steering',
+    'etf-strategies/automation/steering'
+]:
+    index_file = os.path.join(steering_dir, 'REQ_INDEX.md')
+    if not os.path.exists(index_file):
+        print(f'MISSING: {index_file}')
+        continue
+    
+    with open(index_file, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    # 提取 REQ-XXX 引用
+    refs = set(re.findall(r'REQ-\d+', content))
+    
+    for ref in refs:
+        req_file = os.path.join(steering_dir, 'open', f'{ref}.md')
+        if not os.path.exists(req_file):
+            print(f'ORPHAN: {ref} in INDEX but {req_file} MISSING')
+    
+    # 反向检查: open/ 中的文件是否在 INDEX 中
+    open_dir = os.path.join(steering_dir, 'open')
+    if os.path.exists(open_dir):
+        for f in os.listdir(open_dir):
+            if f.startswith('REQ-') and f.endswith('.md'):
+                req_id = f.replace('.md', '')
+                if req_id not in refs:
+                    print(f'UNREGISTERED: {f} exists but not in INDEX')
+"
+```
+
+### 5B.5 自动修复（仅低风险）
+
+- 如果 `open/` 中有 REQ 文件但不在 INDEX → 自动追加到 INDEX
+- 如果 INDEX 中有 REQ 但文件不存在 → 标记为 ORPHAN，建议人工清理
+- 如果 `steering/` 目录结构缺失 → 自动创建（mkdir -p）
+
+### 5B.6 IMPLEMENTED 无测试滞留检测（v4.0 新增）
+
+> 检测 IMPLEMENTED 状态但缺少对应测试文件的 REQ，防止 TDD 门禁被绕过。
+
+#### 5B.6.1 扫描
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -c "
+import sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.state_machine import detect_stuck
+
+# 从 REQ_INDEX.md 手动解析（避免依赖 markdown parser）
+reqs = []
+with open('my_doc/每日复盘/harness/automation/steering/REQ_INDEX.md', 'r', encoding='utf-8') as f:
+    for line in f:
+        if 'IMPLEMENTED' in line and 'REQ-' in line:
+            parts = line.strip().split('|')
+            if len(parts) >= 5:
+                req_id = parts[1].strip()
+                created = parts[5].strip() if len(parts) > 5 else 'unknown'
+                reqs.append({'id': req_id, 'status': 'IMPLEMENTED', 'created_date': created})
+
+tests_dir = 'my_doc/每日复盘/harness/automation/tests'
+stuck = detect_stuck(reqs, tests_dir)
+
+if stuck:
+    print(f'=== {len(stuck)} REQ(s) IMPLEMENTED but no test file ===')
+    for s in stuck:
+        print(f\"  {s['id']}: {s['stuck_reason']}\")
+else:
+    print('OK: All IMPLEMENTED REQs have test files')
+"
+```
+
+#### 5B.6.2 判定
+
+| 情况 | 阈值 | 操作 |
+|------|------|------|
+| 无测试 + 停留 ≤ 3 交易日 | — | 静默，正常补测窗口期内 |
+| 无测试 + 停留 > 3 交易日 | >3 天 | ⚠️ 输出告警 + 建议手动处理 |
+| 无测试 + 停留 > 7 交易日 | >7 天 | ❌ 自动创建补测子 REQ（`steering/open/REQ-{id}-TEST.md`） |
+
+#### 5B.6.3 写入健康报告
+
+```
+(C) IMPLEMENTED 无测试滞留:
+  - 滞留 >3 天: {N} — {REQ-ID 列表}
+  - 滞留 >7 天 (已自动创建补测 REQ): {N} — {REQ-ID 列表}
+  - 健康: {N} IMPLEMENTED，全部有测试
+```
+
+---
+
 ## 第六步：输出健康报告
 
 写入 `my_doc/每日复盘/harness/automation/logs/experience_health_{YYYY-MM-DD}.md`：
@@ -153,6 +306,15 @@ done
 - 短线机会经验.md: {完整 / 缺少章节: [...]}
 - 报告审阅经验.md: {完整 / 缺少章节: [...]}
 
+## Steering 系统健康
+- 僵死 REQ (OPEN>7天): {N} — {REQ-ID 列表}
+- 滞留 REQ (IN_PROGRESS>3天): {N} — {REQ-ID 列表}
+- 卡住 REQ (IMPLEMENTED>5天): {N} — {REQ-ID 列表}
+- 无测试 IMPLEMENTED (>3天): {N} — {REQ-ID 列表}
+- 积压程度: {OPEN 总数} OPEN — {OK/⚠️积压/❌严重积压}
+- 30日闭环率: {X}% ({CLOSED}/{总处理}) — {✅/⚠️/❌}
+- 目录完整性: {OK/有异常}
+
 ## 综合评估
 {健康/需要关注/需要紧急维护}
 
@@ -173,3 +335,5 @@ done
 - 解决矛盾条目
 - 删除过时条目
 - > 500 行的压缩合并
+
+如果建议操作涉及架构性改动（如经验库重组、新章节体系设计），**创建 REQ 文档**到 `my_doc/每日复盘/harness/automation/steering/open/REQ-{NNN}.md`，按 `steering/REQ_TEMPLATE.md` 模板（模板已内置 superpowers 开发流程：brainstorming→writing-plans→TDD→executing-plans→code-review），并在 `steering/REQ_INDEX.md` 中登记。
