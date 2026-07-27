@@ -138,7 +138,7 @@
       "trading_day_required": false,
       "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_experience_health.md",
       "window_minutes": 7,
-      "description": "经验库健康 (每周三)"
+      "description": "经验库健康 + Steering健康 (每周三)"
     },
     {
       "task_id": "weekly_portfolio",
@@ -148,6 +148,26 @@
       "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_weekly_portfolio.md",
       "window_minutes": 7,
       "description": "周度组合回顾 (每周四)"
+    },
+    {
+      "task_id": "req_implement",
+      "target_time": "12:57",
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": false,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_req_implement.md",
+      "window_minutes": 7,
+      "description": "REQ自动实施 (superpowers闭环，每日)"
+    },
+    {
+      "task_id": "harness_bug_auto_fix",
+      "hourly": true,
+      "target_minute": 17,
+      "hourly_range": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+      "days_of_week": [0, 1, 2, 3, 4],
+      "trading_day_required": false,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_bug_fix.md",
+      "window_minutes": 7,
+      "description": "Harness BUG自动修复 (每小时 :17)"
     }
   ]
 }
