@@ -48,6 +48,15 @@ def validate_transition(from_status: str, to_status: str) -> tuple:
 # TDD 门禁
 # ============================================================
 
+def _req_to_test_filename(req_id: str) -> str:
+    """将 REQ-ID 转换为测试文件名（连字符替换为下划线）。
+
+    ex: "REQ-001" -> "test_REQ_001.py"
+    """
+    safe_id = req_id.replace('-', '_')
+    return f"test_{safe_id}.py"
+
+
 def check_test_exists(req_id: str, tests_dir: str) -> bool:
     """检查指定 REQ 的测试文件是否存在。
 
@@ -58,7 +67,7 @@ def check_test_exists(req_id: str, tests_dir: str) -> bool:
     Returns:
         True 如果 test_{REQ-ID}.py 存在
     """
-    test_file = Path(tests_dir) / f"test_{req_id}.py"
+    test_file = Path(tests_dir) / _req_to_test_filename(req_id)
     return test_file.exists()
 
 
@@ -72,7 +81,7 @@ def run_tests(req_id: str, tests_dir: str) -> tuple:
     Returns:
         (passed: bool, output: str)
     """
-    test_file = f"test_{req_id}.py"
+    test_file = _req_to_test_filename(req_id)
     test_path = Path(tests_dir) / test_file
 
     if not test_path.exists():
@@ -111,7 +120,7 @@ def tdd_gate_check(req_id: str, tests_dir: str) -> dict:
         return {
             'test_exists': False,
             'test_pass': False,
-            'output': f'Test file test_{req_id}.py not found in {tests_dir}',
+            'output': f'Test file {_req_to_test_filename(req_id)} not found in {tests_dir}',
             'blocked': True,
         }
 
