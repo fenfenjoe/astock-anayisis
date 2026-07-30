@@ -154,7 +154,7 @@
 ```
 自动化层（本section定义）
 ├── .claude/scripts/
-│   ├── task_schedule.json         #   14条任务调度定义（时间/星期/交易日等）
+│   ├── task_schedule.json         #   16条任务调度定义（时间/星期/交易日等）
 │   ├── task_scheduler.py          #   Python调度器（时间匹配+幂等+交易日判断）
 │   └── scheduler_state.json       #   运行时幂等状态（自动创建）
 ├── .claude/prompts/
@@ -187,7 +187,7 @@
   → Steering健康监控 (experience_health 第五(B)步)
 ```
 
-### 7.2 全部 14 条任务调度
+### 7.2 全部 16 条任务调度
 
 | task_id | 时间 | 星期 | 需交易日 | Prompt |
 |---------|------|------|---------|--------|
@@ -200,6 +200,7 @@
 | intraday_1400 | 14:00 | 一~五 | ✓ | `auto_intraday_check.md` |
 | intraday_1430 | 14:30 | 一~五 | ✓ | `auto_intraday_check.md` |
 | evening_review | 15:52 | 一~五 | ✓ | `auto_evening_review.md` |
+| logic_inspect | 17:07 | 每天 | ✗ | `auto_logic_inspect.md` |
 | bug_auto_fix | 每小时:07 (9-18) | 一~五 | ✗ | `bug_auto_fix.md` |
 | bug_inspect_data | 12:07 | 一~五 | ✗ | `bug_inspect_data.md` |
 | bug_inspect_code | 12:17 | 一~五 | ✗ | `bug_inspect_code.md` |
@@ -208,6 +209,7 @@
 | experience_health | 12:47 | 周三 | ✗ | `auto_experience_health.md` |
 | weekly_portfolio | 13:17 | 周四 | ✗ | `auto_weekly_portfolio.md` |
 | req_implement | 12:57 | 一~五 | ✗ | `auto_req_implement.md` |
+| pending_remind | 每2h:13 (9-21) | 每天 | ✗ | `auto_pending_remind.md` |
 
 > 修改调度：编辑 `.claude/scripts/task_schedule.json`，下次迭代即生效。
 
@@ -246,6 +248,7 @@ SessionStart hook 会在启动时提醒此命令。
 - **失败透明**：所有自动化任务写入执行日志（`automation/logs/`），失败不静默
 - **交易日优先**：所有盘中/盘前/盘后自动化任务首先检查是否为交易日，非交易日自动跳过
 - **幂等双保险**：调度器 `scheduler_state.json` + 任务 prompt 内部 `task_state.json` 各自独立检查，防止重复执行
+- **用户通知不静默**：逻辑巡检发现的 MANUAL_REVIEW BUG 写入 `PENDING_CONFIRMATION.md`，`auto_pending_remind` 每 2 小时扫描并提醒，确保用户感知待确认事项
 
 ### 7.6 优化需求 Steering
 
