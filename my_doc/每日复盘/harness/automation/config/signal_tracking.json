@@ -1,0 +1,49 @@
+{
+  "_schema": "1.0",
+  "_description": "跨日信号追踪数据库: 记录所有已触发信号的完整生命周期和P&L",
+  "_created": "2026-07-24",
+  "_updated": "2026-07-24",
+  "_rules": {
+    "high_urgency_tracking_days": 2,
+    "low_urgency_default_days": 5,
+    "archive_after_days": 90,
+    "archive_path": "harness/archive/signal_tracking_{year}.json"
+  },
+  "signals": [],
+  "aggregates": {
+    "total_signals_tracked": 0,
+    "total_resolved": 0,
+    "total_open": 0,
+    "total_pnl_amount": 0.00,
+    "total_pnl_pct": 0.00,
+    "total_avoided_loss": 0.00,
+    "win_rate": null,
+    "win_count": 0,
+    "lose_count": 0,
+    "by_urgency": {
+      "high": {
+        "count": 0,
+        "resolved": 0,
+        "total_pnl": 0.00,
+        "total_avoided_loss": 0.00,
+        "win_rate": null,
+        "avg_holding_days": null
+      },
+      "low": {
+        "count": 0,
+        "resolved": 0,
+        "total_pnl": 0.00,
+        "total_avoided_loss": 0.00,
+        "win_rate": null,
+        "avg_holding_days": null
+      }
+    },
+    "by_priority": {
+      "P0": {"count": 0, "resolved": 0, "total_pnl": 0.00, "total_avoided_loss": 0.00, "win_rate": null},
+      "P1": {"count": 0, "resolved": 0, "total_pnl": 0.00, "total_avoided_loss": 0.00, "win_rate": null},
+      "P2": {"count": 0, "resolved": 0, "total_pnl": 0.00, "total_avoided_loss": 0.00, "win_rate": null}
+    },
+    "by_trade_type": {},
+    "by_ticker": {}
+  }
+}

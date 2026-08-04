@@ -286,10 +286,111 @@ else:
 " 2>&1
 ```
 
+### B4: Staging 新鲜度 — 复盘后必须刷新为明日可执行 prompt
+
+> **铁律**：`evening_review=completed` → staging 文件必须已覆写为**明日**可执行内容。
+> 不可跳过此步骤——复盘的最后一步就是生成次日 staging。上一日 staging 在复盘开始时已归档，
+> 当前 staging 必须指向下一个交易日。
+
+**检查方法**：
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -c "
+import os, json, sys
+from datetime import date, datetime
+
+today = date.today().strftime('%Y%m%d')
+failures = []
+
+# 1. 读取 task_state 确认 evening_review 是否完成
+state_file = 'my_doc/每日复盘/harness/automation/config/task_state.json'
+er_completed = False
+er_completed_time = None
+if os.path.exists(state_file):
+    with open(state_file, 'r') as f:
+        state = json.load(f)
+    er = state.get('tasks', {}).get('evening_review', {})
+    if er.get('status') == 'completed':
+        er_completed = True
+        er_completed_time = er.get('completed_at', None)
+
+if not er_completed:
+    print('B4:PASS: evening_review 尚未完成，staging freshess豁免')
+    sys.exit(0)
+
+# 2. 检查两个 staging 文件的修改时间
+staging_files = [
+    'my_doc/每日复盘/harness/staging/今日-早盘分析.md',
+    'my_doc/每日复盘/harness/staging/今日-复盘分析.md'
+]
+
+for sf in staging_files:
+    if not os.path.exists(sf):
+        failures.append(f'MISSING: {sf}')
+        continue
+
+    # 文件修改时间必须晚于 evening_review 完成时间（如果记录存在）
+    mtime = datetime.fromtimestamp(os.path.getmtime(sf))
+    mtime_str = mtime.strftime('%Y-%m-%d %H:%M')
+
+    if er_completed_time:
+        try:
+            er_time = datetime.fromisoformat(er_completed_time)
+            if mtime < er_time:
+                failures.append(f'STALE: {sf} mtime={mtime_str} < evening_review完成={er_completed_time}')
+                continue
+        except:
+            pass  # 无法解析时间戳，跳过时间比对
+
+    # 3. 检查 staging 内容是否指向明日（而非昨日或今日）
+    with open(sf, 'r', encoding='utf-8') as fh:
+        content = fh.read()
+
+    # 关键的日期标记：staging文件头应包含明日日期
+    # 早盘分析：'今日早盘分析 — YYYY-MM-DD' 其中 YYYY-MM-DD 应为明日
+    # 复盘分析：'执行日期：**YYYY-MM-DD' 其中 YYYY-MM-DD 应为明日
+    import re
+    dates_found = re.findall(r'(\d{4}-\d{2}-\d{2})', content[:500])
+    tomorrow = date.today().strftime('%Y-%m-%d')
+
+    if tomorrow not in dates_found:
+        # 检查是否有比今天更新的日期
+        future_dates = [d for d in dates_found if d > date.today().strftime('%Y-%m-%d')]
+        today_str = date.today().strftime('%Y-%m-%d')
+        past_dates = [d for d in dates_found if d <= today_str]
+
+        if not future_dates:
+            failures.append(f'OUTDATED: {sf} 文件内日期={dates_found[:3]} 不含明日({tomorrow})或未来日期，疑似未刷新')
+        else:
+            pass  # 有未来日期，可能已刷新但用了不同的日期格式
+
+    # 4. 检查 staging 大小是否合理（空文件<500字节=未填充）
+    size = os.path.getsize(sf)
+    if size < 500:
+        failures.append(f'TOO_SMALL: {sf} 仅{size}字节，疑似未填充内容')
+
+if failures:
+    for f_item in failures:
+        print(f'B4:FAIL: {f_item}')
+else:
+    print('B4:PASS: staging 文件新鲜，指向明日且内容充实')
+" 2>&1
+```
+
 **处理**：
-- B1/B2/B3 PASS → 记录日志
-- B1/B2/B3 FAIL → 创建 BUG
+- PASS → 记录日志
+- FAIL → 创建 BUG（`auto_fix_eligible=false`，MANUAL_REVIEW — **复盘流程违规：staging生成步骤被跳过**）
+  - BUG 优先级：P1（影响次日早盘分析执行）
+  - BUG 标题示例：`复盘完成但 staging 未刷新为明日可执行 prompt`
+  - 修复建议：重新执行 staging 生成步骤（见 `daily-review-harness` skill §Staging Prompt 生成协议）
+- **非交易日**：`evening_review=completed` 但同时 `intraday` 任务也未执行 → 标记今日为非交易日，B4 不检查（跳过），避免误报
+
+**处理**：
+- B1/B2/B3/B4 PASS → 记录日志
+- B1/B2/B3/B4 FAIL → 创建 BUG
   - B3（代码名称不匹配）→ `auto_fix_eligible=true`（确定性重命名修复），状态 OPEN
+  - B4（staging未刷新）→ `auto_fix_eligible=false`（复盘流程违规，需人工审视），状态 MANUAL_REVIEW
   - B1/B2（章节缺失）→ `auto_fix_eligible=false`（需要判断为什么），状态 MANUAL_REVIEW
 - **非交易日**：B1/B2 若章节完整但日期为旧 → WARN（非 FAIL）
 

@@ -1,23 +1,29 @@
 {
   "_schema": "1.1",
   "_description": "每日复盘自动化流水线的跨任务协调状态。早盘→盘中(4次)→复盘 共享此文件，确保幂等和流水线感知。",
-  "_updated": "2026-07-22",
-  "date": "2026-07-22",
+  "_updated": "2026-07-24",
+  "signal_tracking_version": "1.0",
+  "date": "20260804",
   "trading_day": true,
   "tasks": {
     "morning_analysis": {
       "status": "completed",
-      "executed_at": "2026-07-22T09:10:00",
+      "executed_at": "2026-08-04T09:12:05.316601",
       "reports_generated": [
         "早盘报告.md",
         "每日信号.md"
       ],
       "signal_count": 8,
-      "p0_signals": 4,
-      "p1_signals": 1,
+      "p0_signals": 2,
+      "p1_signals": 2,
       "p2_signals": 3,
       "errors": [],
-      "warnings": []
+      "warnings": [
+        "Staging文件来自7/23（距今4个交易日+1个周末），基于最新数据重新生成",
+        "海外市场数据通过WebSearch获取（非a-stock-data直连）",
+        "CNH/日经/KOSPI未获取（非交易时段无法获取）"
+      ],
+      "fix_note": "修复后重新执行：staging更新为7/28生成+持仓从config/持仓.md权威读取(5只)"
     },
     "intraday_1003": {
       "status": "not_yet",
@@ -49,22 +55,68 @@
     },
     "evening_review": {
       "status": "completed",
-      "executed_at": "2026-07-22T16:28:00",
+      "executed_at": "2026-08-03T16:01:45",
       "reports_generated": [
         "复盘报告.md"
       ],
-      "staging_generated": true,
-      "experience_updated": true,
-      "portfolio_synced": true,
-      "errors": [],
-      "warnings": [],
-      "_note": "v2修正版"
+      "staging_generated": "今日-早盘分析.md + 今日-复盘分析.md (for 8/4)",
+      "prediction_accuracy": "83% (5/6 correct/partial, +23pp vs 7/31)"
+    },
+    "intraday_0940": {
+      "status": "completed",
+      "executed_at": "2026-08-03T09:46:22.279348",
+      "signals_triggered": 0
+    },
+    "intraday_1000": {
+      "status": "completed",
+      "executed_at": "2026-07-30T10:02:05.216914",
+      "signals_triggered": 0,
+      "signals_expired": 1
+    },
+    "intraday_1030": {
+      "status": "completed",
+      "executed_at": "2026-07-30T10:37:37.734291",
+      "signals_triggered": 1,
+      "trigger_details": "SIG-03 备选触发"
+    },
+    "intraday_1100": {
+      "status": "completed",
+      "executed_at": "2026-08-03T11:08:00",
+      "market_status": "上证-0.59%/创业板-0.75%/半导体-5.34% 系统性风险持续",
+      "signals_expired": 3,
+      "signals_triggered": 0,
+      "new_signals": 0,
+      "active_signals": "SIG-04(黄金待触发) SIG-06(半导体观察恶化) SIG-08(电网接近突破)"
+    },
+    "intraday_1330": {
+      "status": "completed",
+      "executed_at": "2026-08-03T13:32:00",
+      "signals_triggered": 1,
+      "trigger_details": "SIG-04 黄金ETF触发: 8.41进入买区8.380-8.420",
+      "signals_expired": 0,
+      "new_signals": 0,
+      "market_note": "午后跌幅扩大: 上证-0.78%/创业板-1.00%/半导体-6.15%",
+      "active_signals": "SIG-04(已触发待执行) SIG-06(半导体观察恶化) SIG-08(电网接近突破)"
+    },
+    "intraday_1400": {
+      "status": "completed",
+      "executed_at": "2026-08-03T14:00:00",
+      "market_note": "尾盘前持续走弱: 上证新低3798(-0.80%) 创-1.37% 半导体-6.65%",
+      "signals_triggered": 0,
+      "active_alerts": "SIG-04黄金已脱离买区 SIG-06半导体极端恶化 SIG-08电网横盘待突破"
+    },
+    "intraday_1430": {
+      "status": "completed",
+      "executed_at": "2026-08-03T14:35:00",
+      "market_close_est": "上证3807(-0.65%) 创3299(-1.32%) 半导体-6.85%",
+      "stop_loss_triggered": false,
+      "overnight_assessment": "隔夜风险可控：无P0止损触发；半导体-6.85%极端但未封跌停；电网+1.70%军工+1.44%逆势走强明日关注"
     }
   },
   "pipeline_health": {
     "morning_missing": false,
     "staging_missing_for_tomorrow": false,
     "consecutive_failures": 0,
-    "last_successful_cycle": "2026-07-22"
+    "last_successful_cycle": "2026-08-03"
   }
 }

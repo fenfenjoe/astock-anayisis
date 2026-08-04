@@ -13,6 +13,12 @@
 
 **核心约束**: 严格遵循 Generator-Evaluator 分离原则。你要以一个批判性评估者的角色审视早盘分析的预测，不允许为早盘分析的错误找借口。
 
+**🚨 铁律：全部 13 个步骤不可跳过，不可精简，不可"产出精简版"。**
+- 复盘报告不是摘要——必须包含模板要求的所有章节和数据表
+- **第九步（生成次日 Staging）是不可跳过的硬性门禁**——复盘的最后一步必须是覆写 staging 文件为明日可执行内容。不生成 staging = 次日早盘无 prompt 可用 = 复盘流程失效
+- 若因 token/上下文限制确实无法完成全部步骤 → 至少完成第九步(Staging)+第十步(持仓同步)，并在报告中明确标注"XX步骤因上下文限制未完成"
+- 逻辑巡检(B4)会在 17:07 自动检查 staging 新鲜度，跳过生成将被检测到并创建 P1 BUG
+
 ---
 
 ## 第一步：前置检查
@@ -161,13 +167,20 @@ for f in ['my_doc/每日复盘/reports/{today}/早盘报告.md', 'my_doc/每日�
 
 ## 第七步：信号执行复盘
 
-对 `每日信号.md` 中的每条信号进行评级，并**原地写入**以下两个节：
+> 🚨 **关键约束：信号评价必须"原地写入"到 `每日信号.md` 文件中。**
+> 复盘报告（`复盘报告.md`）中可以有一个汇总版，但 `每日信号.md` 中的 `## 信号评价（复盘时填入）` 和 `## 当日信号统计` 两个节的表格**必须有实际数据行**，不能留空。
+> **这是硬性要求，不是建议。如果这两个节为空，复盘视为未完成。**
 
-### 7.0 写入位置
+对 `每日信号.md` 中的每条信号进行评级，并**原地写入**以下三个节：
 
-- **`## 信号评价（复盘时填入）`**：填写 7.1（决策质量）+ 7.2（执行质量）的评级结果，含入场价/出场价/P&L/持有天数/紧急度校准
-- **`## 当日信号统计`**：填写 7.4 的汇总统计（含紧急度相关指标）
-- **`## 信号收益追踪（复盘时填入）`**：填写 7.6 的本日结算信号 + 累计统计（从 signal_tracking.json 聚合）
+### 7.0 写入位置与操作顺序
+
+1. **先读取** `reports/{today}/每日信号.md` 当前内容
+2. **修改**以下三个节的内容（保留节标题，填充表格数据行）：
+   - **`## 信号评价（复盘时填入）`**：填写 7.1（决策质量）+ 7.2（执行质量）的评级结果，含入场价/出场价/P&L/持有天数/紧急度校准。**每条已触发/已执行的信号必须有一行**（未触发/已过期的信号可选填）
+   - **`## 当日信号统计`**：填写 7.4 的汇总统计（含紧急度相关指标）。**所有指标必须填具体数字，不可留"—"**
+   - **`## 信号收益追踪（复盘时填入）`**：填写 7.6 的本日结算信号 + 累计统计（从 signal_tracking.json 聚合）
+3. **写回** `每日信号.md` 文件
 
 ### 7.1 决策质量评级 (S/A/B/C/D/F)
 - S: 信号精准预判了市场走势，触发条件恰到好处
@@ -176,6 +189,13 @@ for f in ['my_doc/每日复盘/reports/{today}/早盘报告.md', 'my_doc/每日�
 - C: 信号方向错误但损失可控
 - D: 信号方向错误且有明显损失
 - F: 信号本身不该生成（逻辑错误/数据错误）
+
+**升级质量评级（仅针对操作来源="观察升级"的信号，v3.0新增）：**
+- U-S: 升级时机精准，升级后信号获利
+- U-A: 升级方向正确，升级后信号平盘或微利
+- U-B: 升级方向正确但时机偏早/偏晚
+- U-C: 假突破升级——原观察信号本身不该触发（升级条件过于宽松），升级后亏损
+- U-F: 该升级但未升级——方向确认明确但升级条件未触发（升级条件设计错误）
 
 ### 7.2 执行质量评级 (A/B/C/D/F)
 - A: 完美执行，在最佳时机
@@ -211,6 +231,9 @@ for f in ['my_doc/每日复盘/reports/{today}/早盘报告.md', 'my_doc/每日�
 | 高紧急度触发率 | 高紧急度信号中已触发数 / 高紧急度信号总数 |
 | 低紧急度触发率 | 低紧急度信号中已触发数 / 低紧急度信号总数 |
 | 紧急度正确率 | 复盘确认紧急度分配正确的信号数 / 信号总数 |
+| P2升级率 | 已升级的P2观察信号数 / 已触发的P2观察信号数（目标：验证升级条件设计精度） |
+| 升级质量 | 升级后盈利信号数 / 已升级信号数（目标：≥60%，低于此值需审视升级条件阈值） |
+| 观察废弃率 | 已废弃的观察信号数 / 已触发的观察信号总数（目标：信息价值，废弃≠失败——正确识别不应操作也是价值） |
 
 ### 7.5 更新 `## 信号评价（复盘时填入）`
 
@@ -269,6 +292,10 @@ print(f'信号追踪库已更新: {len(db[\"signals\"])} 条记录')
 - 新触发信号（已触发/已执行）= 创建记录，status="triggered"或"executed"
 - 已有信号的用户操作更新（如从"已触发"→"已执行"）= 更新 status 和 status_history
 - 未触发的信号（已过期/已废弃）= 不录入追踪库（只有触发了才追踪收益）
+- **升级信号双向链接（v3.0新增）**：
+  - 对操作来源="观察升级"的信号 → 在 signal record 中追加 `upgraded_from` 字段，存储原观察信号ID
+  - 对状态="已升级"的原观察信号 → 在原记录中追加 `upgraded_to` 字段，存储新操作信号ID
+  - 这建立双向链接，便于跨日追踪升级信号的质量（升级后信号盈利=升级决策正确）
 
 #### 7.6.2 结算到期信号
 
@@ -356,7 +383,79 @@ print(f'到期结算完成')
 | 总胜率 | {XX}%（{W}/{L}） |
 | 高紧急度: 胜率 / 平均持有天数 | {XX}% / {X.X}天 |
 | 低紧急度: 胜率 / 平均持有天数 | {XX}% / {X.X}天 |
+
+### 观察升级专项统计（v3.0 新增）
+
+| 指标 | 数值 |
+|------|:---:|
+| 本日P2观察信号数 | {N} |
+| 其中已触发 | {N} |
+| 已升级为操作信号 | {N} |
+| 升级后盈利 | {N} |
+| 已废弃（方向证伪） | {N} |
+| 升级准确率 | {XX}%（盈利/已升级） |
 ```
+
+### 7.7 写入验证（‼️ 硬性门禁，禁止跳过）
+
+> 🚨 确认信号评价和统计已正确写入 `每日信号.md` 后，必须运行以下验证脚本。验证失败 = 复盘未完成，必须回补。
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -c "
+import sys
+
+with open('my_doc/每日复盘/reports/{today}/每日信号.md', 'r', encoding='utf-8') as f:
+    content = f.read()
+
+errors = []
+
+# 检查1: 信号评价表必须有数据行（至少1行非空）
+eval_section = content.split('## 信号评价（复盘时填入）')
+if len(eval_section) < 2:
+    errors.append('未找到 ## 信号评价（复盘时填入） 节')
+else:
+    eval_text = eval_section[1].split('## ')[0] if '## ' in eval_section[1] else eval_section[1]
+    eval_lines = [l for l in eval_text.split('\n') if l.strip().startswith('|') and not l.strip().startswith('|--') and '信号ID' not in l and '决策质量' not in l]
+    data_rows = [l for l in eval_lines if any(c.strip() for c in l.split('|')[1:-1] if c.strip() and c.strip() != '—')]
+    if len(data_rows) == 0:
+        errors.append('信号评价表为空 — 必须为每条已触发/已执行的信号填写评价行')
+    else:
+        print(f'信号评价表: {len(data_rows)} 条评价记录')
+
+# 检查2: 当日信号统计表必须有具体数字
+stat_section = content.split('## 当日信号统计')
+if len(stat_section) < 2:
+    errors.append('未找到 ## 当日信号统计 节')
+else:
+    stat_text = stat_section[1].split('## ')[0] if '## ' in stat_section[1] else stat_section[1]
+    # 检查是否还有未填充的 '—'
+    placeholder_count = stat_text.count('—')
+    if placeholder_count > 2:  # 允许最多2个 '—'（如遗漏信号数=0时可能用—）
+        errors.append(f'当日信号统计有 {placeholder_count} 个未填充的占位符(—)，必须填具体数字')
+
+# 检查3: 信号总表中的状态已更新（不应全为'待执行'）
+signal_table = content.split('## 信号总表')
+if len(signal_table) >= 2:
+    table_text = signal_table[1].split('## ')[0] if '## ' in signal_table[1] else signal_table[1]
+    pending_count = table_text.count('待执行')
+    triggered_count = table_text.count('已触发')
+    executed_count = table_text.count('已执行')
+    expired_count = table_text.count('已过期')
+    print(f'信号总表状态: 待执行={pending_count} 已触发={triggered_count} 已执行={executed_count} 已过期={expired_count}')
+
+if errors:
+    print(f'[FAIL] 每日信号.md 写入验证失败 ({len(errors)} errors):')
+    for e in errors:
+        print(f'  ❌ {e}')
+    print('必须回补每日信号.md 后再继续')
+    sys.exit(1)
+else:
+    print('[PASS] 每日信号.md 信号评价和统计已正确写入')
+" 2>&1
+```
+
+**如果验证失败**：必须回到 7.4/7.5 重新填写，直到验证通过。**禁止在验证失败的情况下继续后续步骤。**
 
 ---
 
@@ -399,34 +498,37 @@ print(f'到期结算完成')
 
 这是复盘最核心的产出——为明日生成完整的、可执行的 staging prompt。
 
-### 9.1 生成 `harness/staging/今日-早盘分析.md`（供明日使用）
+### 9.1 生成 `harness/staging/今日-早盘分析.md`（供明日早盘使用）
+
+> ⚠️ 标题必须用"今日"而非"明日"——该文件在 `{tomorrow_date}` 被执行时，对消费者而言就是"今日"。
 
 重新生成（每日覆盖），包含明日早盘分析所需的全部上下文：
 
 ```markdown
-# 明日早盘分析 — {tomorrow_date}
+# 今日早盘分析 — {tomorrow_date}
 
-<!-- 本文件由 {today_date} 收盘复盘自动生成 -->
+<!-- 本文件由 {today_date} 收盘复盘自动生成，供 {tomorrow_date} 早盘分析使用 -->
 
 ## 一、昨日盘面回顾
-{今日市场摘要}
+{今日市场摘要 — 指数涨跌、日内走势特征、核心矛盾（1-2句话提炼）}
 
 ## 二、当前持仓快照
-{从 config/持仓.md 自动同步}
+{从 config/持仓.md 自动同步，含代码/数量/成本价/今日收盘价/浮盈%}
 
 ## 三、7维打分（非持仓板块）
 {基于今日收盘数据预填}
 
 ## 四、各持仓做T建议
-{基于今日走势 + 明日预判}
+{基于今日走势 + 明日预判，逐一分析每个持仓的正T/反T/持有建议}
 
 ## 五、跨品种联动约束
+{已验证的跨品种关联规则 + 今日新发现的联动模式}
 
 ## 六、前次预测回顾
-{今日早盘预测 vs 实际的根因分析}
+{今日早盘预测 vs 实际结果的逐条对比 + 准确率计算 + 错误根因分析}
 
 ## 七、核心聚焦议题
-{明日需要重点关注的问题}
+{明日需要重点关注的问题，3-5条具体可验证的假设}
 
 ## 八、今日信号汇总
 {9个预定义信号，含完整触发条件}
@@ -434,7 +536,55 @@ print(f'到期结算完成')
 
 ### 9.2 生成 `harness/staging/今日-复盘分析.md`（供明日复盘使用）
 
-每日覆盖，包含明日复盘所需的上下文框架。
+> ⚠️ 此步骤与 9.1 **同等重要**，必须用以下模板完整填充，禁止只写一句话跳过。
+>
+> 该文件为明日收盘复盘提供上下文框架：持仓基线、今日关键事件、经验教训、明日核心变量。如果此文件不更新（仍是旧内容），明日复盘将用过时的持仓和过期变量，导致复盘质量严重降级。
+
+重新生成（每日覆盖），包含明日复盘所需的全部上下文框架：
+
+```markdown
+# 每日复盘上下文
+
+> 本文件由 {today_date} 收盘复盘自动生成。执行日期：**{tomorrow_date} 收盘后**
+
+## 一、我的持仓（基线快照）
+
+{从 config/持仓.md 同步今日收盘后的最终持仓，含代码/数量/成本价}
+> ⚠️ 此为明日复盘的持仓基线——明日调仓变化将与此对比。
+
+## 二、今日核心回顾
+
+### 今日核心特征（{today_date}）
+- **{用1句话概括今日市场核心矛盾}**
+- {指数涨跌 + 日内走势特征（V反/单边/震荡/冲高回落等）}
+- {领涨/领跌板块 + 持仓表现排名}
+- {今日触发/执行的信号ID和结果摘要}
+- 涨停{数}/跌停{数}，炸板率{百分比}，北向{方向+金额}
+
+### 今日核心教训
+1. **{教训标题}**：{具体描述 — 什么情况 → 什么结果 → 下次怎么做}
+2. **{教训标题}**：{具体描述}
+3. {至少 2-3 条，从今日复盘第八步的经验沉淀中提取}
+
+### 明日核心变量（{tomorrow_date}）
+- **{变量1}**：{为什么重要 + 可能的影响路径}
+- **{变量2}**：{为什么重要 + 可能的影响路径}
+- {至少 3-4 个具体可观测变量，不含模糊的"关注大盘方向"}
+
+## 三、特别关注项
+
+1. **{关注项1}**：{具体描述 — 关注什么、为什么、触发条件}
+2. **{关注项2}**：{具体描述}
+3. {3-6条，包含跨品种联动、技术位、事件风险等}
+
+## 四、跨品种联动约束（最新版）
+
+{从今日早盘/复盘验证过的跨品种联动规则，更新至最新校准参数}
+
+## 五、前次预测评估
+
+{今日早盘分析对今日的预测 vs 今日实际结果 — 为明日复盘提供"预测者"的视角，供 Generator-Evaluator 对比使用}
+```
 
 ### 9.3 代码-名称交叉校验（‼️ 防止 159227→恒生科技ETF 类错误）
 
@@ -493,73 +643,225 @@ else:
 
 ### 9.4 归档今日 Staging
 
+> ⚠️ 必须先 `mkdir -p` 创建目标目录，否则 `cp` 会因目录不存在而失败（导致 staging 内容永久丢失）。
+
 ```bash
+mkdir -p "harness/archive/{today}"
 cp harness/staging/今日-早盘分析.md "harness/archive/{today}/早盘分析-staging.md"
 cp harness/staging/今日-复盘分析.md "harness/archive/{today}/复盘分析-staging.md"
 ```
+
+### 9.5 Staging 生成验证（‼️ 硬性门禁，禁止跳过）
+
+> 🚨 此步骤为硬性门禁。Staging 是次日早盘分析+复盘的前置依赖——staging 缺失/过旧 = 次日全部降级执行。必须验证两个文件都已成功写入、日期正确、且为今日生成。
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -c "
+import os, sys
+from datetime import date, timedelta, datetime
+
+today = date.today()
+tomorrow = (today + timedelta(days=1)).strftime('%Y-%m-%d')
+today_str = today.strftime('%Y-%m-%d')
+print(f'今天: {today_str}')
+print(f'预期 staging 目标日期: {tomorrow}')
+
+errors = []
+staging_files = [
+    'my_doc/每日复盘/harness/staging/今日-早盘分析.md',
+    'my_doc/每日复盘/harness/staging/今日-复盘分析.md'
+]
+
+for f in staging_files:
+    if not os.path.exists(f):
+        errors.append(f'MISSING: {f} — 文件不存在，Step 9.1/9.2 可能未执行')
+        continue
+    
+    stat = os.stat(f)
+    size_kb = stat.st_size / 1024
+    mtime = datetime.fromtimestamp(stat.st_mtime)
+    hours_ago = (datetime.now() - mtime).total_seconds() / 3600
+    
+    with open(f, 'r', encoding='utf-8') as fh:
+        content = fh.read()
+    
+    # 检查1: 文件不能太小（空文件或只有标题=无效）
+    if len(content) < 500:
+        errors.append(f'TOO SMALL: {f} 仅 {len(content)} 字符 — staging 生成不完整')
+        continue
+    
+    # 检查2: 必须包含目标日期（tomorrow = 执行日期）
+    if tomorrow not in content:
+        import re
+        dates_found = re.findall(r'\d{4}-\d{2}-\d{2}', content)
+        dates_str = ', '.join(dates_found[:5]) if dates_found else '无日期'
+        errors.append(f'WRONG DATE: {f} 应包含执行日期 {tomorrow}，实际日期: {dates_str}')
+    
+    # 检查3: 文件必须包含今日生成标记（today_str），防止旧文件未被覆盖
+    if today_str not in content and '/'.join(today_str.split('-')[1:]) not in content:
+        import re
+        dates_found = re.findall(r'\d{4}-\d{2}-\d{2}', content)
+        dates_str = ', '.join(dates_found[:5]) if dates_found else '无日期'
+        errors.append(f'STALE: {f} 缺少今日生成日期 {today_str}，可能仍是旧文件未覆盖。文件内日期: {dates_str}')
+    
+    # 检查4: 文件修改时间必须在今天（防止9.1/9.2未执行但旧文件恰好包含tomorrow日期）
+    if mtime.date() < today:
+        errors.append(f'STALE_MTIME: {f} 最后修改于 {mtime.strftime(\"%Y-%m-%d %H:%M\")}（{hours_ago:.1f}h前），不在今天——Step 9.1/9.2未执行！')
+    
+    print(f'{f}: {size_kb:.1f}KB, {len(content)} chars, mtime={mtime.strftime(\"%H:%M\")} ({hours_ago:.1f}h ago)')
+
+if errors:
+    print(f'[FAIL] Staging生成验证失败 ({len(errors)} errors):')
+    for e in errors:
+        print(f'  ❌ {e}')
+    print('')
+    print('*** 必须回到 Step 9.1/9.2 重新生成 staging，直到验证通过 ***')
+    print('*** 禁止在 staging 验证失败的情况下继续后续步骤 ***')
+    sys.exit(1)
+else:
+    print(f'[PASS] Staging 文件已正确生成，目标日期 {tomorrow}')
+" 2>&1
+```
+
+**如果验证失败**：必须回到 Step 9.1/9.2 重新生成 staging 文件，直到 9.3（交叉校验）和 9.5（生成验证）全部通过。**禁止在验证失败的情况下继续第十步。**
 
 ---
 
 ## 第十步：同步持仓配置（‼️ 必须在输出报告之前）
 
 > ⚠️ 关键顺序：持仓同步必须在复盘报告输出之前完成，否则报告中的"一、我的持仓"和"八、持仓变更"将使用旧数据。
+>
+> **🚨 强制规则：以下 Python 脚本必须通过 bash 实际执行，禁止凭推理模拟输出。必须看到 python 输出的 `config/持仓.md 已更新` 才算完成。**
+
+### 10.1 执行同步脚本
 
 ```bash
 cd E:/ideaworkspace/astock-anayisis
 python -c "
-import re, os
-# 读取 每日调仓.md 的当前持仓表
+import re, os, sys, json
+from datetime import date
+from collections import defaultdict
+
+# ============================================================
+# 1. 读取 每日调仓.md 的当前持仓表 + 调仓记录（v4.1 增强）
+# ============================================================
 with open('my_doc/每日复盘/每日调仓.md', 'r', encoding='utf-8') as f:
     content = f.read()
 
-# 提取 ## 1. 当前持仓 表格
-match = re.search(r'## 1\. 当前持仓\n\n(\|.+\|\n(?:\|.+\|\n)+)', content)
+# 提取 ## 1. 当前持仓 表格（兼容多种空白格式）
+match = re.search(r'## 1\.\s*当前持仓\s*\n\s*\n(\|.+\|\s*\n(?:\|.+\|\s*\n)+)', content)
 if not match:
-    print('ERROR: 无法解析当前持仓表')
-    exit(1)
+    print('ERROR: 无法解析每日调仓.md的当前持仓表')
+    sys.exit(1)
 
 table = match.group(1)
-lines = table.strip().split('\n')
+lines = [l for l in table.strip().split('\n') if l.strip()]
 # 校验表头
-if len(lines) < 3:
+if len(lines) < 2:
     print(f'ERROR: 持仓表行数不足 ({len(lines)})')
-    exit(1)
+    sys.exit(1)
 
-# 解析数据行
+# 解析数据行（跳过表头和分隔行）
 holdings = []
-for line in lines[2:]:  # skip header + separator
+for line in lines:
     parts = [p.strip() for p in line.split('|')[1:-1]]
-    if len(parts) >= 4:
+    # 跳过表头行和分隔行
+    if not parts or parts[0] in ('股票名称', '--------', '------'):
+        continue
+    if len(parts) >= 4 and parts[1].isdigit() and len(parts[1]) == 6:
         holdings.append(parts)
 
-print(f'从 每日调仓.md 解析到 {len(holdings)} 个持仓:')
+if not holdings:
+    print('ERROR: 未解析到任何持仓数据行')
+    sys.exit(1)
+
+print(f'=== 从 每日调仓.md 解析到 {len(holdings)} 个持仓 ===')
 for h in holdings:
     print(f'  {h[0]} ({h[1]}): {h[2]}份 @ {h[3]}')
 
-# 读取旧持仓（若存在）
+# ============================================================
+# 1b. 提取 ## 2. 调仓记录，筛选今日交易（v4.1 新增）
+# ============================================================
+today_str = date.today().strftime('%Y-%m-%d')
+today_trades = []
+sold_by_code = defaultdict(list)
+trade_match = re.search(r'## 2\.\s*调仓记录\s*\n\s*\n(\|.+\|\s*\n(?:\|.+\|\s*\n)+)', content)
+if trade_match:
+    trade_table = trade_match.group(1)
+    trade_lines = [l for l in trade_table.strip().split('\n') if l.strip()]
+    for line in trade_lines:
+        parts = [p.strip() for p in line.split('|')[1:-1]]
+        if not parts or parts[0] in ('日期', '--------', '------'):
+            continue
+        if len(parts) >= 6 and parts[0] == today_str:
+            today_trades.append({
+                'name': parts[1], 'code': parts[2], 'qty': parts[3],
+                'price': parts[4], 'direction': parts[5], 'note': parts[6] if len(parts) > 6 else ''
+            })
+    print(f'=== 今日调仓记录 ({today_str}): {len(today_trades)} 笔 ===')
+    for t in today_trades:
+        print(f'  {t["direction"]} {t["name"]}({t["code"]}): {t["qty"]}份 @ {t["price"]} {t["note"]}')
+else:
+    print('=== 今日无调仓记录 ===')
+
+# 1c. 为每个持仓匹配今日操作（v4.1 新增）
+holdings_with_trades = []
+for h in holdings:
+    code = h[1]
+    matched = [t for t in today_trades if t['code'] == code]
+    if matched:
+        ops = [f'{t["direction"]}{t["qty"]}份@{t["price"]}' for t in matched]
+        holdings_with_trades.append((h[0], h[1], h[2], h[3], '; '.join(ops)))
+    else:
+        holdings_with_trades.append((h[0], h[1], h[2], h[3], '无操作'))
+
+# 1d. 识别今日已清仓标的（在调仓记录中有卖出但不在当前持仓中）（v4.1 新增）
+for t in today_trades:
+    if t['direction'] == '卖出' and t['code'] not in {h[1] for h in holdings}:
+        sold_by_code[t['code']].append(t)
+if sold_by_code:
+    print(f'=== 今日已清仓标的 ===')
+    for code, trades in sold_by_code.items():
+        total_qty = sum(int(t['qty']) for t in trades)
+        name = trades[0]['name']
+        prices = [t['price'] for t in trades]
+        notes = [t['note'] for t in trades if t['note']]
+        print(f'  {name}({code}): 清仓{total_qty}份 @ ~{min(prices)}~{max(prices)} {" | ".join(notes) if notes else ""}')
+
+# ============================================================
+# 2. 覆写 config/持仓.md（完全从每日调仓重建，杜绝残留）
+# ============================================================
 old_config_path = 'my_doc/每日复盘/harness/config/持仓.md'
-old_holdings = set()
+old_holdings = {}
 if os.path.exists(old_config_path):
     with open(old_config_path, 'r', encoding='utf-8') as f:
         old = f.read()
     for line in old.split('\n'):
         parts = [p.strip() for p in line.split('|')[1:-1]]
-        if len(parts) >= 3 and parts[0] and parts[0] != '股票名称' and not parts[0].startswith('-'):
-            try:
-                old_holdings.add((parts[0], parts[1], parts[2], parts[3]))
-            except: pass
+        if len(parts) >= 3 and parts[1].isdigit() and len(parts[1]) == 6:
+            old_holdings[parts[1]] = (parts[0], parts[1], parts[2], parts[3])
 
-# 比对
-new_set = set((h[0], h[1], h[2], h[3]) for h in holdings)
-added = [h for h in holdings if (h[0], h[1], h[2], h[3]) not in old_holdings]
-removed = [(n,c,s,p) for (n,c,s,p) in old_holdings if (n,c,s,p) not in new_set]
+# 用代码作为 key 做精确比对
+new_by_code = {h[1]: h for h in holdings}
+old_by_code = {c: (n,c,s,p) for c,(n,c,s,p) in old_holdings.items()}
 
-if added: print(f'新增: {added}')
-if removed: print(f'移除: {removed}')
-if not added and not removed: print('持仓无变化')
+added = [h for c, h in new_by_code.items() if c not in old_by_code]
+removed = [(n,c,s,p) for c,(n,c,s,p) in old_by_code.items() if c not in new_by_code]
+changed = []
+for c, h in new_by_code.items():
+    if c in old_by_code:
+        oh = old_by_code[c]
+        if h[2] != oh[2] or h[3] != oh[3]:  # 份额或成本变了
+            changed.append((oh, h))
+
+if added: print(f'新增: {[(h[0],h[1]) for h in added]}')
+if removed: print(f'移除: {[(n,c) for n,c,s,p in removed]}')
+if changed: print(f'变更: {[(f\"{old[0]}:{old[2]}→{new[2]}份 @{old[3]}→{new[3]}\") for old,new in changed]}')
+if not added and not removed and not changed: print('持仓无变化')
 
 # 覆写 config/持仓.md
-header = '# 当前持仓\n\n> 本文件由每日复盘自动同步自 `每日调仓.md`，反映最新持仓状态。调仓历史记录见根目录 `每日调仓.md`。\n\n'
+header = '# 当前持仓\n\n> 本文件由每日复盘自动同步自 每日调仓.md，反映最新持仓状态。\n> 最后更新: 自动同步\n\n'
 new_table = '| 股票名称 | 代码 | 持仓数量（份） | 成本价（元） |\n| -------- | ------ | -------------- | ------------ |\n'
 for h in holdings:
     new_table += f'| {h[0]} | {h[1]} | {h[2]} | {h[3]} |\n'
@@ -567,11 +869,87 @@ for h in holdings:
 with open(old_config_path, 'w', encoding='utf-8') as f:
     f.write(header + new_table)
 print('config/持仓.md 已更新')
-print(f'__POSITION_CHANGE__: added={len(added)} removed={len(removed)}')
+
+# 输出增强版持仓JSON供报告生成使用（v4.1 新增）
+enhanced_output = {
+    'holdings': [{'name': h[0], 'code': h[1], 'shares': h[2], 'cost': h[3],
+                  'today_ops': next((hw[4] for hw in holdings_with_trades if hw[1] == h[1]), '无操作')}
+                 for h in holdings],
+    'sold_out': [{'name': trades[0]['name'], 'code': code,
+                  'total_qty': sum(int(t['qty']) for t in trades),
+                  'trades': [{'qty': x['qty'], 'price': x['price'], 'note': x['note']} for x in trades]}
+                 for code, trades in sold_by_code.items()] if sold_by_code else [],
+    'today_trades': today_trades,
+    'added': [{'name': h[0], 'code': h[1]} for h in added],
+    'removed': [{'name': n, 'code': c} for n,c,s,p in removed],
+    'changed': [{'name': old[0], 'code': old[1], 'old_shares': old[2], 'new_shares': new[2]} for old, new in changed]
+}
+print(f'__POSITION_CHANGE__: added={len(added)} removed={len(removed)} changed={len(changed)} today_trades={len(today_trades)} sold_out={len(sold_by_code)}')
+print(f'__HOLDINGS_JSON__: {json.dumps(enhanced_output, ensure_ascii=False)}')
 " 2>&1
 ```
 
-**根据 python 输出的 `__POSITION_CHANGE__` 确定持仓变更情况**（用于写入复盘报告第八节）。
+### 10.2 同步后验证（‼️ 强制，确保 config/持仓.md 与 每日调仓.md 一致）
+
+> 🚨 此步骤为硬性门禁。如果验证失败，必须修正后重新执行 10.1，不得跳过直接输出报告。
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -c "
+import re, sys
+
+# 读取每日调仓.md的当前持仓
+with open('my_doc/每日复盘/每日调仓.md', 'r', encoding='utf-8') as f:
+    content = f.read()
+match = re.search(r'## 1\.\s*当前持仓\s*\n\s*\n(\|.+\|\s*\n(?:\|.+\|\s*\n)+)', content)
+if not match:
+    print('VERIFY_ERROR: 无法解析每日调仓.md')
+    sys.exit(1)
+lines = [l for l in match.group(1).strip().split('\n') if l.strip()]
+src_holdings = {}
+for line in lines:
+    parts = [p.strip() for p in line.split('|')[1:-1]]
+    if parts and parts[0] not in ('股票名称','--------','------') and len(parts)>=4 and parts[1].isdigit():
+        src_holdings[parts[1]] = (parts[0], parts[2], parts[3])
+
+# 读取config/持仓.md
+with open('my_doc/每日复盘/harness/config/持仓.md', 'r', encoding='utf-8') as f:
+    cfg = f.read()
+cfg_holdings = {}
+for line in cfg.split('\n'):
+    parts = [p.strip() for p in line.split('|')[1:-1]]
+    if parts and parts[0] not in ('股票名称','--------','------','') and len(parts)>=3 and parts[1].isdigit() and len(parts[1])==6:
+        cfg_holdings[parts[1]] = (parts[0], parts[2], parts[3])
+
+# 对比
+errors = []
+for code, (name, shares, cost) in src_holdings.items():
+    if code not in cfg_holdings:
+        errors.append(f'MISSING in config: {name}({code}) {shares}份 @{cost}')
+    else:
+        cn, cs, cc = cfg_holdings[code]
+        if cs != shares or cc != cost:
+            errors.append(f'MISMATCH: {name}({code}) src={shares}@{cost} config={cs}@{cc}')
+
+for code in cfg_holdings:
+    if code not in src_holdings:
+        errors.append(f'STALE in config: {cfg_holdings[code][0]}({code}) — 已不在每日调仓.md当前持仓中，必须移除！')
+
+if errors:
+    print(f'[FAIL] 持仓同步验证失败 ({len(errors)} errors):')
+    for e in errors:
+        print(f'  ❌ {e}')
+    sys.exit(1)
+else:
+    print(f'[PASS] config/持仓.md 与 每日调仓.md 一致 ({len(src_holdings)} 个持仓)')
+" 2>&1
+```
+
+**如果验证失败**：检查错误详情，修正 `config/持仓.md`（或重新执行 10.1），重新运行验证直到 `[PASS]`。**禁止在验证失败的情况下输出复盘报告。**
+
+### 10.3 读取变更摘要
+
+**根据 10.1 中 python 输出的 `__POSITION_CHANGE__` 确定持仓变更情况**（用于写入复盘报告第八节）。
 
 ---
 
@@ -581,6 +959,21 @@ print(f'__POSITION_CHANGE__: added={len(added)} removed={len(removed)}')
 （完整格式遵循 `harness/prompts/复盘分析-模板.md`）
 
 > ⚠️ 此时 config/持仓.md 已经是最新持仓（第十步已完成同步），报告中必须使用最新持仓数据。
+
+### "一、我的持仓"表格格式规则（v4.1）
+
+> **规则：已清仓标的直接并入持仓表格，不单独列出"已清仓标的"节。**
+>
+> 表格包含两类行：
+> 1. **当前持仓**（从 10.1 `__HOLDINGS_JSON__` 的 `holdings` 数组获取）：正常显示持仓数量+成本价，今日操作列显示匹配的调仓记录
+> 2. **今日已清仓标的**（从 10.1 `__HOLDINGS_JSON__` 的 `sold_out` 数组获取）：持仓数量列显示 `0（已清仓）`，成本价列显示 `—`，今日操作列显示完整的卖出信息（数量+均价+备注），行首名称加 `~~删除线~~` 标记
+>
+> 示例格式：
+> ```
+> | ~~半导体ETF~~ | 512480 | 0（已清仓） | — | 1.027 | -1.34% | 1.052/0.978 | 🔴 卖出15,800份@~1.016（止损） |
+> ```
+>
+> 排序：当前持仓在前（按代码排序），已清仓标的在后（按代码排序）。
 
 ---
 

@@ -167,7 +167,19 @@ code:
 
 ---
 
-## 第七步：数据纪律
+## 第七步：为绿灯候选创建 REQ（如需开发工作）
+
+对于每个 🟢 绿灯候选策略，如果转化过程涉及**非模板化**的开发工作（如自定义信号逻辑、新数据源、特殊风控规则），创建 REQ 文档：
+
+1. 按 `etf-strategies/automation/steering/REQ_TEMPLATE.md` 模板创建 `steering/open/REQ-{NNN}.md`
+2. 在 `steering/REQ_INDEX.md` 中登记
+3. REQ 模板已内置 **superpowers 开发流程**（brainstorming → writing-plans → TDD → executing-plans → code-review），实施时严格遵循
+
+> 简单的模板化转化（仅调整参数/资产池/回测周期）不需要 REQ，直接走 `strategy_convert_backtest.md`。
+
+---
+
+## 第八步：数据纪律
 
 - 策略评估中如果涉及 A 股实际数据验证，**必须**使用 `a-stock-data` skill 获取，**禁止**凭网络搜索结果填实际价格/估值数据
 - 平台上的回测指标（年化/夏普/回撤）直接转录自原文，无需验证

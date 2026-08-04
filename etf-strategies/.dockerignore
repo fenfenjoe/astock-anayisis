@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Tests
+tests/
+pytest.ini
+.pytest_cache/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Data (mounted as volumes at runtime)
+dashboard/data/
+cache/
+report/
+
+# Automation (not needed by dashboard)
+automation/
+
+# Docs & misc
+*.md
+*.png
+*.zip
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore

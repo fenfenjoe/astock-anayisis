@@ -1,0 +1,30 @@
+{
+  "updated_at": "2026-08-04T11:15:21.638164",
+  "bugs": {
+    "MANUAL_REVIEW": [],
+    "WONT_FIX": [],
+    "VERIFIED": [],
+    "FIXED": [],
+    "IN_PROGRESS": [],
+    "OPEN": []
+  },
+  "reqs_daily": {
+    "CLOSED": [
+      "REQ-001",
+      "REQ-002"
+    ],
+    "IMPLEMENTED": [],
+    "IN_PROGRESS": [],
+    "OPEN": [],
+    "REJECTED": [],
+    "ADOPTED": []
+  },
+  "reqs_etf": {
+    "CLOSED": [],
+    "IMPLEMENTED": [],
+    "IN_PROGRESS": [],
+    "OPEN": [],
+    "REJECTED": [],
+    "ADOPTED": []
+  }
+}

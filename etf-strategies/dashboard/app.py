@@ -46,7 +46,8 @@ async def lifespan(app: FastAPI):
     # ── Seed default admin user if no users exist ──
     if user_count() == 0:
         import secrets
-        default_password = secrets.token_hex(8)[:16]
+        import os as _os
+        default_password = _os.environ.get("DASHBOARD_ADMIN_PASSWORD", "") or secrets.token_hex(8)[:16]
         user_create(
             username="admin",
             password_hash=hash_password(default_password),
@@ -315,26 +316,27 @@ def _load_prices_from_db(assets: list[str], lookback_days: int = 300):
             pass  # Sync failure is non-fatal; proceed with whatever is in DB
 
         best_close = None
-        best_len = 0
 
-        # 1) Try SQLite cache first
+        # 1) SQLite is the primary cache — use it if data is sufficient.
+        #    sync_kline() above ensures it's fresh; no need for redundant API call.
         try:
             df = kline_get_dataframe(code, start_d, end_d)
             if df is not None and len(df) >= 2:
                 best_close = df["close"]
-                best_len = len(df)
         except Exception:
             pass
 
-        # 2) Also try API/parquet — use whichever source has MORE data
-        #    (parquet cache often has deeper history than SQLite)
-        try:
-            kdf = get_kline(code, start=start_d, end=end_d, refresh=False)
-            if kdf is not None and len(kdf) > best_len:
-                best_close = kdf["close"]
-                best_len = len(kdf)
-        except Exception:
-            pass
+        # 2) Fallback to API/parquet ONLY if SQLite is empty or has too little data
+        #    (e.g., first run, DB reset, or code not yet cached).
+        #    With the get_kline() refresh=False optimization, this is a parquet
+        #    cache read — zero API calls if parquet covers the range.
+        if best_close is None:
+            try:
+                kdf = get_kline(code, start=start_d, end=end_d, refresh=False)
+                if kdf is not None and len(kdf) >= 2:
+                    best_close = kdf["close"]
+            except Exception:
+                pass
 
         if best_close is not None:
             series[code] = best_close

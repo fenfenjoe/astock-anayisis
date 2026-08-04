@@ -148,7 +148,9 @@
 
 ## 异常处理
 
-- 修复过程中发现新的关联问题 → 创建新 BUG 报告，标记 "Related: BUG-{new_NNN}"
+- 修复过程中发现新的关联问题：
+  - 如果是可修复的 bug → 创建新 BUG 报告，标记 "Related: BUG-{new_NNN}"
+  - 如果需要架构/设计层面的改动（如重构、新功能、流程改进）→ **创建 REQ 文档**到 `etf-strategies/automation/steering/open/REQ-{NNN}.md`，按 `steering/REQ_TEMPLATE.md` 模板（模板已内置 superpowers 开发流程），并在 `steering/REQ_INDEX.md` 中登记
 - 修复导致其他测试失败 → 自动回滚，在报告中记录失败的尝试
 - BUG_INDEX.md 损坏 → 从 `bugs/open/` 和 `bugs/closed/` 重建索引
 - git 操作失败（如冲突）→ 跳过该 BUG，标记为 MANUAL_REVIEW，记录失败原因

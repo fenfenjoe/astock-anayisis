@@ -1,0 +1,22 @@
+# ETF Dashboard & Backtest — Python dependencies
+# Install: pip install -r requirements.txt
+
+# Web framework
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+
+# Auth
+bcrypt>=4.0.0
+PyJWT>=2.8.0
+
+# Data
+pandas>=2.0.0
+numpy>=1.24.0
+pyarrow>=14.0.0
+
+# HTTP (Eastmoney / Sina data sources)
+requests>=2.31.0
+urllib3>=2.0.0
+
+# Charts & reports
+matplotlib>=3.7.0

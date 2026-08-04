@@ -402,17 +402,29 @@ def tencent_quote(codes: list[str]) -> dict[str, dict]:
     批量拉取腾讯财经实时行情。
     codes: ["688017", "300476", "002463"]
     也支持指数: ["000001", "000300", "399006"]
+       ⚠️ 上证指数(000001)/沪深300(000300)等以"0"开头的沪市指数，建议传
+       带前缀的格式 ["sh000001", "sh000300", "sz399006"] 以免与深市股票混淆。
     也支持ETF: ["510050", "510300"]
     返回: {code: {name, price, pe_ttm, pb, mcap, ...}}
     """
+    # 沪市指数代码（以"0"开头但不是深市股票，需要明确映射到 sh 前缀）
+    _SH_INDEX_CODES = {
+        "000001", "000002", "000003", "000008", "000009", "000010",
+        "000016", "000300", "000688", "000852", "000905", "000922",
+    }
     prefixed = []
     for c in codes:
-        if c.startswith(("5", "6", "9")):
-            prefixed.append(f"sh{c}")
+        # 已带前缀（如 sh000001 / sz399006）→ 直接使用
+        if c.lower().startswith(("sh", "sz", "bj")):
+            prefixed.append(c.lower())
+        elif c in _SH_INDEX_CODES:
+            prefixed.append(f"sh{c}")          # 沪市指数
+        elif c.startswith(("5", "6", "9")):
+            prefixed.append(f"sh{c}")          # 沪市主板/科创板
         elif c.startswith(("4", "8")):
-            prefixed.append(f"bj{c}")
+            prefixed.append(f"bj{c}")          # 北交所
         else:
-            prefixed.append(f"sz{c}")
+            prefixed.append(f"sz{c}")          # 深市主板/创业板
 
     url = "https://qt.gtimg.cn/q=" + ",".join(prefixed)
     req = urllib.request.Request(url)
@@ -458,7 +470,8 @@ for code, q in quotes.items():
     print(f"{q['name']}({code}): {q['price']}元 PE={q['pe_ttm']} PB={q['pb']} 市值={q['mcap_yi']}亿")
 
 # 用法: 指数 — sh000001=上证指数, sh000300=沪深300, sz399006=创业板指
-index_quotes = tencent_quote(["000001", "000300", "399006"])
+# ⚠️ 强烈建议用带前缀格式，避免 000001→sz000001(平安银行) 而非 sh000001(上证指数)
+index_quotes = tencent_quote(["sh000001", "sh000300", "sz399006"])
 
 # 用法: ETF — sh510050=上证50ETF, sh510300=沪深300ETF
 etf_quotes = tencent_quote(["510050", "510300"])

@@ -24,7 +24,7 @@ today = datetime.now().date()
 count = 0
 for i in range(5):
     d = today - timedelta(days=i+1)
-    if os.path.exists(f'my_doc/每日复盘/reports/{d.isoformat()}/复盘报告.md'):
+    if os.path.exists(f'my_doc/每日复盘/reports/{d.strftime("%Y%m%d")}/复盘报告.md'):
         count += 1
 if count < 3:
     print(f'过去5个交易日仅 {count} 天有复盘报告，数据不足')
