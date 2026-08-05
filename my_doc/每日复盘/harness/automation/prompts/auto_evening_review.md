@@ -1183,6 +1183,89 @@ python -m pytest tests/test_{REQ-ID}.py -v --tb=short 2>&1
 
 ---
 
+## 第十六步：最终产出验证（‼️ 硬性门禁）
+
+> 🚨 此步骤为复盘的最后一道防线。验证所有关键产出文件是否存在、是否为今日生成。验证失败 = 复盘未完成，必须回补。
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -c "
+import os, sys
+from datetime import date, timedelta, datetime
+
+today = date.today()
+today_ymd = today.strftime('%Y%m%d')
+today_str = today.strftime('%Y-%m-%d')
+tomorrow_str = (today + timedelta(days=1)).strftime('%Y-%m-%d')
+
+errors = []
+
+# 1. 验证复盘报告
+report_path = f'my_doc/每日复盘/reports/{today_ymd}/复盘报告.md'
+if os.path.exists(report_path):
+    mtime = datetime.fromtimestamp(os.path.getmtime(report_path))
+    if mtime.strftime('%Y-%m-%d') == today_str:
+        size_kb = os.path.getsize(report_path) / 1024
+        print(f'✅ 复盘报告: {report_path} ({size_kb:.1f}KB, {mtime.strftime(\"%H:%M\")})')
+    else:
+        errors.append(f'复盘报告存在但非今日生成 (mtime={mtime.strftime(\"%Y-%m-%d\")})')
+else:
+    errors.append(f'复盘报告不存在: {report_path}')
+
+# 2. 验证早盘分析 staging
+morning_staging = 'my_doc/每日复盘/harness/staging/今日-早盘分析.md'
+if os.path.exists(morning_staging):
+    with open(morning_staging, 'r', encoding='utf-8') as f:
+        content = f.read()
+    if len(content) < 500:
+        errors.append(f'早盘分析staging过小 ({len(content)}字符): {morning_staging}')
+    elif tomorrow_str not in content:
+        errors.append(f'早盘分析staging缺少明日日期({tomorrow_str}): {morning_staging}')
+    else:
+        print(f'✅ 早盘分析staging: {morning_staging} ({len(content)}字符, 目标日期={tomorrow_str})')
+else:
+    errors.append(f'早盘分析staging不存在: {morning_staging}')
+
+# 3. 验证复盘分析 staging
+review_staging = 'my_doc/每日复盘/harness/staging/今日-复盘分析.md'
+if os.path.exists(review_staging):
+    with open(review_staging, 'r', encoding='utf-8') as f:
+        content = f.read()
+    if len(content) < 500:
+        errors.append(f'复盘分析staging过小 ({len(content)}字符): {review_staging}')
+    elif tomorrow_str not in content:
+        errors.append(f'复盘分析staging缺少明日日期({tomorrow_str}): {review_staging}')
+    else:
+        print(f'✅ 复盘分析staging: {review_staging} ({len(content)}字符, 目标日期={tomorrow_str})')
+else:
+    errors.append(f'复盘分析staging不存在: {review_staging}')
+
+# 4. 验证归档
+archive_dir = f'my_doc/每日复盘/harness/archive/{today_ymd}'
+if os.path.isdir(archive_dir):
+    files = os.listdir(archive_dir)
+    print(f'✅ 归档目录: {archive_dir} ({len(files)}个文件)')
+else:
+    errors.append(f'归档目录不存在: {archive_dir}')
+
+# 输出结果
+if errors:
+    print(f'\n❌ 最终验证失败 ({len(errors)}个错误):')
+    for e in errors:
+        print(f'  ❌ {e}')
+    print('\n*** 必须回补缺失文件后重新验证 ***')
+    sys.exit(1)
+else:
+    print(f'\n✅ 最终验证通过 — 所有产出文件已正确生成')
+" 2>&1
+```
+
+**如果验证失败**：必须回到对应步骤重新生成缺失文件，重新运行验证直到通过。**禁止在验证失败的情况下标记 task_state 为 completed。**
+
+**如果验证通过**：继续执行第十五步（更新 task_state → completed）或确认已完成。
+
+---
+
 ## 异常处理
 
 | 异常 | 处理方式 |
