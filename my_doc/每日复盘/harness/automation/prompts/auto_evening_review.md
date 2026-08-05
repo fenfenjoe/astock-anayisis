@@ -587,249 +587,13 @@ else:
 
 ---
 
-## 第十步：生成次日 Staging
+## 第十步：同步持仓配置（‼️ 必须在生成Staging之前执行）
 
-这是复盘最核心的产出——为明日生成完整的、可执行的 staging prompt。
-
-这是复盘最核心的产出——为明日生成完整的、可执行的 staging prompt。
-
-### 10.1 生成 `harness/staging/今日-早盘分析.md`（供明日早盘使用）
-
-> ⚠️ 标题必须用"今日"而非"明日"——该文件在 `{tomorrow_date}` 被执行时，对消费者而言就是"今日"。
-
-重新生成（每日覆盖），包含明日早盘分析所需的全部上下文：
-
-```markdown
-# 今日早盘分析 — {tomorrow_date}
-
-<!-- 本文件由 {today_date} 收盘复盘自动生成，供 {tomorrow_date} 早盘分析使用 -->
-
-## 一、昨日盘面回顾
-{今日市场摘要 — 指数涨跌、日内走势特征、核心矛盾（1-2句话提炼）}
-
-## 二、当前持仓快照
-{从 config/持仓.md 自动同步，含代码/数量/成本价/今日收盘价/浮盈%}
-
-## 三、7维打分（非持仓板块）
-{基于今日收盘数据预填}
-
-## 四、各持仓做T建议
-{基于今日走势 + 明日预判，逐一分析每个持仓的正T/反T/持有建议}
-
-## 五、跨品种联动约束
-{已验证的跨品种关联规则 + 今日新发现的联动模式}
-
-## 六、前次预测回顾
-{今日早盘预测 vs 实际结果的逐条对比 + 准确率计算 + 错误根因分析}
-
-## 七、核心聚焦议题
-{明日需要重点关注的问题，3-5条具体可验证的假设}
-
-## 八、今日信号汇总
-{9个预定义信号，含完整触发条件}
-```
-
-### 10.2 生成 `harness/staging/今日-复盘分析.md`（供明日复盘使用）
-
-> ⚠️ 此步骤与 9.1 **同等重要**，必须用以下模板完整填充，禁止只写一句话跳过。
->
-> 该文件为明日收盘复盘提供上下文框架：持仓基线、今日关键事件、经验教训、明日核心变量。如果此文件不更新（仍是旧内容），明日复盘将用过时的持仓和过期变量，导致复盘质量严重降级。
-
-重新生成（每日覆盖），包含明日复盘所需的全部上下文框架：
-
-```markdown
-# 每日复盘上下文
-
-> 本文件由 {today_date} 收盘复盘自动生成。执行日期：**{tomorrow_date} 收盘后**
-
-## 一、我的持仓（基线快照）
-
-{从 config/持仓.md 同步今日收盘后的最终持仓，含代码/数量/成本价}
-> ⚠️ 此为明日复盘的持仓基线——明日调仓变化将与此对比。
-
-## 二、今日核心回顾
-
-### 今日核心特征（{today_date}）
-- **{用1句话概括今日市场核心矛盾}**
-- {指数涨跌 + 日内走势特征（V反/单边/震荡/冲高回落等）}
-- {领涨/领跌板块 + 持仓表现排名}
-- {今日触发/执行的信号ID和结果摘要}
-- 涨停{数}/跌停{数}，炸板率{百分比}，北向{方向+金额}
-
-### 今日核心教训
-1. **{教训标题}**：{具体描述 — 什么情况 → 什么结果 → 下次怎么做}
-2. **{教训标题}**：{具体描述}
-3. {至少 2-3 条，从今日复盘第九步的经验沉淀中提取}
-
-### 明日核心变量（{tomorrow_date}）
-- **{变量1}**：{为什么重要 + 可能的影响路径}
-- **{变量2}**：{为什么重要 + 可能的影响路径}
-- {至少 3-4 个具体可观测变量，不含模糊的"关注大盘方向"}
-
-## 三、特别关注项
-
-1. **{关注项1}**：{具体描述 — 关注什么、为什么、触发条件}
-2. **{关注项2}**：{具体描述}
-3. {3-6条，包含跨品种联动、技术位、事件风险等}
-
-## 四、跨品种联动约束（最新版）
-
-{从今日早盘/复盘验证过的跨品种联动规则，更新至最新校准参数}
-
-## 五、前次预测评估
-
-{今日早盘分析对今日的预测 vs 今日实际结果 — 为明日复盘提供"预测者"的视角，供 Generator-Evaluator 对比使用}
-```
-
-### 10.3 代码-名称交叉校验（‼️ 防止 159227→恒生科技ETF 类错误）
-
-> ⚠️ staging 文件中的持仓表是 AI 手写的，可能把代码和名称搞混（如 159227 写成了"恒生科技ETF"而非"航空航天ETF"）。必须在归档前做自动化交叉校验。
-
-```bash
-cd E:/ideaworkspace/astock-anayisis
-python -c "
-import re, sys
-
-# 1. 读取权威持仓配置
-with open('my_doc/每日复盘/harness/config/持仓.md', 'r', encoding='utf-8') as f:
-    config = f.read()
-
-# 提取 config/持仓.md 的代码→名称映射
-code_to_name = {}
-for line in config.split('\n'):
-    parts = [p.strip() for p in line.split('|')[1:-1]]
-    if len(parts) >= 2 and parts[1].isdigit() and len(parts[1]) == 6:
-        code_to_name[parts[1]] = parts[0]
-
-print(f'权威映射 (config/持仓.md): {code_to_name}')
-
-# 2. 检查 staging 文件
-errors = []
-for staging_file in [
-    'my_doc/每日复盘/harness/staging/今日-早盘分析.md',
-    'my_doc/每日复盘/harness/staging/今日-复盘分析.md'
-]:
-    try:
-        with open(staging_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        for line in content.split('\n'):
-            parts = [p.strip() for p in line.split('|')[1:-1]]
-            if len(parts) >= 2 and parts[1].isdigit() and len(parts[1]) == 6:
-                code = parts[1]
-                name_in_staging = parts[0]
-                name_in_config = code_to_name.get(code)
-                if name_in_config and name_in_staging != name_in_config:
-                    errors.append(f'{staging_file}: 代码{code}在staging中为\"{name_in_staging}\"，但config/持仓.md中为\"{name_in_config}\"')
-    except FileNotFoundError:
-        print(f'WARNING: {staging_file} 不存在，跳过校验')
-
-if errors:
-    print(f'[FAIL] {len(errors)} code-name mismatches:')
-    for e in errors:
-        print(f'  {e}')
-    print('Fix staging file names before archiving')
-    sys.exit(1)
-else:
-    print('[PASS] All staging code-name mappings match config/持仓.md')
-" 2>&1
-```
-
-**如果校验失败**：必须修正 staging 文件中的错误名称，重新运行校验直到通过，才能继续归档。
-
-### 10.4 归档今日 Staging
-
-> ⚠️ 必须先 `mkdir -p` 创建目标目录，否则 `cp` 会因目录不存在而失败（导致 staging 内容永久丢失）。
-
-```bash
-mkdir -p "harness/archive/{today}"
-cp harness/staging/今日-早盘分析.md "harness/archive/{today}/早盘分析-staging.md"
-cp harness/staging/今日-复盘分析.md "harness/archive/{today}/复盘分析-staging.md"
-```
-
-### 10.5 Staging 生成验证（‼️ 硬性门禁，禁止跳过）
-
-> 🚨 此步骤为硬性门禁。Staging 是次日早盘分析+复盘的前置依赖——staging 缺失/过旧 = 次日全部降级执行。必须验证两个文件都已成功写入、日期正确、且为今日生成。
-
-```bash
-cd E:/ideaworkspace/astock-anayisis
-python -c "
-import os, sys
-from datetime import date, timedelta, datetime
-
-today = date.today()
-tomorrow = (today + timedelta(days=1)).strftime('%Y-%m-%d')
-today_str = today.strftime('%Y-%m-%d')
-print(f'今天: {today_str}')
-print(f'预期 staging 目标日期: {tomorrow}')
-
-errors = []
-staging_files = [
-    'my_doc/每日复盘/harness/staging/今日-早盘分析.md',
-    'my_doc/每日复盘/harness/staging/今日-复盘分析.md'
-]
-
-for f in staging_files:
-    if not os.path.exists(f):
-        errors.append(f'MISSING: {f} — 文件不存在，Step 10.1/10.2 可能未执行')
-        continue
-    
-    stat = os.stat(f)
-    size_kb = stat.st_size / 1024
-    mtime = datetime.fromtimestamp(stat.st_mtime)
-    hours_ago = (datetime.now() - mtime).total_seconds() / 3600
-    
-    with open(f, 'r', encoding='utf-8') as fh:
-        content = fh.read()
-    
-    # 检查1: 文件不能太小（空文件或只有标题=无效）
-    if len(content) < 500:
-        errors.append(f'TOO SMALL: {f} 仅 {len(content)} 字符 — staging 生成不完整')
-        continue
-    
-    # 检查2: 必须包含目标日期（tomorrow = 执行日期）
-    if tomorrow not in content:
-        import re
-        dates_found = re.findall(r'\d{4}-\d{2}-\d{2}', content)
-        dates_str = ', '.join(dates_found[:5]) if dates_found else '无日期'
-        errors.append(f'WRONG DATE: {f} 应包含执行日期 {tomorrow}，实际日期: {dates_str}')
-    
-    # 检查3: 文件必须包含今日生成标记（today_str），防止旧文件未被覆盖
-    if today_str not in content and '/'.join(today_str.split('-')[1:]) not in content:
-        import re
-        dates_found = re.findall(r'\d{4}-\d{2}-\d{2}', content)
-        dates_str = ', '.join(dates_found[:5]) if dates_found else '无日期'
-        errors.append(f'STALE: {f} 缺少今日生成日期 {today_str}，可能仍是旧文件未覆盖。文件内日期: {dates_str}')
-    
-    # 检查4: 文件修改时间必须在今天（防止9.1/9.2未执行但旧文件恰好包含tomorrow日期）
-    if mtime.date() < today:
-        errors.append(f'STALE_MTIME: {f} 最后修改于 {mtime.strftime(\"%Y-%m-%d %H:%M\")}（{hours_ago:.1f}h前），不在今天——Step 10.1/10.2未执行！')
-    
-    print(f'{f}: {size_kb:.1f}KB, {len(content)} chars, mtime={mtime.strftime(\"%H:%M\")} ({hours_ago:.1f}h ago)')
-
-if errors:
-    print(f'[FAIL] Staging生成验证失败 ({len(errors)} errors):')
-    for e in errors:
-        print(f'  ❌ {e}')
-    print('')
-    print('*** 必须回到 Step 10.1/10.2 重新生成 staging，直到验证通过 ***')
-    print('*** 禁止在 staging 验证失败的情况下继续后续步骤 ***')
-    sys.exit(1)
-else:
-    print(f'[PASS] Staging 文件已正确生成，目标日期 {tomorrow}')
-" 2>&1
-```
-
-**如果验证失败**：必须回到 Step 10.1/10.2 重新生成 staging 文件，直到 10.3（交叉校验）和 10.5（生成验证）全部通过。**禁止在验证失败的情况下继续第十一步。**
-
----
-
-## 第十一步：同步持仓配置（‼️ 必须在输出报告之前）
-
-> ⚠️ 关键顺序：持仓同步必须在复盘报告输出之前完成，否则报告中的"一、我的持仓"和"八、持仓变更"将使用旧数据。
+> ⚠️ 关键顺序：持仓同步必须在生成 Staging（第十一步）和输出复盘报告（第十二步）之前完成，否则 staging 中的持仓表将使用旧数据。
 >
 > **🚨 强制规则：以下 Python 脚本必须通过 bash 实际执行，禁止凭推理模拟输出。必须看到 python 输出的 `config/持仓.md 已更新` 才算完成。**
 
-### 11.1 执行同步脚本
+### 10.1 执行同步脚本
 
 ```bash
 cd E:/ideaworkspace/astock-anayisis
@@ -896,7 +660,7 @@ if trade_match:
             })
     print(f'=== 今日调仓记录 ({today_str}): {len(today_trades)} 笔 ===')
     for t in today_trades:
-        print(f'  {t["direction"]} {t["name"]}({t["code"]}): {t["qty"]}份 @ {t["price"]} {t["note"]}')
+        print(f'  {t[\"direction\"]} {t[\"name\"]}({t[\"code\"]}): {t[\"qty\"]}份 @ {t[\"price\"]} {t[\"note\"]}')
 else:
     print('=== 今日无调仓记录 ===')
 
@@ -906,7 +670,7 @@ for h in holdings:
     code = h[1]
     matched = [t for t in today_trades if t['code'] == code]
     if matched:
-        ops = [f'{t["direction"]}{t["qty"]}份@{t["price"]}' for t in matched]
+        ops = [f'{t[\"direction\"]}{t[\"qty\"]}份@{t[\"price\"]}' for t in matched]
         holdings_with_trades.append((h[0], h[1], h[2], h[3], '; '.join(ops)))
     else:
         holdings_with_trades.append((h[0], h[1], h[2], h[3], '无操作'))
@@ -922,7 +686,7 @@ if sold_by_code:
         name = trades[0]['name']
         prices = [t['price'] for t in trades]
         notes = [t['note'] for t in trades if t['note']]
-        print(f'  {name}({code}): 清仓{total_qty}份 @ ~{min(prices)}~{max(prices)} {" | ".join(notes) if notes else ""}')
+        print(f'  {name}({code}): 清仓{total_qty}份 @ ~{min(prices)}~{max(prices)} {\" | \".join(notes) if notes else \"\"}')
 
 # ============================================================
 # 2. 覆写 config/持仓.md（完全从每日调仓重建，杜绝残留）
@@ -984,7 +748,7 @@ print(f'__HOLDINGS_JSON__: {json.dumps(enhanced_output, ensure_ascii=False)}')
 " 2>&1
 ```
 
-### 11.2 同步后验证（‼️ 强制，确保 config/持仓.md 与 每日调仓.md 一致）
+### 10.2 同步后验证（‼️ 强制，确保 config/持仓.md 与 每日调仓.md 一致）
 
 > 🚨 此步骤为硬性门禁。如果验证失败，必须修正后重新执行 10.1，不得跳过直接输出报告。
 
@@ -1040,11 +804,249 @@ else:
 " 2>&1
 ```
 
-**如果验证失败**：检查错误详情，修正 `config/持仓.md`（或重新执行 10.1），重新运行验证直到 `[PASS]`。**禁止在验证失败的情况下输出复盘报告。**
+**如果验证失败**：检查错误详情，修正 `config/持仓.md`（或重新执行 10.1），重新运行验证直到 `[PASS]`。**禁止在验证失败的情况下生成 Staging。**
 
-### 11.3 读取变更摘要
+### 10.3 读取变更摘要
 
 **根据 10.1 中 python 输出的 `__POSITION_CHANGE__` 确定持仓变更情况**（用于写入复盘报告第八节）。
+
+---
+
+## 第十一步：生成次日 Staging（‼️ 使用第十步同步后的最新持仓）
+
+这是复盘最核心的产出——为明日生成完整的、可执行的 staging prompt。
+
+这是复盘最核心的产出——为明日生成完整的、可执行的 staging prompt。
+
+> ⚠️ 持仓表已在第十步（同步持仓配置）中更新为最新数据，此处直接使用。
+
+### 11.1 生成 `harness/staging/今日-早盘分析.md`（供明日早盘使用）
+
+> ⚠️ 标题必须用"今日"而非"明日"——该文件在 `{tomorrow_date}` 被执行时，对消费者而言就是"今日"。
+
+重新生成（每日覆盖），包含明日早盘分析所需的全部上下文：
+
+```markdown
+# 今日早盘分析 — {tomorrow_date}
+
+<!-- 本文件由 {today_date} 收盘复盘自动生成，供 {tomorrow_date} 早盘分析使用 -->
+
+## 一、昨日盘面回顾
+{今日市场摘要 — 指数涨跌、日内走势特征、核心矛盾（1-2句话提炼）}
+
+## 二、当前持仓快照
+{从 config/持仓.md 自动同步，含代码/数量/成本价/今日收盘价/浮盈%}
+
+## 三、7维打分（非持仓板块）
+{基于今日收盘数据预填}
+
+## 四、各持仓做T建议
+{基于今日走势 + 明日预判，逐一分析每个持仓的正T/反T/持有建议}
+
+## 五、跨品种联动约束
+{已验证的跨品种关联规则 + 今日新发现的联动模式}
+
+## 六、前次预测回顾
+{今日早盘预测 vs 实际结果的逐条对比 + 准确率计算 + 错误根因分析}
+
+## 七、核心聚焦议题
+{明日需要重点关注的问题，3-5条具体可验证的假设}
+
+## 八、今日信号汇总
+{9个预定义信号，含完整触发条件}
+```
+
+### 11.2 生成 `harness/staging/今日-复盘分析.md`（供明日复盘使用）
+
+> ⚠️ 此步骤与 11.1 **同等重要**，必须用以下模板完整填充，禁止只写一句话跳过。
+>
+> 该文件为明日收盘复盘提供上下文框架：持仓基线、今日关键事件、经验教训、明日核心变量。如果此文件不更新（仍是旧内容），明日复盘将用过时的持仓和过期变量，导致复盘质量严重降级。
+
+重新生成（每日覆盖），包含明日复盘所需的全部上下文框架：
+
+```markdown
+# 每日复盘上下文
+
+> 本文件由 {today_date} 收盘复盘自动生成。执行日期：**{tomorrow_date} 收盘后**
+
+## 一、我的持仓（基线快照）
+
+{从 config/持仓.md 同步今日收盘后的最终持仓，含代码/数量/成本价}
+> ⚠️ 此为明日复盘的持仓基线——明日调仓变化将与此对比。
+
+## 二、今日核心回顾
+
+### 今日核心特征（{today_date}）
+- **{用1句话概括今日市场核心矛盾}**
+- {指数涨跌 + 日内走势特征（V反/单边/震荡/冲高回落等）}
+- {领涨/领跌板块 + 持仓表现排名}
+- {今日触发/执行的信号ID和结果摘要}
+- 涨停{数}/跌停{数}，炸板率{百分比}，北向{方向+金额}
+
+### 今日核心教训
+1. **{教训标题}**：{具体描述 — 什么情况 → 什么结果 → 下次怎么做}
+2. **{教训标题}**：{具体描述}
+3. {至少 2-3 条，从今日复盘第九步的经验沉淀中提取}
+
+### 明日核心变量（{tomorrow_date}）
+- **{变量1}**：{为什么重要 + 可能的影响路径}
+- **{变量2}**：{为什么重要 + 可能的影响路径}
+- {至少 3-4 个具体可观测变量，不含模糊的"关注大盘方向"}
+
+## 三、特别关注项
+
+1. **{关注项1}**：{具体描述 — 关注什么、为什么、触发条件}
+2. **{关注项2}**：{具体描述}
+3. {3-6条，包含跨品种联动、技术位、事件风险等}
+
+## 四、跨品种联动约束（最新版）
+
+{从今日早盘/复盘验证过的跨品种联动规则，更新至最新校准参数}
+
+## 五、前次预测评估
+
+{今日早盘分析对今日的预测 vs 今日实际结果 — 为明日复盘提供"预测者"的视角，供 Generator-Evaluator 对比使用}
+```
+
+### 11.3 代码-名称交叉校验（‼️ 防止 159227→恒生科技ETF 类错误）
+
+> ⚠️ staging 文件中的持仓表是 AI 手写的，可能把代码和名称搞混（如 159227 写成了"恒生科技ETF"而非"航空航天ETF"）。必须在归档前做自动化交叉校验。
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -c "
+import re, sys
+
+# 1. 读取权威持仓配置
+with open('my_doc/每日复盘/harness/config/持仓.md', 'r', encoding='utf-8') as f:
+    config = f.read()
+
+# 提取 config/持仓.md 的代码→名称映射
+code_to_name = {}
+for line in config.split('\n'):
+    parts = [p.strip() for p in line.split('|')[1:-1]]
+    if len(parts) >= 2 and parts[1].isdigit() and len(parts[1]) == 6:
+        code_to_name[parts[1]] = parts[0]
+
+print(f'权威映射 (config/持仓.md): {code_to_name}')
+
+# 2. 检查 staging 文件
+errors = []
+for staging_file in [
+    'my_doc/每日复盘/harness/staging/今日-早盘分析.md',
+    'my_doc/每日复盘/harness/staging/今日-复盘分析.md'
+]:
+    try:
+        with open(staging_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        for line in content.split('\n'):
+            parts = [p.strip() for p in line.split('|')[1:-1]]
+            if len(parts) >= 2 and parts[1].isdigit() and len(parts[1]) == 6:
+                code = parts[1]
+                name_in_staging = parts[0]
+                name_in_config = code_to_name.get(code)
+                if name_in_config and name_in_staging != name_in_config:
+                    errors.append(f'{staging_file}: 代码{code}在staging中为\"{name_in_staging}\"，但config/持仓.md中为\"{name_in_config}\"')
+    except FileNotFoundError:
+        print(f'WARNING: {staging_file} 不存在，跳过校验')
+
+if errors:
+    print(f'[FAIL] {len(errors)} code-name mismatches:')
+    for e in errors:
+        print(f'  {e}')
+    print('Fix staging file names before archiving')
+    sys.exit(1)
+else:
+    print('[PASS] All staging code-name mappings match config/持仓.md')
+" 2>&1
+```
+
+**如果校验失败**：必须修正 staging 文件中的错误名称，重新运行校验直到通过，才能继续归档。
+
+### 11.4 归档今日 Staging
+
+> ⚠️ 必须先 `mkdir -p` 创建目标目录，否则 `cp` 会因目录不存在而失败（导致 staging 内容永久丢失）。
+
+```bash
+mkdir -p "harness/archive/{today}"
+cp harness/staging/今日-早盘分析.md "harness/archive/{today}/早盘分析-staging.md"
+cp harness/staging/今日-复盘分析.md "harness/archive/{today}/复盘分析-staging.md"
+```
+
+### 11.5 Staging 生成验证（‼️ 硬性门禁，禁止跳过）
+
+> 🚨 此步骤为硬性门禁。Staging 是次日早盘分析+复盘的前置依赖——staging 缺失/过旧 = 次日全部降级执行。必须验证两个文件都已成功写入、日期正确、且为今日生成。
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -c "
+import os, sys
+from datetime import date, timedelta, datetime
+
+today = date.today()
+tomorrow = (today + timedelta(days=1)).strftime('%Y-%m-%d')
+today_str = today.strftime('%Y-%m-%d')
+print(f'今天: {today_str}')
+print(f'预期 staging 目标日期: {tomorrow}')
+
+errors = []
+staging_files = [
+    'my_doc/每日复盘/harness/staging/今日-早盘分析.md',
+    'my_doc/每日复盘/harness/staging/今日-复盘分析.md'
+]
+
+for f in staging_files:
+    if not os.path.exists(f):
+        errors.append(f'MISSING: {f} — 文件不存在，Step 11.1/11.2 可能未执行')
+        continue
+    
+    stat = os.stat(f)
+    size_kb = stat.st_size / 1024
+    mtime = datetime.fromtimestamp(stat.st_mtime)
+    hours_ago = (datetime.now() - mtime).total_seconds() / 3600
+    
+    with open(f, 'r', encoding='utf-8') as fh:
+        content = fh.read()
+    
+    # 检查1: 文件不能太小（空文件或只有标题=无效）
+    if len(content) < 500:
+        errors.append(f'TOO SMALL: {f} 仅 {len(content)} 字符 — staging 生成不完整')
+        continue
+    
+    # 检查2: 必须包含目标日期（tomorrow = 执行日期）
+    if tomorrow not in content:
+        import re
+        dates_found = re.findall(r'\d{4}-\d{2}-\d{2}', content)
+        dates_str = ', '.join(dates_found[:5]) if dates_found else '无日期'
+        errors.append(f'WRONG DATE: {f} 应包含执行日期 {tomorrow}，实际日期: {dates_str}')
+    
+    # 检查3: 文件必须包含今日生成标记（today_str），防止旧文件未被覆盖
+    if today_str not in content and '/'.join(today_str.split('-')[1:]) not in content:
+        import re
+        dates_found = re.findall(r'\d{4}-\d{2}-\d{2}', content)
+        dates_str = ', '.join(dates_found[:5]) if dates_found else '无日期'
+        errors.append(f'STALE: {f} 缺少今日生成日期 {today_str}，可能仍是旧文件未覆盖。文件内日期: {dates_str}')
+    
+    # 检查4: 文件修改时间必须在今天（防止9.1/9.2未执行但旧文件恰好包含tomorrow日期）
+    if mtime.date() < today:
+        errors.append(f'STALE_MTIME: {f} 最后修改于 {mtime.strftime(\"%Y-%m-%d %H:%M\")}（{hours_ago:.1f}h前），不在今天——Step 11.1/11.2未执行！')
+    
+    print(f'{f}: {size_kb:.1f}KB, {len(content)} chars, mtime={mtime.strftime(\"%H:%M\")} ({hours_ago:.1f}h ago)')
+
+if errors:
+    print(f'[FAIL] Staging生成验证失败 ({len(errors)} errors):')
+    for e in errors:
+        print(f'  ❌ {e}')
+    print('')
+    print('*** 必须回到 Step 11.1/11.2 重新生成 staging，直到验证通过 ***')
+    print('*** 禁止在 staging 验证失败的情况下继续后续步骤 ***')
+    sys.exit(1)
+else:
+    print(f'[PASS] Staging 文件已正确生成，目标日期 {tomorrow}')
+" 2>&1
+```
+
+**如果验证失败**：必须回到 Step 11.1/11.2 重新生成 staging 文件，直到 11.3（交叉校验）和 11.5（生成验证）全部通过。**禁止在验证失败的情况下继续第十二步。**
 
 ---
 
