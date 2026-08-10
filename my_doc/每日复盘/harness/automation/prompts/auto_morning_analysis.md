@@ -106,10 +106,8 @@ except FileNotFoundError:
 ```bash
 cd E:/ideaworkspace/astock-anayisis
 python -c "
-import re, sys, os
-from datetime import date, datetime
+import sys, os
 
-today = date.today().strftime('%Y%m%d')
 errors = []
 
 # 1. 读取权威持仓配置
@@ -130,19 +128,13 @@ print(f'config/持仓.md: {len(config_holdings)} 个持仓')
 for code, h in config_holdings.items():
     print(f'  {h[\"name\"]} ({code}): {h[\"shares\"]}份 @ {h[\"cost\"]}')
 
-# 2. 检查 staging 文件的日期新鲜度
+# 2. 读取 staging 内容（日期新鲜度由 1.3d 统一判定）
 staging_file = 'my_doc/每日复盘/harness/staging/今日-早盘分析.md'
-staging_date = None
 staging_holdings = {}
 
 if os.path.exists(staging_file):
     with open(staging_file, 'r', encoding='utf-8') as f:
         staging = f.read()
-    
-    # 提取 staging 日期
-    date_match = re.search(r'(\d{4}-\d{2}-\d{2})', staging.split('\n')[0] if staging else '')
-    if date_match:
-        staging_date = date_match.group(1)
     
     # 提取 staging 中的持仓
     for line in staging.split('\n'):
@@ -154,7 +146,6 @@ if os.path.exists(staging_file):
                 'cost': parts[3]
             }
     
-    print(f'\nstaging 日期: {staging_date}')
     print(f'staging 持仓: {len(staging_holdings)} 个')
     for code, h in staging_holdings.items():
         print(f'  {h[\"name\"]} ({code}): {h[\"shares\"]}份 @ {h[\"cost\"]}')
@@ -191,15 +182,6 @@ if staging_holdings:
         if diffs:
             errors.append(f'MISMATCH: {ch[\"name\"]}({code}): {\" / \".join(diffs)}')
     
-    if staging_date:
-        try:
-            sd = datetime.strptime(staging_date, '%Y-%m-%d').date()
-            days_old = (date.today() - sd).days
-            if days_old > 1:
-                errors.append(f'STALE DATE: staging生成于{staging_date}，距今{days_old}天，已过期')
-        except:
-            pass
-
 if errors:
     print(f'[FAIL] Staging持仓校验失败 ({len(errors)} errors):')
     for e in errors:
@@ -216,6 +198,54 @@ else:
 - `[PASS]` → staging 持仓与 config 一致，但仍以 config/持仓.md 为权威来源
 - `[FAIL]` → **忽略 staging 中的持仓表**，Step 4.1 必须从 config/持仓.md 重新构建。报告中的 "Staging来源" 标注追加 "⚠️ staging 持仓已过期，已用 config/持仓.md 覆写"
 - staging 中的前次预测回顾/做T建议/跨品种约束等**分析内容**可继续参考，但**持仓数据本身**必须以 config/持仓.md 为准覆盖
+
+### 1.3d Staging 过期检测与自动重建（🚨 防止隔多日使用失效 staging）
+
+> ⚠️ 系统可能隔几天才使用（如节假日/遗漏执行），此时 staging 仍是为旧日期生成的，内容已过期。
+> 必须检测 staging 的执行日期，过期则自动重建，绝不用失效 staging 生成早盘报告。
+
+执行健康检查：
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -X utf8 -c "
+import json, sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from datetime import date
+from lib.staging_freshness import staging_health_check
+
+try:
+    with open('my_doc/每日复盘/harness/staging/今日-早盘分析.md', 'r', encoding='utf-8') as f:
+        text = f.read()
+except FileNotFoundError:
+    text = None
+
+result = staging_health_check(text, date.today(), 'my_doc/每日复盘/reports')
+print(json.dumps(result, ensure_ascii=False, default=str))
+"
+```
+
+**按 `action` 分支处理：**
+
+- **`use`** → staging 为今日执行日，正常继续
+- **`missing`** → 已在 1.3 处理（降级为模板早盘），继续走 1.3 的降级逻辑
+- **`rebuild`** → 触发**轻量重建流程**（见下方），重建后重新读取 staging 继续早盘
+
+**🚨 轻量重建流程（当 action=rebuild 时执行）：**
+
+1. 从健康检查结果取 `latest_review_date`（记为 Y，若无则降级为模板早盘，标注"无历史复盘可参考"）
+2. 读取 `reports/{Y}/复盘报告.md` → 提取"核心矛盾 / 核心教训 / 上期预判回顾"
+3. 生成新 staging：
+   - 执行日期更新为今天
+   - 持仓表从 `config/持仓.md` 权威读取（铁律：绝不用旧 staging 持仓）
+   - "前次预测回顾 / 上期信号回顾" ← 基于复盘报告 Y 的内容（标注"基于 Y 日复盘"）
+   - 核心矛盾 / 特别关注 ← 基于复盘 Y + 今日市场状态
+   - 事件日历 ← 今日数据（解禁 / 宏观 / 海外映射，走 1.3 的降级取数路径）
+4. 覆写 `my_doc/每日复盘/harness/staging/今日-早盘分析.md` + `今日-复盘分析.md`
+5. 新 staging 头部标注：`> ⚠️ 补生成（原 staging 执行日 {原日期} 已过期，基于 {Y} 日复盘重建）`
+6. 重建完成后，重新执行 1.3d 的健康检查确认 action=use，然后继续早盘流程
+
+**重建后必做**：重新跑 1.3b 代码-名称校验 + 1.3c 持仓比对，确保重建的 staging 持仓与 config 一致。
 
 ### 1.4 幂等性检查
 读取 `my_doc/每日复盘/harness/automation/config/task_state.json`。
