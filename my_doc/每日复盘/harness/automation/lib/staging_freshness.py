@@ -38,7 +38,10 @@ def parse_staging_execution_date(text: Optional[str]) -> Optional[date]:
     for pat in _DATE_PATTERNS:
         m = pat.search(text)
         if m:
-            return date.fromisoformat(m.group(1))
+            try:
+                return date.fromisoformat(m.group(1))
+            except ValueError:
+                return None
     return None
 
 

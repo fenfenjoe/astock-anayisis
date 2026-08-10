@@ -58,6 +58,11 @@ class TestParseStagingExecutionDate:
         assert parse_staging_execution_date('') is None
         assert parse_staging_execution_date(None) is None
 
+    def test_malformed_date(self):
+        """畸形日期（如 2026-13-99）→ 返回 None 而非抛异常"""
+        text = '> 执行日期：**2026-13-99（周X）早盘前**\n'
+        assert parse_staging_execution_date(text) is None
+
 
 # ============================================================
 # is_staging_stale
