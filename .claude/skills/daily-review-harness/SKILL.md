@@ -57,16 +57,34 @@ my_doc/每日复盘/
 触发：用户说"执行早盘分析"或"早盘报告"
 
 **流程：**
-1. 读取 `harness/staging/今日-早盘分析.md`（完整可执行 prompt，由昨日复盘已填充日期特定内容）
-2. 调用 `a-stock-data` 按四步并行取数（隔夜外盘 → 板块催化 → 资金面 → 事件日历）
-3. 执行宏观研判 → 非持仓板块七维评分（第五节）→ 持仓板块评分+做T建议（第六节）→ 操作清单
-4. 产出 `reports/{today}/早盘报告.md`
-5. **生成每日信号**：从持仓映射分析和操作清单中提取结构化信号，按 `harness/prompts/早盘分析-模板.md` 第九节每日信号生成的规则，输出 `reports/{today}/每日信号.md`
+1. **staging 新鲜度检查**：读取 `harness/staging/今日-早盘分析.md` 全文，执行以下命令判断是否过期：
+   ```bash
+   cd E:/ideaworkspace/astock-anayisis
+   python -X utf8 -c "
+   import json, sys
+   sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+   from datetime import date
+   from lib.staging_freshness import staging_health_check
+   try:
+       text = open('my_doc/每日复盘/harness/staging/今日-早盘分析.md', encoding='utf-8').read()
+   except FileNotFoundError:
+       text = None
+   print(json.dumps(staging_health_check(text, date.today(), 'my_doc/每日复盘/reports'), ensure_ascii=False, default=str))
+   "
+   ```
+   - `action=use` → 正常使用
+   - `action=missing` → 降级为模板早盘（跳过 staging，标注"staging 缺失"）
+   - `action=rebuild` → 执行**轻量重建**：读 `reports/{latest_review_date}/复盘报告.md` 提取核心矛盾/预判回顾 → 用 `config/持仓.md` 持仓 + 模板重建两份 staging（执行日=今天）→ 头部标注"⚠️ 补生成（基于 Y 日复盘重建）" → 重新读 staging
+2. 读取 `harness/staging/今日-早盘分析.md`（完整可执行 prompt，由昨日复盘已填充日期特定内容）
+3. 调用 `a-stock-data` 按四步并行取数（隔夜外盘 → 板块催化 → 资金面 → 事件日历）
+4. 执行宏观研判 → 非持仓板块七维评分（第五节）→ 持仓板块评分+做T建议（第六节）→ 操作清单
+5. 产出 `reports/{today}/早盘报告.md`
+6. **生成每日信号**：从持仓映射分析和操作清单中提取结构化信号，按 `harness/prompts/早盘分析-模板.md` 第九节每日信号生成的规则，输出 `reports/{today}/每日信号.md`
    - 信号必须可量化、可验证、有时效
    - P0信号 ≤ 3条（风险控制信号精而不多）
    - 总信号 5-10 条
    - 信号总表按"优先级→标的→触发条件"排序（重要信息前置），信号ID在末尾便于盘中追加
-6. 若执行交易操作，更新 `harness/config/持仓.md`
+7. 若执行交易操作，更新 `harness/config/持仓.md`
 
 ### 盘中模式（交易时段 9:30-15:00）
 
