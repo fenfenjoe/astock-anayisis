@@ -17,6 +17,9 @@ from backtest.strategies.sentiment_momentum import SentimentMomentum
 from backtest.strategies.multi_factor import MultiFactor
 from backtest.strategies.rsrs_reversal_momentum import RsrsReversalMomentum
 from backtest.strategies.low_correlation_rotation import LowCorrelationRotation
+from backtest.strategies.adaptive_momentum import AdaptiveMomentum
+from backtest.strategies.rsrs_momentum import TrendFilterMomentum
+from backtest.strategies.canary_defense import CanaryDefense, CanaryDefenseDaily
 
 
 def _prices(up_a=True, n=300):
@@ -677,6 +680,120 @@ def test_low_correlation_diagnostics():
         assert "ann_return" in detail
         assert "r_squared" in detail
         assert "score" in detail
+
+
+# ── S14 动态波动率调整动量（BUG-002 补测） ──
+
+def test_adaptive_momentum_weights_sum_to_one():
+    """S14 warmup 期后每行权重和≈1"""
+    p = _prices_multi(n=300)
+    s = AdaptiveMomentum()
+    w = s.generate(p)
+    valid = w.iloc[120:]  # warmup = max(lb_max=120, vol_long=60, 120) = 120
+    rowsums = valid.sum(axis=1)
+    assert ((rowsums - 1.0).abs() < 1e-6).all(), f"S14 权重不和为1"
+
+
+def test_adaptive_momentum_warmup_equal_weight():
+    """S14 warmup 期内应等权分配且每行和=1"""
+    p = _prices_multi(n=300)
+    s = AdaptiveMomentum()
+    w = s.generate(p)
+    warmup = w.iloc[:120]
+    rowsums = warmup.sum(axis=1)
+    assert ((rowsums - 1.0).abs() < 1e-6).all()
+    assert (warmup.iloc[0][s.etf_pool] == 0.25).all()  # 4 只 ETF 等权
+
+
+def test_adaptive_momentum_date_alignment():
+    """S14 权重索引与价格索引逐日对齐，无 NaN"""
+    p = _prices_multi(n=300)
+    s = AdaptiveMomentum()
+    w = s.generate(p)
+    assert w.index.equals(p.index)
+    assert not w.iloc[120:].isna().any().any()
+
+
+# ── S15 趋势过滤+动量增强（BUG-002 补测） ──
+
+def test_trend_filter_weights_sum_to_one():
+    """S15 warmup 期后每行权重和≈1"""
+    p = _prices_broad(n=300)
+    s = TrendFilterMomentum()
+    w = s.generate(p)
+    valid = w.iloc[250:]  # warmup = max(ma_long=200, mom_lookback=25, 250) = 250
+    rowsums = valid.sum(axis=1)
+    assert ((rowsums - 1.0).abs() < 1e-6).all(), f"S15 权重不和为1"
+
+
+def test_trend_filter_warmup_equal_weight():
+    """S15 warmup 期内应等权分配"""
+    p = _prices_broad(n=300)
+    s = TrendFilterMomentum()
+    w = s.generate(p)
+    warmup = w.iloc[:250]
+    rowsums = warmup.sum(axis=1)
+    assert ((rowsums - 1.0).abs() < 1e-6).all()
+    assert (warmup.iloc[100][s.etf_pool] == 1.0 / len(s.etf_pool)).all()
+
+
+def test_trend_filter_date_alignment():
+    """S15 权重索引与价格索引逐日对齐，无 NaN"""
+    p = _prices_broad(n=300)
+    s = TrendFilterMomentum()
+    w = s.generate(p)
+    assert w.index.equals(p.index)
+    assert not w.iloc[250:].isna().any().any()
+
+
+# ── S16/S17 金丝雀防御（BUG-002 补测） ──
+
+def test_canary_defense_weights_sum_to_one():
+    """S16 warmup 期后每行权重和≈1（含现金列）"""
+    p = _prices_broad(n=300)
+    s = CanaryDefense()
+    w = s.generate(p)
+    valid = w.iloc[150:]  # warmup = max(ma_bond=150, ma_vol*3=60, mom_lookback=25) = 150
+    rowsums = valid.sum(axis=1)
+    assert ((rowsums - 1.0).abs() < 1e-6).all(), f"S16 权重不和为1"
+
+
+def test_canary_defense_warmup_equal_weight():
+    """S16 warmup 期内应等权分配"""
+    p = _prices_broad(n=300)
+    s = CanaryDefense()
+    w = s.generate(p)
+    warmup = w.iloc[:150]
+    rowsums = warmup.sum(axis=1)
+    assert ((rowsums - 1.0).abs() < 1e-6).all()
+    assert (warmup.iloc[0][s.etf_pool] == 0.25).all()  # 4 只 ETF 等权
+
+
+def test_canary_defense_date_alignment():
+    """S16 权重索引与价格索引逐日对齐，无 NaN"""
+    p = _prices_broad(n=300)
+    s = CanaryDefense()
+    w = s.generate(p)
+    assert w.index.equals(p.index)
+    assert not w.iloc[150:].isna().any().any()
+
+
+def test_canary_defense_daily_weights_sum_to_one():
+    """S17 (CanaryDefenseDaily) warmup 期后每行权重和≈1"""
+    p = _prices_broad(n=300)
+    s = CanaryDefenseDaily()
+    w = s.generate(p)
+    valid = w.iloc[150:]
+    rowsums = valid.sum(axis=1)
+    assert ((rowsums - 1.0).abs() < 1e-6).all(), f"S17 权重不和为1"
+
+
+def test_canary_defense_has_cash_column():
+    """S16 应有现金列 511880"""
+    p = _prices_broad(n=300)
+    s = CanaryDefense()
+    w = s.generate(p)
+    assert "511880" in w.columns
 
 
 # ── Cross-strategy invariants ──
