@@ -8,8 +8,9 @@ Staging 新鲜度检测 — 早盘分析前判断 staging 是否过期
 """
 
 import re
-from datetime import date
-from typing import Optional
+from datetime import date, datetime
+from pathlib import Path
+from typing import Optional, Tuple, Union
 
 
 # 三种格式的匹配模式，按优先级排列（执行日期字段 > 供X使用注释 > 标题）
@@ -39,3 +40,59 @@ def parse_staging_execution_date(text: Optional[str]) -> Optional[date]:
         if m:
             return date.fromisoformat(m.group(1))
     return None
+
+
+def is_staging_stale(exec_date: Optional[date], today: date) -> Tuple[bool, dict]:
+    """判定 staging 是否过期。
+
+    Args:
+        exec_date: staging 执行日期；None 表示无法解析
+        today: 今天日期
+
+    Returns:
+        (is_stale, diag) 其中 diag = {exec_date, days_old, reason}
+    """
+    if exec_date is None:
+        return (True, {
+            'exec_date': None,
+            'days_old': None,
+            'reason': '无法解析执行日期，保守判为过期',
+        })
+    days_old = (today - exec_date).days
+    if exec_date < today:
+        return (True, {
+            'exec_date': exec_date.isoformat(),
+            'days_old': days_old,
+            'reason': f'执行日 {exec_date} 早于今日 {today}',
+        })
+    return (False, {
+        'exec_date': exec_date.isoformat(),
+        'days_old': days_old,
+        'reason': f'执行日 {exec_date} 为今日或未来',
+    })
+
+
+def find_latest_review_report(reports_root: Union[str, Path]) -> Optional[date]:
+    """定位最近一次含 复盘报告.md 的 reports/{yyyyMMdd}/ 目录日期。
+
+    Args:
+        reports_root: reports/ 目录路径
+
+    Returns:
+        最近复盘日期；无则 None
+    """
+    root = Path(reports_root)
+    if not root.is_dir():
+        return None
+    latest = None
+    for child in root.iterdir():
+        if not child.is_dir():
+            continue
+        try:
+            d = datetime.strptime(child.name, '%Y%m%d').date()
+        except ValueError:
+            continue  # 跳过 weekly 等非日期目录
+        if (child / '复盘报告.md').is_file():
+            if latest is None or d > latest:
+                latest = d
+    return latest

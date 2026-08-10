@@ -7,7 +7,7 @@ Staging 执行日期解析 测试套件
 
 import pytest
 from datetime import date
-from lib.staging_freshness import parse_staging_execution_date
+from lib.staging_freshness import parse_staging_execution_date, is_staging_stale, find_latest_review_report
 
 
 # ============================================================
@@ -57,3 +57,67 @@ class TestParseStagingExecutionDate:
         """空文本 → None"""
         assert parse_staging_execution_date('') is None
         assert parse_staging_execution_date(None) is None
+
+
+# ============================================================
+# is_staging_stale
+# ============================================================
+
+class TestIsStagingStale:
+    def test_stale_when_exec_before_today(self):
+        """执行日 < 今天 → 过期"""
+        stale, diag = is_staging_stale(date(2026, 8, 7), date(2026, 8, 10))
+        assert stale is True
+        assert diag['days_old'] == 3
+
+    def test_fresh_when_exec_today(self):
+        """执行日 == 今天 → 新鲜"""
+        stale, diag = is_staging_stale(date(2026, 8, 10), date(2026, 8, 10))
+        assert stale is False
+        assert diag['days_old'] == 0
+
+    def test_fresh_when_exec_future(self):
+        """执行日 > 今天（提前生成）→ 新鲜"""
+        stale, diag = is_staging_stale(date(2026, 8, 11), date(2026, 8, 10))
+        assert stale is False
+
+    def test_stale_when_none(self):
+        """执行日 None → 保守判过期"""
+        stale, diag = is_staging_stale(None, date(2026, 8, 10))
+        assert stale is True
+        assert diag['reason'] is not None
+
+
+# ============================================================
+# find_latest_review_report
+# ============================================================
+
+class TestFindLatestReviewReport:
+    def test_finds_latest(self, tmp_path):
+        """多个日期目录，取含复盘报告的最大日期"""
+        (tmp_path / '20260805').mkdir()
+        (tmp_path / '20260805' / '复盘报告.md').write_text('x', encoding='utf-8')
+        (tmp_path / '20260807').mkdir()
+        (tmp_path / '20260807' / '复盘报告.md').write_text('x', encoding='utf-8')
+        (tmp_path / '20260810').mkdir()  # 无复盘报告
+        assert find_latest_review_report(tmp_path) == date(2026, 8, 7)
+
+    def test_skips_non_date_dirs(self, tmp_path):
+        """跳过 weekly 等非日期目录"""
+        (tmp_path / 'weekly').mkdir()
+        (tmp_path / '20260805').mkdir()
+        (tmp_path / '20260805' / '复盘报告.md').write_text('x', encoding='utf-8')
+        assert find_latest_review_report(tmp_path) == date(2026, 8, 5)
+
+    def test_none_when_empty(self, tmp_path):
+        """空目录 → None"""
+        assert find_latest_review_report(tmp_path) is None
+
+    def test_none_when_no_review(self, tmp_path):
+        """有日期目录但无复盘报告 → None"""
+        (tmp_path / '20260810').mkdir()
+        assert find_latest_review_report(tmp_path) is None
+
+    def test_none_when_root_missing(self, tmp_path):
+        """目录不存在 → None"""
+        assert find_latest_review_report(tmp_path / 'nope') is None
