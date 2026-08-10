@@ -1,0 +1,57 @@
+{
+  "status": {
+    "push2": "fail",
+    "tencent": "ok",
+    "ths": "ok",
+    "push2ex": "ok",
+    "mootdx": "ok",
+    "datacenter": "ok",
+    "timestamp": "2026-08-07 14:17:58"
+  },
+  "overall": "partial",
+  "ok_count": 5,
+  "total_sources": 6,
+  "paths": {
+    "industry_ranking": {
+      "primary": "腾讯财经批量行情自算（push2 不可达）",
+      "fallback": "同花顺热点题材频次推断",
+      "note": "⚠️ push2 不可达，板块排名基于腾讯批量行情 + 同花顺热点题材频次综合判断"
+    },
+    "northbound": {
+      "primary": "同花顺 hsgtApi（实时）",
+      "fallback": "本地 CSV 缓存（历史数据）",
+      "note": "⚠️ push2 不可达，北向资金数据源自同花顺 hsgtApi 或本地缓存"
+    },
+    "fund_flow": {
+      "primary": "mootdx 量价估算 + 腾讯换手率",
+      "fallback": "标记'数据缺失'",
+      "note": "⚠️ push2 不可达，资金流数据基于 mootdx 量价 + 腾讯换手率估算，精度有限"
+    },
+    "margin": {
+      "primary": "东财 datacenter 融资融券",
+      "fallback": "标记'数据缺失'",
+      "note": ""
+    },
+    "limit_up": {
+      "primary": "东财 push2ex 涨停/炸板/跌停池",
+      "fallback": "同花顺涨停揭秘",
+      "note": ""
+    },
+    "hot_themes": {
+      "primary": "同花顺热点 reason tags",
+      "fallback": "东财人气榜概念命中",
+      "note": ""
+    },
+    "overseas": {
+      "primary": "腾讯财经（海外指数）",
+      "fallback": "WebSearch 综合搜索",
+      "note": ""
+    },
+    "kline": {
+      "primary": "mootdx TCP",
+      "fallback": "腾讯财经日K（百度股市通兜底）",
+      "note": ""
+    }
+  },
+  "note": "数据源探测结果 — 用于 Prompt 判断数据采集路径"
+}

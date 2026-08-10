@@ -243,9 +243,76 @@ json.dump(state, open('my_doc/每日复盘/harness/automation/config/task_state.
 
 ---
 
-## 第三步：数据收集（四路并行）
+## 第二步半：数据源连通性探测（新增 — 大幅减少获取失败）
+
+> ⚠️ **核心原则：先探测，再取数。** 在数据收集前先判断各数据源是否可达，根据结果选择最优取数路径。
+> 避免在不可达的 API 上反复重试浪费 token 和时间。不可达时直接走 fallback 路径，报告中标注替代数据来源。
+
+### 2.5.1 执行探测
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python my_doc/每日复盘/harness/automation/lib/data_source_probe.py \
+  --output my_doc/每日复盘/harness/automation/config/probe_status.json \
+  --pretty
+```
+
+### 2.5.2 读取探测结果
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -c "
+import json
+probe = json.load(open('my_doc/每日复盘/harness/automation/config/probe_status.json', encoding='utf-8'))
+status = probe['status']
+paths = probe['paths']
+print('=== 数据源连通性探测结果 ===')
+print(f'push2: {status[\"push2\"]} | 腾讯: {status[\"tencent\"]} | 同花顺: {status[\"ths\"]}')
+print(f'push2ex: {status[\"push2ex\"]} | mootdx: {status[\"mootdx\"]} | datacenter: {status[\"datacenter\"]}')
+print(f'整体: {probe[\"overall\"]} ({probe[\"ok_count\"]}/{probe[\"total_sources\"]})')
+print()
+# 输出不可达数据源的 fallback 路径
+for key, p in paths.items():
+    if p['note']:
+        print(f'[{key}] {p[\"note\"]}')
+"
+```
+
+### 2.5.3 探测结果处理规则
+
+| 探测结果 | 含义 | 操作 |
+|:-------:|------|------|
+| `all_ok` | 全部数据源可达 | 正常取数，全部使用 primary 数据源 |
+| `partial` | 部分数据源不可达 | 按下方 fallback 映射表选择替代路径，报告中标注⚠️ |
+| `all_fail` | 全部数据源不可达 | **标记任务为 failed**，输出"网络不可达，跳过本次早盘分析"，退出 |
+
+**将探测结论（哪些数据源可用/不可用）传递给后续数据收集步骤和报告输出**，报告中必须包含数据源健康状态行。
+
+---
+
+## 第三步：数据收集（按探测结果选择路径）
 
 **严格使用 `a-stock-data` skill** 获取所有市场数据。禁止使用网络搜索结果填实际数据。
+
+### ⚡ 数据源 fallback 映射表
+
+根据 Step 2.5 探测结果，按以下映射选择取数路径：
+
+| 数据类型 | Primary（优先用） | Fallback 1 | Fallback 2 | 不可达时标注 |
+|---------|------------------|-----------|-----------|------------|
+| **行业板块排名** | 东财 push2 `industry_comparison` | 腾讯财经批量行情自算涨跌幅 | 同花顺热点题材频次推断 | ⚠️ 板块排名基于替代数据 |
+| **北向资金** | 东财 push2 | 同花顺 `hsgt_realtime` + 本地 CSV 缓存 | — | ⚠️ 北向数据源自同花顺/缓存 |
+| **个股资金流** | 东财 push2his `stock_fund_flow_120d` | mootdx 量价估算 + 腾讯换手率 | 标记"数据缺失" | ⚠️ 资金流为估算值 |
+| **融资融券** | 东财 datacenter `margin_trading` | 上周同期数据参考 | 标记"数据缺失" | ⚠️ 两融数据缺失 |
+| **涨停板池** | 东财 push2ex（涨停/炸板/跌停） | 同花顺 `ths_limit_up_pool` | 标记"数据缺失" | ⚠️ 涨停数据源自同花顺 |
+| **题材热度** | 同花顺热点 `ths_hot_reason` | 同花顺热榜 + 东财人气榜 | 标记"数据缺失" | ⚠️ 题材数据缺失 |
+| **海外市场** | 腾讯财经海外指数 | WebSearch 综合搜索 | — | ⚠️ 海外数据源自 WebSearch |
+| **K线数据** | mootdx TCP `tdx_client` | 腾讯财经日K + pandas 本地算 MA/MACD/RSI | 百度股市通 | ⚠️ K线源自腾讯日K |
+
+**取数纪律：**
+- **不可达的数据源不重试**（探测已确认不可达），直接走 fallback
+- 走 fallback 路径时，在报告中标注 ⚠️ 和数据来源
+- 若 Primary 和 Fallback 均不可达 → 标记"数据缺失"，不为填满表格而编造
 
 ### 3.1 海外市场
 ```
@@ -256,33 +323,41 @@ json.dump(state, open('my_doc/每日复盘/harness/automation/config/task_state.
 - 富时A50期货最新价
 - 离岸人民币 (CNH)
 - 主要商品: 原油/铜/黄金期货
+
+数据源选择：根据探测结果，腾讯可达则用腾讯财经 → 否则用 WebSearch
 ```
 
 ### 3.2 A 股催化剂
 ```
 通过 a-stock-data skill 获取：
-- 同花顺热门题材/概念
-- 东财行业板块排名
-- 北向资金前一日净买卖
-- 重要公告（巨潮）
+- 同花顺热门题材/概念（ths_hot_reason）
+- 东财行业板块排名（若 push2 不可达 → 腾讯财经批量行情自算）
+- 北向资金前一日净买卖（若 push2 不可达 → 同花顺 hsgtApi + 本地缓存）
+- 重要公告（巨潮 cninfo — 独立数据源，不受 push2 影响）
+
+⚠️ 根据探测结果选择路径：push2 可用则用东财，不可用则走 fallback
 ```
 
 ### 3.3 资金面与情绪
 ```
 通过 a-stock-data skill 获取：
-- 主力资金流（主要板块）
-- 融资融券余额
-- 涨停/跌停数量统计
-- 炸板率
+- 主力资金流（主要板块）— push2 可用则用东财 push2his，否则 mootdx 估算
+- 融资融券余额 — datacenter 可用则用 margin_trading，否则标记缺失
+- 涨停/跌停数量统计 — push2ex 可用则用 em_zt_pool，否则同花顺 ths_limit_up_pool
+- 炸板率 — push2ex 可用则用 em_zb_pool，否则标记缺失
+
+⚠️ 根据探测结果选择路径
 ```
 
 ### 3.4 事件日历
 ```
 通过 a-stock-data skill 获取：
-- 今日宏观数据发布日历
-- 今日财报发布列表
-- 今日新股申购
-- 今日解禁预警
+- 今日宏观数据发布日历（WebSearch 搜索"今日财经日历"）
+- 今日财报发布列表（WebSearch）
+- 今日新股申购（WebSearch 或 a-stock-data）
+- 今日解禁预警（datacenter 可用则用 lockup_expiry，否则 WebSearch）
+
+事件日历主要来自 WebSearch，不受 push2 影响
 ```
 
 ---
@@ -464,8 +539,8 @@ json.dump(state, open('my_doc/每日复盘/harness/automation/config/task_state.
 
 > 盘中分析执行时追加。每次执行追加新行，不覆盖历史记录。
 
-| 验证时间 | 标的 | 操作类型 | 仓位 | 当前状态 | 关键数据 | 判断 | 信号ID |
-|----------|------|:------:|:---:|:------:|----------|------|--------|
+| 验证时间 | 信号ID | 标的 | 操作类型 | 仓位 | 当前状态 | 关键数据 | 判断 |
+|----------|--------|------|:------:|:---:|:------:|----------|------|
 ```
 
 > ⚠️ 早盘生成时此表为空，盘中检查 Agent 每次执行追加一行。
@@ -570,6 +645,7 @@ json.dump(state, open('my_doc/每日复盘/harness/automation/config/task_state.
 **数据时点**: {YYYY-MM-DD HH:MM CST}
 **生成方式**: 自动化早盘分析
 **状态**: 正常
+**数据源健康**: push2={✅/❌} 腾讯={✅/❌} 同花顺={✅/❌} mootdx={✅/❌} datacenter={✅/❌} | 详见下方数据标注
 **Staging来源**: {前一交易日收盘复盘生成}
 
 ---

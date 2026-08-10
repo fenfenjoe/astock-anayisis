@@ -5,9 +5,12 @@ Determines which automated task (if any) should run at the current time.
 Used by the /loop meta-prompt (loop_runner.md) each 7-minute iteration.
 
 Usage:
-    python task_scheduler.py --check              # Check if any task is due
-    python task_scheduler.py --complete <task_id> # Mark task as done
-    python task_scheduler.py --status             # Show today's execution state
+    python task_scheduler.py --check                  # Check if any task is due
+    python task_scheduler.py --complete <task_id>     # Mark task as done (prevents re-dispatch)
+    python task_scheduler.py --mark-running <task_id> # Informational: mark as running
+    python task_scheduler.py --clear-running [task_id]# Informational: clear running marker
+    python task_scheduler.py --list-running           # Show running tasks with elapsed times
+    python task_scheduler.py --status                 # Show today's execution state
 """
 
 import json
@@ -152,6 +155,7 @@ def check() -> dict:
             "window": window_key,
             "description": task.get("description", ""),
             "target_time": task.get("target_time", f"hourly :{task.get('target_minute', '?')}"),
+            "self_managed_complete": task.get("self_managed_complete", False),
         }
 
     return {
@@ -162,7 +166,7 @@ def check() -> dict:
 
 
 def complete(task_id: str) -> dict:
-    """Mark *task_id* as executed for the current window."""
+    """Mark *task_id* as executed for the current window and clear its running marker."""
     with open(SCHEDULE_PATH, "r", encoding="utf-8") as f:
         schedule = json.load(f)
 
@@ -177,9 +181,91 @@ def complete(task_id: str) -> dict:
     if "executed" not in state:
         state["executed"] = {}
     state["executed"][window_key] = now.isoformat()
+
+    # Also clear the running marker so --list-running doesn't show stale entries
+    if "running_tasks" in state:
+        state["running_tasks"] = [t for t in state["running_tasks"] if t["task_id"] != task_id]
+
     save_state(state)
 
     return {"completed": True, "task_id": task_id, "window_key": window_key}
+
+
+# ---------------------------------------------------------------------------
+# Running-task info (purely informational — no lock semantics)
+# ---------------------------------------------------------------------------
+
+
+def mark_running(task_id: str) -> dict:
+    """Add *task_id* to the informational running-tasks list."""
+    state = load_state()
+    if "running_tasks" not in state:
+        state["running_tasks"] = []
+
+    # Load description from schedule
+    desc = ""
+    try:
+        with open(SCHEDULE_PATH, "r", encoding="utf-8") as f:
+            schedule = json.load(f)
+        task_def = next((t for t in schedule["tasks"] if t["task_id"] == task_id), None)
+        if task_def:
+            desc = task_def.get("description", "")
+    except (OSError, json.JSONDecodeError):
+        pass
+
+    # Avoid duplicates (replace if same task_id already in list)
+    existing = [i for i, t in enumerate(state["running_tasks"]) if t["task_id"] == task_id]
+    entry = {
+        "task_id": task_id,
+        "description": desc,
+        "started_at": datetime.now().isoformat(),
+    }
+    if existing:
+        state["running_tasks"][existing[0]] = entry
+    else:
+        state["running_tasks"].append(entry)
+
+    save_state(state)
+    return {"running": True, "task_id": task_id, "description": desc}
+
+
+def clear_running(task_id: str | None = None) -> dict:
+    """Remove *task_id* from the informational running-tasks list.
+    If task_id is None, clears all."""
+    state = load_state()
+    if "running_tasks" not in state:
+        return {"cleared": False}
+
+    before = len(state["running_tasks"])
+    if task_id is None:
+        state["running_tasks"] = []
+    else:
+        state["running_tasks"] = [t for t in state["running_tasks"] if t["task_id"] != task_id]
+
+    after = len(state["running_tasks"])
+    save_state(state)
+    return {"cleared": before > after, "removed": before - after}
+
+
+def list_running() -> dict:
+    """Return the informational running-tasks list with elapsed times."""
+    state = load_state()
+    tasks = state.get("running_tasks", [])
+    now = datetime.now()
+    enriched = []
+    for t in tasks:
+        try:
+            started = datetime.fromisoformat(t["started_at"])
+            elapsed = round((now - started).total_seconds() / 60, 1)
+        except (ValueError, KeyError):
+            elapsed = 0
+        enriched.append({
+            "task_id": t["task_id"],
+            "description": t.get("description", ""),
+            "started_at": t["started_at"],
+            "elapsed_minutes": elapsed,
+        })
+    return {"running": len(enriched) > 0, "tasks": enriched, "count": len(enriched)}
 
 
 def status() -> dict:
@@ -213,9 +299,25 @@ if __name__ == "__main__":
             sys.exit(1)
         result = complete(task_id)
         print(json.dumps(result, indent=2, ensure_ascii=False))
+    elif "--mark-running" in sys.argv:
+        idx = sys.argv.index("--mark-running")
+        task_id = sys.argv[idx + 1] if idx + 1 < len(sys.argv) else None
+        if not task_id:
+            print(json.dumps({"running": False, "error": "Missing task_id"}, ensure_ascii=False))
+            sys.exit(1)
+        result = mark_running(task_id)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    elif "--clear-running" in sys.argv:
+        idx = sys.argv.index("--clear-running")
+        task_id = sys.argv[idx + 1] if idx + 1 < len(sys.argv) else None
+        result = clear_running(task_id)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    elif "--list-running" in sys.argv:
+        result = list_running()
+        print(json.dumps(result, indent=2, ensure_ascii=False))
     elif "--status" in sys.argv:
         result = status()
         print(json.dumps(result, indent=2, ensure_ascii=False))
     else:
-        print("Usage: task_scheduler.py --check | --complete <task_id> | --status", file=sys.stderr)
+        print("Usage: task_scheduler.py --check | --complete <task_id> | --status | --mark-running <task_id> | --clear-running [task_id] | --list-running", file=sys.stderr)
         sys.exit(1)

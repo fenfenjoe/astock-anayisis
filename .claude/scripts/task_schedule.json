@@ -82,7 +82,8 @@
       "trading_day_required": true,
       "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_evening_review.md",
       "window_minutes": 7,
-      "description": "收盘复盘"
+      "description": "收盘复盘",
+      "self_managed_complete": true
     },
     {
       "task_id": "bug_auto_fix",
@@ -188,6 +189,6 @@
       "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_pending_remind.md",
       "window_minutes": 7,
       "description": "待确认事项提醒 (每2小时 :13)"
-    },
+    }
   ]
 }

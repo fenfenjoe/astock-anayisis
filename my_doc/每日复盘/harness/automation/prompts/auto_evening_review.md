@@ -106,6 +106,51 @@ for f in ['my_doc/每日复盘/reports/{today}/早盘报告.md', 'my_doc/每日�
 
 ---
 
+## 第二步半：数据源连通性探测
+
+> ⚠️ 同早盘分析——先探测，再取数。根据探测结果选择最优取数路径，不可达的数据源直接走 fallback。
+
+### 2.5.1 执行探测
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python my_doc/每日复盘/harness/automation/lib/data_source_probe.py \
+  --output my_doc/每日复盘/harness/automation/config/probe_status.json \
+  --pretty
+```
+
+### 2.5.2 读取探测结果
+
+```bash
+cd E:/ideaworkspace/astock-anayisis
+python -c "
+import json
+probe = json.load(open('my_doc/每日复盘/harness/automation/config/probe_status.json', encoding='utf-8'))
+status = probe['status']
+print('=== 数据源连通性探测结果 ===')
+print(f'push2: {status[\"push2\"]} | 腾讯: {status[\"tencent\"]} | 同花顺: {status[\"ths\"]}')
+print(f'push2ex: {status[\"push2ex\"]} | mootdx: {status[\"mootdx\"]} | datacenter: {status[\"datacenter\"]}')
+print(f'整体: {probe[\"overall\"]} ({probe[\"ok_count\"]}/{probe[\"total_sources\"]})')
+"
+```
+
+### 2.5.3 探测结果处理规则
+
+| 探测结果 | 含义 | 操作 |
+|:-------:|------|------|
+| `all_ok` | 全部数据源可达 | 正常取数 |
+| `partial` | 部分数据源不可达 | 按 fallback 映射表选择替代路径，报告中标注⚠️ |
+| `all_fail` | 全部数据源不可达 | 标记任务为 failed，退出 |
+
+**Fallback 映射表同早盘分析**（见 auto_morning_analysis.md 的 "数据源 fallback 映射表" 节）：
+- 行业板块排名：push2 不可达→腾讯批量行情自算
+- 北向资金：push2 不可达→同花顺 hsgtApi + 本地缓存
+- 涨停板池：push2ex 不可达→同花顺涨停揭秘
+- K线数据：mootdx 不可达→腾讯财经日K + pandas 本地算
+- 事件日历（解禁）：datacenter 不可达→WebSearch
+
+**不可达的数据源不重试**，直接走 fallback，报告中标注替代数据来源。
+
 ## 第三步：数据收集（收盘数据）
 
 使用 `a-stock-data` skill：
@@ -347,15 +392,19 @@ for f in ['my_doc/每日复盘/reports/{today}/早盘报告.md', 'my_doc/每日�
 
 #### 7.6.1 读取当日信号并写入追踪库
 
+> ✅ **2026-08-07 修复（BUG-XXX）**：旧版嵌入式脚本是骨架（解析逻辑全是注释），导致 `signal_tracking.json` 的 `signals` 从未被写入。已改为调用 `lib/signal_tracking.py` 的 `parse_signal_markdown` + `merge_new_signals`。解析逻辑已下沉到 lib 并有单测覆盖（test_signal_tracking_parse.py）。
+
 用Python脚本扫描当日信号文件，将触发/执行的信号录入追踪库：
 
 ```bash
 cd E:/ideaworkspace/astock-anayisis
 python -c "
-import json, os, re
-from datetime import date, datetime, timedelta
+import sys, json
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation/lib')
+from signal_tracking import parse_signal_markdown, merge_new_signals, update_aggregation
+from datetime import date
 
-today = date.today().strftime("%Y%m%d")  # ⚠️ 必须用 yyyyMMdd，不能用 isoformat()！
+today = date.today().strftime('%Y%m%d')  # ⚠️ 必须用 yyyyMMdd，不能用 isoformat()！
 tracking_file = 'my_doc/每日复盘/harness/automation/config/signal_tracking.json'
 signal_file = f'my_doc/每日复盘/reports/{today}/每日信号.md'
 
@@ -363,23 +412,39 @@ signal_file = f'my_doc/每日复盘/reports/{today}/每日信号.md'
 with open(tracking_file, 'r', encoding='utf-8') as f:
     db = json.load(f)
 
-existing_ids = {s['signal_id'] for s in db['signals']}
+# 2. 解析当日信号文件 → 提取已触发/已执行/部分执行的信号
+with open(signal_file, 'r', encoding='utf-8') as f:
+    md_text = f.read()
 
-# 2. 解析当日信号文件
-# 读取信号总表，提取状态为'已触发'或'已执行'的信号
-# 对每条新触发信号（不在 existing_ids 中）→ 创建记录
-# 关键字段: signal_id, ticker, trade_type, direction, priority, urgency,
-#           expected_return_date, trigger_date, entry_price, quantity, status
+new_records = parse_signal_markdown(md_text, date.today().isoformat())
+print(f'解析出可追踪信号: {len(new_records)} 条')
+for r in new_records:
+    print(f\"  {r['signal_id']} {r['name']}({r['ticker']}) {r['trade_type']} 触发价={r['entry_price']}\")
 
-# 3. 更新已有信号（今日有执行操作的）
+# 3. 合并入追踪库（按 signal_id 去重）+ 更新聚合
+merge_new_signals(db, new_records)
+db = update_aggregation(db)
 
 # 4. 写回
 with open(tracking_file, 'w', encoding='utf-8') as f:
     json.dump(db, f, indent=2, ensure_ascii=False)
 
-print(f'信号追踪库已更新: {len(db[\"signals\"])} 条记录')
+print(f'信号追踪库已更新: {len(db[\"signals\"])} 条记录 (新增 {len(new_records)} 条)')
+print(f'聚合: 追踪={db[\"aggregates\"][\"total_signals_tracked\"]} 已结算={db[\"aggregates\"][\"total_resolved\"]} P&L={db[\"aggregates\"][\"total_pnl_amount\"]}')
 "
 ```
+
+**执行结果判定**：
+- `解析出可追踪信号: N 条`，N=当日实际触发的信号数（未触发=0 属正常，只有触发了才追踪收益）
+- 若信号文件不存在 → 跳过本步，写日志"信号文件缺失，跳过信号追踪"
+
+**操作规则**：
+- 新触发信号（已触发/已执行/部分执行）= 创建记录，status="triggered"
+- 未触发的信号（已过期/已废弃/待执行）= 不录入追踪库（只有触发了才追踪收益）
+- **升级信号双向链接（v3.0新增）**：
+  - 对操作来源="观察升级"的信号 → 在 signal record 中追加 `upgraded_from` 字段，存储原观察信号ID
+  - 对状态="已升级"的原观察信号 → 在原记录中追加 `upgraded_to` 字段，存储新操作信号ID
+  - 这建立双向链接，便于跨日追踪升级信号的质量（升级后信号盈利=升级决策正确）
 
 **操作规则**：
 - 新触发信号（已触发/已执行）= 创建记录，status="triggered"或"executed"
@@ -392,66 +457,54 @@ print(f'信号追踪库已更新: {len(db[\"signals\"])} 条记录')
 
 #### 7.6.2 结算到期信号
 
-扫描所有 status="open" 的信号，检查是否满足结算条件：
+> ✅ **2026-08-07 修复（BUG-XXX）**：旧版脚本是骨架（P&L 计算全是注释）。已改为调用 `lib/signal_tracking.py` 的 `settle_due_signals`。
+
+扫描追踪库中 status ∈ {open, triggered, executed, partial_executed} 的信号，检查是否满足结算条件并结算：
 
 ```bash
 cd E:/ideaworkspace/astock-anayisis
 python -c "
-import json
-from datetime import date, datetime, timedelta
+import sys, json
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation/lib')
+from signal_tracking import settle_due_signals, update_aggregation
+from datetime import date
 
-today = date.today().strftime("%Y%m%d")  # ⚠️ 必须用 yyyyMMdd，不能用 isoformat()！
 tracking_file = 'my_doc/每日复盘/harness/automation/config/signal_tracking.json'
 
 with open(tracking_file, 'r', encoding='utf-8') as f:
     db = json.load(f)
 
-# 结算规则：
-# - 高紧急度: 触发日 + 2个交易日 >= today → 自动结算
-# - 低紧急度: expected_return_date <= today → 自动结算
-# - 手动结算: 用户执行了反向操作（减仓后回补 / 加仓后卖出）
+# 1. 构建今日收盘价表 {ticker: price}
+#    ⚠️ 需要你先用 a-stock-data 获取当日所有持仓ETF/信号标的的收盘价，
+#    填入 price_lookup。无法获取的标的本次不结算（等待下次）。
+price_lookup = {
+    # '512800': 0.798,   # 银行ETF — 示例，替换为真实收盘价
+    # '159326': 1.692,   # 电网设备ETF
+    # '513100': 2.263,   # 纳指ETF
+}
 
-for sig in db['signals']:
-    if sig['status'] not in ('open', 'triggered', 'executed', 'partial_executed'):
-        continue
-    
-    trigger_date = date.fromisoformat(sig['trigger_date'])
-    days_since = (date.today() - trigger_date).days
-    
-    should_close = False
-    close_reason = ''
-    
-    if sig['urgency'] == 'high' and days_since >= 2:
-        should_close = True
-        close_reason = '高紧急度2日自动结算'
-    elif sig['urgency'] == 'low' and sig.get('expected_return_date'):
-        exp_date = date.fromisoformat(sig['expected_return_date'])
-        if date.today() >= exp_date:
-            should_close = True
-            close_reason = f'低紧急度预期收益日{sig[\"expected_return_date\"]}到期结算'
-    
-    if should_close:
-        # 取今日收盘价作为出场价
-        # 计算 P&L
-        # 买入信号: P&L = (出场价 - 入场价) * quantity
-        # 卖出信号: P&L = (入场价 - 成本基准) * quantity, 避免损失 = (入场价 - 出场价) * quantity
-        sig['status'] = 'resolved'
-        sig['exit_date'] = today
-        sig['status_history'].append({
-            'date': today,
-            'status': 'resolved',
-            'note': close_reason
-        })
+# 2. 结算到期信号
+before = sum(1 for s in db['signals'] if s.get('status') == 'settled')
+db = settle_due_signals(db, price_lookup, date.today().isoformat())
+after = sum(1 for s in db['signals'] if s.get('status') == 'settled')
 
-# 更新聚合统计
-# 重新计算 aggregates 中的各项指标
+# 3. 更新聚合统计
+db = update_aggregation(db)
 
 with open(tracking_file, 'w', encoding='utf-8') as f:
     json.dump(db, f, indent=2, ensure_ascii=False)
 
-print(f'到期结算完成')
+print(f'到期结算完成: 本次新结算 {after - before} 条, 累计已结算 {after} 条')
+print(f'追踪={db[\"aggregates\"][\"total_signals_tracked\"]} 已结算={db[\"aggregates\"][\"total_resolved\"]} '
+      f'P&L={db[\"aggregates\"][\"total_pnl_amount\"]} 胜率={db[\"aggregates\"][\"win_rate\"]}')
 "
 ```
+
+**结算规则**（lib 内置）：
+- 高紧急度: 触发日 + 2 自然日 → 自动结算
+- 低紧急度: expected_return_date ≤ 今日 → 自动结算
+- 手动结算: 用户执行了反向操作（减仓后回补 / 加仓后卖出）
+- P&L：买入=(现价-入场价)×份额；卖出=(入场价-成本)×份额，避免损失=(入场价-现价)×份额
 
 #### 7.6.3 填充信号收益追踪章节
 
@@ -1277,3 +1330,16 @@ else:
 | 经验文件写入冲突 | 先读取最新版本，再合并写入 |
 | 持仓配置同步失败 | 保留旧配置，不覆盖，记录 error |
 | 发现系统性改善机会 | 创建 REQ 文档到 `my_doc/每日复盘/harness/automation/steering/open/REQ-{NNN}.md`，按 `steering/REQ_TEMPLATE.md` 模板（模板已内置 superpowers 开发流程：brainstorming→writing-plans→TDD→executing-plans→code-review），并在 `steering/REQ_INDEX.md` 中登记 |
+
+---
+
+## 第十七步：标记完成 + 清除运行锁
+
+> 复盘完成时标记调度器任务为已完成，并清除运行锁。
+
+```bash
+cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py --complete evening_review
+cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py --clear-running evening_review
+```
+
+> ⚠️ 如果复盘因异常中断，此步骤不会执行。此时 `check_running()` 的 stale 检测会在 45 分钟后自动清除该锁，后续迭代恢复正常。

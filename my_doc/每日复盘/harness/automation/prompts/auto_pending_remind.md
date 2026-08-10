@@ -35,7 +35,7 @@ if len(section) < 2:
 section_text = section[1].split('## ')[0] if '## ' in section[1] else section[1]
 lines = [l for l in section_text.split('\n') if l.strip().startswith('|') and not l.strip().startswith('|--') and not l.strip().startswith('|---')]
 # 排除表头行
-data_rows = [l for l in lines if '日期' not in l and '来源BUG' not in l and '事项' not in l and '优先级' not in l]
+data_rows = [l for l in lines if '日期' not in l and '来源BUG' not in l and '事项' not in l and '优先级' not in l and '暂无' not in l]
 count = len(data_rows)
 print(f'PENDING_COUNT:{count}')
 if count > 0:

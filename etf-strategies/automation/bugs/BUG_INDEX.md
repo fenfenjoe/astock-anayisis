@@ -11,8 +11,7 @@
 |------|------|
 | OPEN | 0 |
 | IN_PROGRESS | 0 |
-| FIXED | 1 |
-| VERIFIED | 0 |
+| VERIFIED | 1 |
 | WONT_FIX | 0 |
 | MANUAL_REVIEW | 0 |
 
@@ -34,7 +33,7 @@
 <!-- BUG 条目由自动巡检脚本追加在下方 -->
 
 <!-- BUG_TABLE_START -->
-| BUG-001 | Dashboard同步测试策略计数不匹配 | tests | MEDIUM | FIXED | 2026-07-23 |
+| BUG-001 | Dashboard同步测试策略计数不匹配 | tests | MEDIUM | VERIFIED | 2026-07-23 |
 <!-- BUG_TABLE_END -->
 
 ---
@@ -47,6 +46,7 @@
 | 2026-07-24 | 代码巡检 | 0 | 0 | 0 |
 | 2026-07-27 | 代码巡检 | 0 | 0 | 0 |
 | 2026-07-27 | 逻辑巡检 | 0 | 0 | 0 |
+| 2026-08-07 | 代码巡检 | 0 | 0 | 0 |
 
 ---
 
