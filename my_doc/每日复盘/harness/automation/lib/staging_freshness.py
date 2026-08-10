@@ -96,3 +96,47 @@ def find_latest_review_report(reports_root: Union[str, Path]) -> Optional[date]:
             if latest is None or d > latest:
                 latest = d
     return latest
+
+
+def staging_health_check(
+    staging_text: Optional[str],
+    today: date,
+    reports_root: Union[str, Path],
+) -> dict:
+    """早盘前的 staging 综合健康检查。
+
+    Args:
+        staging_text: staging 文件全文；None 表示文件缺失
+        today: 今天日期
+        reports_root: reports/ 目录路径（用于定位最近复盘）
+
+    Returns:
+        {
+            'exists': bool,
+            'exec_date': date | None,
+            'stale': bool,
+            'latest_review_date': date | None,
+            'action': 'use' | 'rebuild' | 'missing',
+        }
+    """
+    if not staging_text:
+        return {
+            'exists': False,
+            'exec_date': None,
+            'stale': True,
+            'latest_review_date': find_latest_review_report(reports_root),
+            'action': 'missing',
+        }
+    exec_date = parse_staging_execution_date(staging_text)
+    stale, _diag = is_staging_stale(exec_date, today)
+    if exec_date is None or stale:
+        action = 'rebuild'
+    else:
+        action = 'use'
+    return {
+        'exists': True,
+        'exec_date': exec_date,
+        'stale': stale,
+        'latest_review_date': find_latest_review_report(reports_root),
+        'action': action,
+    }

@@ -121,3 +121,47 @@ class TestFindLatestReviewReport:
     def test_none_when_root_missing(self, tmp_path):
         """目录不存在 → None"""
         assert find_latest_review_report(tmp_path / 'nope') is None
+
+
+# ============================================================
+# staging_health_check
+# ============================================================
+
+from lib.staging_freshness import staging_health_check
+
+
+class TestStagingHealthCheck:
+    def test_missing_when_none(self, tmp_path):
+        """staging 缺失 → action=missing"""
+        r = staging_health_check(None, date(2026, 8, 10), tmp_path)
+        assert r['exists'] is False
+        assert r['action'] == 'missing'
+
+    def test_use_when_fresh(self, tmp_path):
+        """执行日 == 今天 → use"""
+        text = '# 今日早盘分析 — 2026-08-10（周一）\n\n供 2026-08-10 早盘分析使用\n'
+        r = staging_health_check(text, date(2026, 8, 10), tmp_path)
+        assert r['exists'] is True
+        assert r['stale'] is False
+        assert r['action'] == 'use'
+
+    def test_rebuild_when_stale(self, tmp_path):
+        """执行日 < 今天 → rebuild"""
+        text = '# 今日早盘分析 — 2026-08-07（周五）\n\n供 2026-08-07 早盘分析使用\n'
+        r = staging_health_check(text, date(2026, 8, 10), tmp_path)
+        assert r['action'] == 'rebuild'
+        assert r['stale'] is True
+
+    def test_rebuild_when_unparseable(self, tmp_path):
+        """执行日解析失败 → 保守 rebuild"""
+        r = staging_health_check('# 无日期文件', date(2026, 8, 10), tmp_path)
+        assert r['action'] == 'rebuild'
+        assert r['stale'] is True
+
+    def test_reports_latest_date_populated(self, tmp_path):
+        """latest_review_date 从 reports_root 定位"""
+        (tmp_path / '20260805').mkdir()
+        (tmp_path / '20260805' / '复盘报告.md').write_text('x', encoding='utf-8')
+        text = '# 今日早盘分析 — 2026-08-10（周一）\n'
+        r = staging_health_check(text, date(2026, 8, 10), tmp_path)
+        assert r['latest_review_date'] == date(2026, 8, 5)
