@@ -39,11 +39,25 @@
       "market_snapshot": {}
     },
     "intraday_1337": {
-      "status": "not_yet",
-      "executed_at": null,
-      "triggers_found": 0,
-      "new_signals": 0,
-      "market_snapshot": {}
+      "status": "completed",
+      "executed_at": "2026-08-10T13:34:00",
+      "triggers_found": 1,
+      "new_signals": 1,
+      "signals_expired": 4,
+      "signals_upgraded": 1,
+      "market_snapshot": {
+        "shanghai": 3944.86,
+        "shenzhen": 14157.93,
+        "chongqing": 3487.53,
+        "north_flow": null,
+        "bank_etf": 0.805,
+        "grid_etf": 1.684,
+        "nasdaq_etf": 2.269,
+        "aero_etf": 1.019,
+        "medicine_etf": 0.402,
+        "zt_count": 76
+      },
+      "note": "13:30检查：4条P0/P1过期；SIG-06医药观察升级为SIG-06-UP建仓；SIG-05条件未达；无Tier1/2新信号"
     },
     "intraday_1452": {
       "status": "not_yet",
@@ -54,18 +68,19 @@
     },
     "evening_review": {
       "status": "completed",
-      "executed_at": "2026-08-10T08:42:00",
-      "completed_at": "2026-08-10T08:42:00",
+      "executed_at": "2026-08-10T16:02:32",
+      "completed_at": "2026-08-10T16:43:46",
       "outputs": [
-        "reports/20260807/复盘报告.md (周五复盘补生成)",
-        "reports/20260807/每日信号.md (信号评价已补填)",
-        "harness/experience/投资经验.md (3条经验已沉淀)",
-        "harness/experience/短线机会经验.md (2条经验已沉淀)",
-        "staging/今日-早盘分析.md (周一staging已生成)",
-        "staging/今日-复盘分析.md (周一staging已生成)",
-        "archive/20260807/ (周一staging已归档)"
+        "reports/20260810/复盘报告.md",
+        "reports/20260810/每日信号.md (信号评价+统计+收益追踪已原地写入)",
+        "harness/experience/投资经验.md (3条经验沉淀)",
+        "harness/experience/短线机会经验.md (2条经验沉淀)",
+        "harness/config/持仓.md (已同步，无变更)",
+        "staging/今日-早盘分析.md (次日staging)",
+        "staging/今日-复盘分析.md (次日staging)",
+        "archive/20260810/ (staging已归档)"
       ],
-      "notes": "20260807复盘因系统故障未执行，20260810早盘前人工补跑完成：补生成复盘报告+信号评价+经验沉淀+周一staging+归档。"
+      "notes": "20260810收盘复盘完成: 大盘权重强成长弱, 创业板-0.73%; 信号0执行1触发(SIG-06-UP未执行); 持仓无变更; staging已生成并通过校验"
     },
     "intraday_0940": {
       "status": "completed",
@@ -128,20 +143,28 @@
     },
     "intraday_1400": {
       "status": "completed",
-      "executed_at": "2026-08-07T14:07:00",
-      "triggers_found": 0,
+      "executed_at": "2026-08-10T14:00:00",
+      "triggers_found": 1,
       "new_signals": 0,
       "signals_expired": 1,
+      "signals_upgraded": 0,
       "market_snapshot": {
-        "shanghai": 3931.25,
-        "shenzhen": 14300.38,
-        "chongqing": 3565.28,
-        "north_flow": -9.28,
-        "bank_etf": 0.8,
-        "grid_etf": 1.692,
-        "nasdaq_etf": 2.248,
-        "aero_etf": 1.008
-      }
+        "shanghai": 3949.46,
+        "shenzhen": 14209.19,
+        "chongqing": 3503.53,
+        "north_flow": {
+          "hgt": -9.28,
+          "sgt": 379.75,
+          "note": "数据可能陈旧"
+        },
+        "bank_etf": 0.803,
+        "grid_etf": 1.69,
+        "nasdaq_etf": 2.271,
+        "aero_etf": 1.028,
+        "medicine_etf": 0.402,
+        "zt_count": 84
+      },
+      "note": "14:00盘中检查：SIG-06-UP(医药建仓)条件满足已触发；SIG-05(航空航天观察)75%窗口过期；无新增信号"
     },
     "intraday_1430": {
       "status": "completed",
@@ -166,6 +189,6 @@
     "morning_missing": false,
     "staging_missing_for_tomorrow": false,
     "consecutive_failures": 0,
-    "last_successful_cycle": "2026-08-07"
+    "last_successful_cycle": "2026-08-10"
   }
 }
