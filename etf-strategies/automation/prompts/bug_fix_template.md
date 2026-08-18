@@ -27,7 +27,7 @@ BUG-ID: BUG-{NNN}
 ## 第二步：创建修复分支
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 git checkout master
 git checkout -b bugfix/BUG-{NNN}-{short-desc}
 ```
@@ -61,7 +61,7 @@ git checkout -b bugfix/BUG-{NNN}-{short-desc}
 ## 第五步：运行测试
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/etf-strategies
+cd etf-strategies
 
 # 1. 运行 BUG 关联的测试
 python -m pytest tests/ -v -k "{关联的测试名}" --tb=short
@@ -95,7 +95,7 @@ python -m pytest tests/ -v --tb=short 2>&1 | tail -30
 ## 第七步：提交修复
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 
 git add {修改的文件列表}
 git commit -m "fix(BUG-{NNN}): {一句话修复描述}

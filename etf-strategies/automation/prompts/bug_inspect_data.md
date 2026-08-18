@@ -14,7 +14,7 @@
 ## 前置检查：是否交易日
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python my_doc/每日复盘/harness/automation/config/trading_calendar.py
 ```
 
@@ -27,7 +27,7 @@ python my_doc/每日复盘/harness/automation/config/trading_calendar.py
 检查 `etf-strategies/cache/` 下所有 parquet 文件的最后修改时间：
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/etf-strategies
+cd etf-strategies
 python -c "
 import os, glob
 from datetime import datetime, timedelta
@@ -60,7 +60,7 @@ else:
 对每个活跃策略使用的 ETF（从 strategy_kb.py 提取），检查最近 5 个交易日是否有异常价格跳动：
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/etf-strategies
+cd etf-strategies
 python -c "
 import pandas as pd, glob, os
 
@@ -104,7 +104,7 @@ for f in glob.glob('cache/*.parquet'):
 检查所有活跃策略（在 daily_signal.py STRAT_MAP 中注册的）使用的 ETF 是否都有数据：
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/etf-strategies
+cd etf-strategies
 python -c "
 import pandas as pd, glob, os, sys
 from datetime import datetime, timedelta

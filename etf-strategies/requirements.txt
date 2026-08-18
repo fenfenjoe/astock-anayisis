@@ -20,3 +20,6 @@ urllib3>=2.0.0
 
 # Charts & reports
 matplotlib>=3.7.0
+
+# Eastmoney credential encryption (Fernet, dashboard 东财实验功能)
+cryptography>=41.0.0

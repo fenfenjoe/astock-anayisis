@@ -22,7 +22,7 @@
 ### 0.1 扫描 OPEN REQ
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 echo "=== 每日复盘 Steering ==="
 if test -f "my_doc/每日复盘/harness/automation/steering/REQ_INDEX.md"; then
   grep -E "OPEN|IN_PROGRESS" "my_doc/每日复盘/harness/automation/steering/REQ_INDEX.md" || echo "无 OPEN/IN_PROGRESS REQ"
@@ -49,7 +49,7 @@ fi
 
 读取选中 REQ 的 `task_state.json` 中 `req_implement` 段：
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import json
 with open('my_doc/每日复盘/harness/automation/config/task_state.json', 'r') as f:
@@ -143,7 +143,7 @@ print(json.dumps(req_state, indent=2, ensure_ascii=False))
 #### 3.5.1 检查测试文件存在
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import sys
 sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
@@ -160,7 +160,7 @@ print(f'Test file test_{req_id}: {\"EXISTS\" if exists else \"MISSING\"}')
 #### 3.5.2 运行测试
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/my_doc/每日复盘/harness/automation
+cd my_doc/每日复盘/harness/automation
 python -m pytest tests/test_{REQ-ID}.py -v --tb=short
 ```
 
@@ -214,7 +214,7 @@ python -m pytest tests/test_{REQ-ID}.py -v --tb=short
 ### 4.3 更新 task_state.json
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import json
 from datetime import datetime
@@ -238,7 +238,7 @@ print('task_state.json updated')
 ### 4.4 Git 提交
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 git add {修改的文件列表}
 git commit -m "feat({REQ-ID}): {REQ 标题}
 

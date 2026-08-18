@@ -24,7 +24,7 @@
 ### 0.1 判断交易日
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import json, subprocess, sys
 from datetime import date
@@ -63,7 +63,7 @@ mkdir -p my_doc/每日复盘/harness/automation/bugs/closed
 ### A1: archive/{today}/早盘分析-staging.md 存在
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import os
 from datetime import date
@@ -80,7 +80,7 @@ else:
 ### A2: archive/{today}/复盘分析-staging.md 存在
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import os
 from datetime import date
@@ -120,7 +120,7 @@ else:
 
 **检查方法**：
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import os, sys
 from datetime import date
@@ -179,7 +179,7 @@ else:
 5. **五、前次预测评估** — 逐条预测vs实际+准确率+根因
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import os, sys
 
@@ -241,7 +241,7 @@ else:
 **必须机械化比对——复制 auto_evening_review.md §9.3 的 Python 校验脚本：**
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import re, sys
 
@@ -295,7 +295,7 @@ else:
 **检查方法**：
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import os, json, sys
 from datetime import date, datetime
@@ -403,7 +403,7 @@ else:
 ### C1: reports/{today}/早盘报告.md 章节完整性
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import os, sys
 from datetime import date
@@ -448,7 +448,7 @@ else:
 ### C2: reports/{today}/每日信号.md 章节完整性
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import os, sys
 from datetime import date
@@ -507,7 +507,7 @@ else:
 ### C3: reports/{today}/复盘报告.md 章节完整性
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import os, sys
 from datetime import date
@@ -555,7 +555,7 @@ else:
 ### C4: 报告产出与 task_state 一致性
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import json, os
 from datetime import date
@@ -609,7 +609,7 @@ else:
 **复制 auto_evening_review.md §10.2 的验证脚本**（已在生产验证）：
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import re, sys
 
@@ -659,7 +659,7 @@ else:
 ### D2: task_state.json 日期与交易日字段正确
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import json
 from datetime import date
@@ -684,7 +684,7 @@ except Exception as e:
 ### D3: signal_tracking.json 无孤立信号
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import json, os, glob
 from datetime import date, timedelta
@@ -752,7 +752,7 @@ else:
 ### E2: BUG_INDEX.md 统计数与实际文件一致
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import os, re
 

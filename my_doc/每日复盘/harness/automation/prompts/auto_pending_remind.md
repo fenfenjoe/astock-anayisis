@@ -14,7 +14,7 @@
 ## 第一步：扫描待确认事项
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import re, os
 

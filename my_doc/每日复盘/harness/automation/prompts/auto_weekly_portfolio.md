@@ -16,7 +16,7 @@
 
 检查过去 5 个交易日中至少 3 天有复盘报告：
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import os
 from datetime import datetime, timedelta
@@ -50,7 +50,7 @@ print(f'{count}/5 天有复盘报告，数据充足')
 
 ### 2.3 获取量化信号
 ```bash
-cd E:/ideaworkspace/astock-anayisis/etf-strategies
+cd etf-strategies
 python daily_signal.py --all
 ```
 

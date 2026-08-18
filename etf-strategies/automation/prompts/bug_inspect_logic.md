@@ -16,7 +16,7 @@
 本巡检依赖最新的全量回测结果。执行前先运行：
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/etf-strategies
+cd etf-strategies
 python run_backtest.py 2>&1 | tail -50
 ```
 
