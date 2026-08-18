@@ -3,25 +3,24 @@
   "_description": "每日复盘自动化流水线的跨任务协调状态。早盘→盘中(4次)→复盘 共享此文件，确保幂等和流水线感知。",
   "_updated": "2026-08-10",
   "signal_tracking_version": "1.0",
-  "date": "20260810",
+  "date": "20260818",
   "trading_day": true,
   "tasks": {
     "morning_analysis": {
       "status": "completed",
-      "executed_at": "2026-08-10T08:44:00",
+      "executed_at": "2026-08-18T09:09:33.488790",
       "reports_generated": [
         "早盘报告.md",
         "每日信号.md"
       ],
       "signal_count": 6,
-      "p0_signals": 1,
+      "p0_signals": 0,
       "p1_signals": 3,
-      "p2_signals": 2,
+      "p2_signals": 3,
       "errors": [],
       "warnings": [
-        "东财push2 API不可达",
-        "日韩早盘数据暂不可达",
-        "WebSearch对A股无返回"
+        "东财push2/push2his风控：行业排名走腾讯fallback，主力资金流缺失",
+        "北向深股通数据缺失(同花顺sgt空)"
       ]
     },
     "intraday_1003": {
@@ -68,7 +67,7 @@
     },
     "evening_review": {
       "status": "completed",
-      "executed_at": "2026-08-10T16:02:32",
+      "executed_at": "2026-08-18T15:22:06.188713",
       "completed_at": "2026-08-10T16:43:46",
       "outputs": [
         "reports/20260810/复盘报告.md",
@@ -80,32 +79,47 @@
         "staging/今日-复盘分析.md (次日staging)",
         "archive/20260810/ (staging已归档)"
       ],
-      "notes": "20260810收盘复盘完成: 大盘权重强成长弱, 创业板-0.73%; 信号0执行1触发(SIG-06-UP未执行); 持仓无变更; staging已生成并通过校验"
+      "notes": "20260810收盘复盘完成: 大盘权重强成长弱, 创业板-0.73%; 信号0执行1触发(SIG-06-UP未执行); 持仓无变更; staging已生成并通过校验",
+      "reports_generated": [
+        "复盘报告.md",
+        "每日信号.md(评价+统计)",
+        "次日staging(早盘+复盘)"
+      ],
+      "errors": [],
+      "warnings": [
+        "每日调仓.md持仓表与config冲突(BUG-001)",
+        "东财push2/push2his风控",
+        "北向数据断供"
+      ]
     },
     "intraday_0940": {
       "status": "completed",
-      "executed_at": "2026-08-07T10:02:22",
+      "executed_at": "2026-08-18T09:49:06.323228",
       "triggers_found": 0,
-      "new_signals": 0,
+      "new_signals": 1,
       "market_snapshot": {
-        "shanghai": 3898.54,
-        "shenzhen": 14152.12,
-        "chongqing": 3535.14,
-        "north_flow": -9.28
+        "sh": 3986.18,
+        "sz": 14662.29,
+        "cyb": 3723.43,
+        "kc50": 1787.14,
+        "time": "09:44"
       }
     },
     "intraday_1000": {
       "status": "completed",
-      "executed_at": "2026-08-07T10:14:30",
+      "executed_at": "2026-08-18T10:26:17.132254",
       "triggers_found": 0,
-      "new_signals": 0,
+      "new_signals": 1,
       "signals_expired": 4,
       "market_snapshot": {
-        "shanghai": 3906.88,
-        "shenzhen": 14219.26,
-        "chongqing": 3552.77,
-        "north_flow": 5.66
-      }
+        "sh": 3977.99,
+        "sz": 14595.01,
+        "cyb": 3701.95,
+        "kc50": 1769.04,
+        "time": "10:21"
+      },
+      "upgraded_signals": 1,
+      "expired_signals": 1
     },
     "intraday_1030": {
       "status": "completed",
@@ -121,8 +135,17 @@
       }
     },
     "intraday_1100": {
-      "status": "not_yet",
-      "executed_at": null
+      "status": "completed",
+      "executed_at": "2026-08-18T11:14:04.894675",
+      "triggers_found": 1,
+      "new_signals": 0,
+      "market_snapshot": {
+        "sh": 3960.23,
+        "sz": 14485.53,
+        "cyb": 3671.26,
+        "kc50": 1759.16,
+        "time": "11:11"
+      }
     },
     "intraday_1330": {
       "status": "completed",
@@ -143,28 +166,20 @@
     },
     "intraday_1400": {
       "status": "completed",
-      "executed_at": "2026-08-10T14:00:00",
-      "triggers_found": 1,
+      "executed_at": "2026-08-18T14:09:38.458003",
+      "triggers_found": 0,
       "new_signals": 0,
       "signals_expired": 1,
       "signals_upgraded": 0,
       "market_snapshot": {
-        "shanghai": 3949.46,
-        "shenzhen": 14209.19,
-        "chongqing": 3503.53,
-        "north_flow": {
-          "hgt": -9.28,
-          "sgt": 379.75,
-          "note": "数据可能陈旧"
-        },
-        "bank_etf": 0.803,
-        "grid_etf": 1.69,
-        "nasdaq_etf": 2.271,
-        "aero_etf": 1.028,
-        "medicine_etf": 0.402,
-        "zt_count": 84
+        "sh": 3973.95,
+        "sz": 14539.31,
+        "cyb": 3686.65,
+        "kc50": 1777.97,
+        "time": "14:07"
       },
-      "note": "14:00盘中检查：SIG-06-UP(医药建仓)条件满足已触发；SIG-05(航空航天观察)75%窗口过期；无新增信号"
+      "note": "14:00盘中检查：SIG-06-UP(医药建仓)条件满足已触发；SIG-05(航空航天观察)75%窗口过期；无新增信号",
+      "expired_signals": 1
     },
     "intraday_1430": {
       "status": "completed",
