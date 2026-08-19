@@ -25,7 +25,7 @@
 
 ### 1.1 交易日 + 收盘后
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 from datetime import datetime, time
 now = datetime.now()
@@ -39,7 +39,7 @@ if now.time() < time(15, 0):
 
 **必须用 bash 实际检查文件系统，不得凭记忆或推理判断文件是否存在：**
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 echo "=== 文件存在性检查 ==="
 for f in "my_doc/每日复盘/reports/{today}/早盘报告.md" "my_doc/每日复盘/reports/{today}/每日信号.md" "my_doc/每日复盘/harness/staging/今日-复盘分析.md"; do
   if test -f "$f"; then echo "EXISTS: $f"; else echo "MISSING: $f"; fi
@@ -58,7 +58,7 @@ done
 > 🚨 检查 `reports/{today}/复盘报告.md` 是否存在且为今日生成。是则跳过，否则强制执行。
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import os
 from datetime import datetime
@@ -113,7 +113,7 @@ for f in ['my_doc/每日复盘/reports/{today}/早盘报告.md', 'my_doc/每日�
 ### 2.5.1 执行探测
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python my_doc/每日复盘/harness/automation/lib/data_source_probe.py \
   --output my_doc/每日复盘/harness/automation/config/probe_status.json \
   --pretty
@@ -122,7 +122,7 @@ python my_doc/每日复盘/harness/automation/lib/data_source_probe.py \
 ### 2.5.2 读取探测结果
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import json
 probe = json.load(open('my_doc/每日复盘/harness/automation/config/probe_status.json', encoding='utf-8'))
@@ -397,7 +397,7 @@ print(f'整体: {probe[\"overall\"]} ({probe[\"ok_count\"]}/{probe[\"total_sourc
 用Python脚本扫描当日信号文件，将触发/执行的信号录入追踪库：
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import sys, json
 sys.path.insert(0, 'my_doc/每日复盘/harness/automation/lib')
@@ -462,7 +462,7 @@ print(f'聚合: 追踪={db[\"aggregates\"][\"total_signals_tracked\"]} 已结算
 扫描追踪库中 status ∈ {open, triggered, executed, partial_executed} 的信号，检查是否满足结算条件并结算：
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import sys, json
 sys.path.insert(0, 'my_doc/每日复盘/harness/automation/lib')
@@ -547,7 +547,7 @@ print(f'追踪={db[\"aggregates\"][\"total_signals_tracked\"]} 已结算={db[\"a
 > 🚨 确认信号评价和统计已正确写入 `每日信号.md` 后，必须运行以下验证脚本。验证失败 = 复盘未完成，必须回补。
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import sys
 
@@ -649,7 +649,7 @@ else:
 ### 10.1 执行同步脚本
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import re, os, sys, json
 from datetime import date
@@ -806,7 +806,7 @@ print(f'__HOLDINGS_JSON__: {json.dumps(enhanced_output, ensure_ascii=False)}')
 > 🚨 此步骤为硬性门禁。如果验证失败，必须修正后重新执行 10.1，不得跳过直接输出报告。
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import re, sys
 
@@ -966,7 +966,7 @@ else:
 > ⚠️ staging 文件中的持仓表是 AI 手写的，可能把代码和名称搞混（如 159227 写成了"恒生科技ETF"而非"航空航天ETF"）。必须在归档前做自动化交叉校验。
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import re, sys
 
@@ -1031,7 +1031,7 @@ cp harness/staging/今日-复盘分析.md "harness/archive/{today}/复盘分析-
 > 🚨 此步骤为硬性门禁。Staging 是次日早盘分析+复盘的前置依赖——staging 缺失/过旧 = 次日全部降级执行。必须验证两个文件都已成功写入、日期正确、且为今日生成。
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import os, sys
 from datetime import date, timedelta, datetime
@@ -1145,7 +1145,7 @@ else:
 ### 14.1 扫描 IMPLEMENTED REQ
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 echo "=== IMPLEMENTED REQs (每日复盘) ==="
 grep "IMPLEMENTED" "my_doc/每日复盘/harness/automation/steering/REQ_INDEX.md" || echo "无 IMPLEMENTED REQ"
 ```
@@ -1160,7 +1160,7 @@ grep "IMPLEMENTED" "my_doc/每日复盘/harness/automation/steering/REQ_INDEX.md
    - 如 REQ-002（信号设计质量提升）：今日信号触发率是否改善？紧急度分配是否正确？
 3. **运行关联测试**（如 REQ 处理记录中有测试用例）：
    ```bash
-   cd E:/ideaworkspace/astock-anayisis
+
    # 根据 REQ 影响范围选择测试命令
    # 数据结构变更 → Python schema 验证
    # Prompt 改动 → grep 验证关键字段
@@ -1172,7 +1172,7 @@ grep "IMPLEMENTED" "my_doc/每日复盘/harness/automation/steering/REQ_INDEX.md
 对每个 IMPLEMENTED REQ，运行测试后按以下规则判定：
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/my_doc/每日复盘/harness/automation
+cd my_doc/每日复盘/harness/automation
 python -m pytest tests/test_{REQ-ID}.py -v --tb=short 2>&1
 ```
 
@@ -1241,7 +1241,7 @@ python -m pytest tests/test_{REQ-ID}.py -v --tb=short 2>&1
 > 🚨 此步骤为复盘的最后一道防线。验证所有关键产出文件是否存在、是否为今日生成。验证失败 = 复盘未完成，必须回补。
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import os, sys
 from datetime import date, timedelta, datetime
@@ -1338,8 +1338,8 @@ else:
 > 复盘完成时标记调度器任务为已完成，并清除运行锁。
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py --complete evening_review
-cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py --clear-running evening_review
+python .claude/scripts/task_scheduler.py --complete evening_review
+python .claude/scripts/task_scheduler.py --clear-running evening_review
 ```
 
 > ⚠️ 如果复盘因异常中断，此步骤不会执行。此时 `check_running()` 的 stale 检测会在 45 分钟后自动清除该锁，后续迭代恢复正常。

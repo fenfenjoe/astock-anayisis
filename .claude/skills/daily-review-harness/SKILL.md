@@ -59,7 +59,6 @@ my_doc/每日复盘/
 **流程：**
 1. **staging 新鲜度检查**：读取 `harness/staging/今日-早盘分析.md` 全文，执行以下命令判断是否过期：
    ```bash
-   cd E:/ideaworkspace/astock-anayisis
    python -X utf8 -c "
    import json, sys
    sys.path.insert(0, 'my_doc/每日复盘/harness/automation')

@@ -16,7 +16,7 @@
 ## 第一步：大小检查
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/my_doc/每日复盘/harness/experience
+cd my_doc/每日复盘/harness/experience
 
 for f in 投资经验.md 短线机会经验.md 报告审阅经验.md; do
     lines=$(wc -l < "$f" 2>/dev/null || echo 0)
@@ -128,7 +128,7 @@ done
 ### 5B.1 读取 REQ 索引
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 echo "=== 每日复盘 Steering ==="
 cat "my_doc/每日复盘/harness/automation/steering/REQ_INDEX.md"
 echo ""
@@ -169,7 +169,7 @@ cat "etf-strategies/automation/steering/REQ_INDEX.md"
 ### 5B.4 目录完整性
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 # 检查 steering 目录结构
 for dir in "my_doc/每日复盘/harness/automation/steering" "etf-strategies/automation/steering"; do
   echo "=== $dir ==="
@@ -226,7 +226,7 @@ for steering_dir in [
 #### 5B.6.1 扫描
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import sys
 sys.path.insert(0, 'my_doc/每日复盘/harness/automation')

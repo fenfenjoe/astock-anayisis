@@ -42,7 +42,7 @@
    - 仅修改必要的行，不引入无关改动
 3. **运行测试验证**：
    ```bash
-   cd E:/ideaworkspace/astock-anayisis/etf-strategies
+   cd etf-strategies
    # 运行 BUG 关联的测试（如果有）
    python -m pytest tests/ -v -k "test_backtest or test_strategies" --tb=short 2>&1 | tail -30
    # 运行全量回归
@@ -53,7 +53,7 @@
    - 测试失败 或 修复引入新问题 → **修复失败**，回滚修改，状态 → MANUAL_REVIEW（在 BUG 报告中追加失败原因）
 5. **提交修复**（仅修复成功时）：
    ```bash
-   cd E:/ideaworkspace/astock-anayisis
+
    git add {修改的文件}
    git commit -m "fix(BUG-{NNN}): [auto-fix] {一句话描述}
 

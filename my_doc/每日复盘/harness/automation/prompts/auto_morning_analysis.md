@@ -38,7 +38,7 @@
 
 ### 1.1 交易日检查
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python my_doc/每日复盘/harness/automation/config/trading_calendar.py --status
 ```
 
@@ -61,7 +61,7 @@ python my_doc/每日复盘/harness/automation/config/trading_calendar.py --statu
 > ⚠️ 即使晚间复盘已校验，此处仍做防卫性检查——防御晚间复盘跳过校验或归档后手动修改引入错误。
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import sys
 with open('my_doc/每日复盘/harness/config/持仓.md', 'r', encoding='utf-8') as f:
@@ -104,7 +104,7 @@ except FileNotFoundError:
 > **铁律：config/持仓.md 是持仓数据的唯一权威来源。staging 中的持仓表仅供参考，发现任何差异时以 config/持仓.md 为准。**
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import sys, os
 
@@ -207,7 +207,7 @@ else:
 执行健康检查：
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -X utf8 -c "
 import json, sys
 sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
@@ -258,7 +258,7 @@ print(json.dumps(result, ensure_ascii=False, default=str))
 ## 第二步：更新 task_state
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import json
 from datetime import date, datetime
@@ -281,7 +281,7 @@ json.dump(state, open('my_doc/每日复盘/harness/automation/config/task_state.
 ### 2.5.1 执行探测
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python my_doc/每日复盘/harness/automation/lib/data_source_probe.py \
   --output my_doc/每日复盘/harness/automation/config/probe_status.json \
   --pretty
@@ -290,7 +290,7 @@ python my_doc/每日复盘/harness/automation/lib/data_source_probe.py \
 ### 2.5.2 读取探测结果
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import json
 probe = json.load(open('my_doc/每日复盘/harness/automation/config/probe_status.json', encoding='utf-8'))

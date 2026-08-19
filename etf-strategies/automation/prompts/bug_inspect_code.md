@@ -25,7 +25,7 @@
 - `etf-strategies/tests/`
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/etf-strategies
+cd etf-strategies
 python -c "
 import py_compile, os, sys
 errors = []
@@ -53,7 +53,7 @@ else:
 
 **检查脚本**：
 ```bash
-cd E:/ideaworkspace/astock-anayisis/etf-strategies
+cd etf-strategies
 python -c "
 import os, re, ast
 
@@ -105,7 +105,7 @@ if not (missing_in_rb or missing_in_ds or missing_in_ls):
 
 ### 2.3 硬编码路径检查
 ```bash
-cd E:/ideaworkspace/astock-anayisis/etf-strategies
+cd etf-strategies
 grep -rn "C:/" backtest/ --include="*.py" || echo "OK: 无Windows绝对路径硬编码"
 grep -rn "D:/" backtest/ --include="*.py" || echo "OK: 无D盘绝对路径硬编码"
 ```
@@ -115,7 +115,7 @@ grep -rn "D:/" backtest/ --include="*.py" || echo "OK: 无D盘绝对路径硬编
 ## 第三步：测试覆盖率检查
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/etf-strategies
+cd etf-strategies
 python -m pytest tests/ --cov=backtest --cov-report=term -q 2>&1 | tail -30
 ```
 
@@ -128,7 +128,7 @@ python -m pytest tests/ --cov=backtest --cov-report=term -q 2>&1 | tail -30
 ## 第四步：运行全量测试
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/etf-strategies
+cd etf-strategies
 python -m pytest tests/ -v --tb=short 2>&1
 ```
 

@@ -32,6 +32,8 @@ from dashboard.auth import (
     check_rate_limit, record_login_failure, clear_rate_limit,
     get_secret_key_warning,
 )
+from dashboard.api_daily import router as daily_router
+from dashboard import scheduler as daily_scheduler
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -90,6 +92,33 @@ async def lifespan(app: FastAPI):
             print(f"[app]   WARNING: signal warm-up failed: {e}")
 
     threading.Thread(target=_warm_cache, daemon=True).start()
+
+    # ── 每日复盘集成：导入历史 + 启动调度器引擎（幂等，可重复跑）──
+    print("[app] Importing 每日复盘 data (reports/holdings/trades)...")
+    try:
+        r = daily_scheduler.import_reports_from_disk()
+        print(f"[app]   reports imported: {r.get('imported', 0)}")
+    except Exception as e:
+        print(f"[app]   WARNING: reports import failed: {e}")
+    try:
+        if daily_scheduler.import_holdings_from_md():
+            print("[app]   holdings imported from 持仓.md")
+        if daily_scheduler.import_trades_from_md():
+            print("[app]   trades imported from 每日调仓.md")
+    except Exception as e:
+        print(f"[app]   WARNING: holdings/trades import failed: {e}")
+
+    try:
+        daily_scheduler.start()
+    except Exception as e:
+        print(f"[app]   WARNING: scheduler start failed: {e}")
+
+    # ── 企业微信信号触发通知 watcher（未配置则静默空转）──
+    try:
+        from dashboard import notify as notify_mod
+        notify_mod.start()
+    except Exception as e:
+        print(f"[app]   WARNING: notify watcher start failed: {e}")
 
     print("[app] Startup complete — server ready at http://localhost:8000")
     yield  # <== Server starts accepting requests HERE
@@ -1604,6 +1633,8 @@ def _kill_existing_on_port(port: int) -> bool:
 
 # ── Mount the protected API router ──
 app.include_router(protected)
+# ── 每日复盘集成 API（持仓/资产/信号/报告/调度，同样走 JWT）──
+app.include_router(daily_router)
 
 if __name__ == "__main__":
     import uvicorn

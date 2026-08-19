@@ -1,5 +1,15 @@
 # 每日复盘项目
 
+> ⚠️ **DEPRECATED（已迁移至 etf-strategies/dashboard）**
+>
+> 本系统的功能已融入 `etf-strategies/dashboard`（端口 8000）：
+> - **持仓/资产 配置** → 页面「💰 持仓/资产」（读写本目录 `harness/config/持仓.md`）
+> - **定时任务**（早盘/盘中/盘后分析）→ 页面「⏰ 定时任务」内置调度器 + headless `claude -p` 运行器
+> - **报告 / 每日信号展示** → 页面「📄 报告」「📡 每日信号」
+>
+> 本目录**保留**作为唯一事实源（报告/持仓/经验/交易记录数据），dashboard 直接读写同一份数据，**不做删除**。
+> 迁移详情见 `etf-strategies/dashboard` 与 `daily-review-harness` skill。
+
 基于 Harness Engineering 架构的 A 股每日市场报告生成系统。
 
 ## 架构

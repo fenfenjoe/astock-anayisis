@@ -250,6 +250,130 @@ CREATE INDEX IF NOT EXISTS idx_kline_code ON kline_daily(code);
 CREATE INDEX IF NOT EXISTS idx_kline_date ON kline_daily(date);
 CREATE INDEX IF NOT EXISTS idx_signal_sid   ON daily_signals(strategy_id, signal_date);
 CREATE INDEX IF NOT EXISTS idx_nav_name     ON backtest_nav(strategy_name);
+
+-- ═══════════════════════════════════════════════════════════════════
+-- Table: portfolio_holdings — 每日复盘持仓快照（权威持仓）
+-- ═══════════════════════════════════════════════════════════════════
+-- 用途: 存储用户当前持仓（1 code 一行），是持仓的唯一权威来源，
+--       与 my_doc/每日复盘/harness/config/持仓.md 双向同步
+-- 数据来源: 手动配置（PUT /api/portfolio/holdings）或东财自动获取（可选实验）
+-- 刷新策略: 替换式 — 保存时 DELETE 全部再 INSERT（持仓.md 是快照语义）
+-- 相关模块: portfolio.py（解析/回写 持仓.md）、api_daily.py
+--
+-- 字段说明:
+--   code        ETF代码（如 159227/513100），UNIQUE
+--   name        股票名称
+--   shares      持仓数量（份）
+--   cost_price  成本价（元）
+CREATE TABLE IF NOT EXISTS portfolio_holdings (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    code       TEXT NOT NULL,
+    name       TEXT,
+    shares     REAL NOT NULL,
+    cost_price REAL,
+    updated_at TEXT DEFAULT (datetime('now','localtime')),
+    UNIQUE(code)
+);
+
+-- ═══════════════════════════════════════════════════════════════════
+-- Table: portfolio_meta — 组合/账户级 key-value 元数据
+-- ═══════════════════════════════════════════════════════════════════
+-- 用途: 存组合维度状态（类似现有 metadata 表的 KV 模式）
+-- 相关模块: portfolio.py / api_daily.py / eastmoney.py
+--
+-- 当前key:
+--   total_assets          总资产（str float）
+--   available_cash        可用现金
+--   account_source        数据源: manual | eastmoney
+--   eastmoney_config      东财凭据（Fernet 加密 JSON）
+--   eastmoney_has_creds   是否已配置东财凭据
+--   last_eastmoney_error  最近一次东财刷新错误
+--   last_refresh_at       最近一次实时估值刷新时间
+--   valuation_snapshot    估值快照 JSON（每行持仓 mv/cost/pnl + 汇总）
+--   holdings_md_mtime     持仓.md 文件 mtime（防止重复反向解析）
+CREATE TABLE IF NOT EXISTS portfolio_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
+
+-- ═══════════════════════════════════════════════════════════════════
+-- Table: portfolio_trades — 调仓交易记录
+-- ═══════════════════════════════════════════════════════════════════
+-- 用途: 交易日志（导入自 my_doc/每日复盘/每日调仓.md 的"调仓记录"表）
+-- 数据来源: 每日调仓.md 解析导入（v1 不回写文件）
+-- 相关模块: scheduler.py:import_trades_from_md()
+CREATE TABLE IF NOT EXISTS portfolio_trades (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    trade_date TEXT NOT NULL,            -- 2026-07-08
+    name       TEXT,
+    code       TEXT,
+    quantity   REAL,
+    price      REAL,
+    side       TEXT,                     -- 买入 | 卖出
+    remark     TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime'))
+);
+
+-- ═══════════════════════════════════════════════════════════════════
+-- Table: daily_reports — 每日复盘报告/信号 markdown
+-- ═══════════════════════════════════════════════════════════════════
+-- 用途: 存储每日复盘系统生成的报告/信号全文，供 dashboard 页面展示
+-- 数据来源: scheduler.py:import_reports_from_disk() 扫描 reports/ 目录导入
+--           （或 claude 运行完成后导入）
+-- 刷新策略: upsert（report_date+report_type UNIQUE，幂等）
+-- 相关模块: scheduler.py / api_daily.py
+--
+-- 字段说明:
+--   report_date  YYYYMMDD（目录名；周报解析自文件名）
+--   report_type  早盘报告 | 复盘报告 | 每日信号 | 早盘机会 | 周度组合回顾
+--   markdown     报告全文（markdown）
+--   status       ready | stale | generating
+--   source_file  reports/20260720/每日信号.md（相对仓库根）
+CREATE TABLE IF NOT EXISTS daily_reports (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_date  TEXT NOT NULL,          -- YYYYMMDD
+    report_type  TEXT NOT NULL,
+    markdown     TEXT NOT NULL,
+    status       TEXT DEFAULT 'ready',
+    generated_at TEXT DEFAULT (datetime('now','localtime')),
+    source_file  TEXT,
+    UNIQUE(report_date, report_type)
+);
+
+-- ═══════════════════════════════════════════════════════════════════
+-- Table: scheduler_runs — 定时任务运行日志 + 幂等记录
+-- ═══════════════════════════════════════════════════════════════════
+-- 用途: dashboard 内置调度器（scheduler.py）每次运行的记录；
+--       window_key 唯一防 auto 重复执行（幂等，与 /loop task_scheduler 兼容）
+-- 相关模块: scheduler.py / api_daily.py
+--
+-- 字段说明:
+--   task_id      任务ID（如 morning_analysis）
+--   window_key   窗口幂等 key（如 "evening_review:2026-08-13"；manual 用独立 key）
+--   trigger      auto | manual
+--   run_time     开始时间（ISO）
+--   status       running | success | failed | timeout | skipped
+--   pid          claude 子进程 PID
+--   duration_sec 运行时长（秒）
+--   output       stdout/stderr 尾部（~8KB）
+--   completed_at 完成时间
+CREATE TABLE IF NOT EXISTS scheduler_runs (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id      TEXT NOT NULL,
+    window_key   TEXT,
+    trigger      TEXT DEFAULT 'auto',
+    run_time     TEXT NOT NULL,
+    status       TEXT,
+    pid          INTEGER,
+    duration_sec REAL,
+    output       TEXT,
+    completed_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_trades_date ON portfolio_trades(trade_date);
+CREATE INDEX IF NOT EXISTS idx_reports_date ON daily_reports(report_date);
+CREATE INDEX IF NOT EXISTS idx_sched_task  ON scheduler_runs(task_id);
+CREATE INDEX IF NOT EXISTS idx_sched_time  ON scheduler_runs(run_time);
 """
 
 
@@ -650,3 +774,211 @@ def user_count() -> int:
     with get_conn() as conn:
         r = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()
         return r["c"] if r else 0
+
+
+# ═══════════════════════════════════════════════════════════════
+# Portfolio Holdings CRUD (每日复盘持仓)
+# ═══════════════════════════════════════════════════════════════
+
+def portfolio_holdings_replace(rows: list[dict]):
+    """Replace all holdings (snapshot semantics — DELETE all then INSERT).
+
+    rows: [{code, name, shares, cost_price}, ...]
+    """
+    with get_conn() as conn:
+        conn.execute("DELETE FROM portfolio_holdings")
+        conn.executemany("""
+            INSERT OR REPLACE INTO portfolio_holdings (code, name, shares, cost_price, updated_at)
+            VALUES (?, ?, ?, ?, datetime('now','localtime'))
+        """, [(r.get("code"), r.get("name"), r.get("shares"), r.get("cost_price")) for r in rows])
+
+
+def portfolio_holdings_get_all() -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM portfolio_holdings ORDER BY code"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def portfolio_holdings_count() -> int:
+    with get_conn() as conn:
+        r = conn.execute("SELECT COUNT(*) as c FROM portfolio_holdings").fetchone()
+        return r["c"] if r else 0
+
+
+# ═══════════════════════════════════════════════════════════════
+# Portfolio Trades CRUD (调仓记录)
+# ═══════════════════════════════════════════════════════════════
+
+def portfolio_trades_replace_all(rows: list[dict]):
+    """Replace all trades (import from 每日调仓.md). rows: [{trade_date, name, code, quantity, price, side, remark}]"""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM portfolio_trades")
+        conn.executemany("""
+            INSERT INTO portfolio_trades (trade_date, name, code, quantity, price, side, remark, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
+        """, [(r.get("trade_date"), r.get("name"), r.get("code"),
+               r.get("quantity"), r.get("price"), r.get("side"), r.get("remark")) for r in rows])
+
+
+def portfolio_trades_get_all() -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM portfolio_trades ORDER BY trade_date DESC, id DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ═══════════════════════════════════════════════════════════════
+# Portfolio Meta CRUD (组合级 KV)
+# ═══════════════════════════════════════════════════════════════
+
+def meta_get(key: str, default=None):
+    with get_conn() as conn:
+        r = conn.execute("SELECT value FROM portfolio_meta WHERE key=?", (key,)).fetchone()
+        return r["value"] if r and r["value"] is not None else default
+
+
+def meta_set(key: str, value):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO portfolio_meta(key, value) VALUES(?, ?)",
+            (key, value),
+        )
+
+
+def meta_get_prefix(prefix: str) -> dict:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT key, value FROM portfolio_meta WHERE key LIKE ?", (prefix + "%",)
+        ).fetchall()
+        return {r["key"]: r["value"] for r in rows}
+
+
+# ═══════════════════════════════════════════════════════════════
+# Daily Reports CRUD (每日复盘报告/信号)
+# ═══════════════════════════════════════════════════════════════
+
+def report_upsert(report_date: str, report_type: str, markdown: str,
+                  source_file: str = "", status: str = "ready"):
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT OR REPLACE INTO daily_reports
+            (report_date, report_type, markdown, status, generated_at, source_file)
+            VALUES (?, ?, ?, ?, datetime('now','localtime'), ?)
+        """, (report_date, report_type, markdown, status, source_file))
+
+
+def report_get(report_date: str, report_type: str) -> dict | None:
+    with get_conn() as conn:
+        r = conn.execute(
+            "SELECT * FROM daily_reports WHERE report_date=? AND report_type=?",
+            (report_date, report_type),
+        ).fetchone()
+        return dict(r) if r else None
+
+
+def report_list(limit: int = 50, report_type: str | None = None) -> list[dict]:
+    """Return report metadata (no markdown) sorted by date desc."""
+    sql = "SELECT id, report_date, report_type, status, generated_at, source_file FROM daily_reports"
+    params: list = []
+    if report_type:
+        sql += " WHERE report_type=?"
+        params.append(report_type)
+    sql += " ORDER BY report_date DESC, report_type"
+    if limit:
+        sql += " LIMIT ?"
+        params.append(limit)
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def report_get_dates() -> list[str]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT report_date FROM daily_reports ORDER BY report_date DESC"
+        ).fetchall()
+        return [r["report_date"] for r in rows]
+
+
+def report_types_for_date(report_date: str) -> list[str]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT report_type FROM daily_reports WHERE report_date=? ORDER BY report_type",
+            (report_date,),
+        ).fetchall()
+        return [r["report_type"] for r in rows]
+
+
+# ═══════════════════════════════════════════════════════════════
+# Scheduler Runs CRUD (定时任务运行日志 + 幂等)
+# ═══════════════════════════════════════════════════════════════
+
+def scheduler_run_insert(task_id: str, window_key: str, trigger: str,
+                         run_time: str, status: str = "running") -> int:
+    with get_conn() as conn:
+        cur = conn.execute("""
+            INSERT INTO scheduler_runs (task_id, window_key, trigger, run_time, status)
+            VALUES (?, ?, ?, ?, ?)
+        """, (task_id, window_key, trigger, run_time, status))
+        return cur.lastrowid
+
+
+def scheduler_run_update(run_id: int, **fields):
+    """Update a scheduler run row. fields: status/pid/duration_sec/output/completed_at/window_key"""
+    allowed = {"status", "pid", "duration_sec", "output", "completed_at", "window_key", "run_time", "trigger", "task_id"}
+    sets = [k for k in fields if k in allowed]
+    if not sets:
+        return
+    assignments = ", ".join(f"{k}=?" for k in sets)
+    params = [fields[k] for k in sets] + [run_id]
+    with get_conn() as conn:
+        conn.execute(f"UPDATE scheduler_runs SET {assignments} WHERE id=?", params)
+
+
+def scheduler_runs_list(task_id: str | None = None, limit: int = 50) -> list[dict]:
+    sql = "SELECT * FROM scheduler_runs"
+    params: list = []
+    if task_id:
+        sql += " WHERE task_id=?"
+        params.append(task_id)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def scheduler_run_get(run_id: int) -> dict | None:
+    with get_conn() as conn:
+        r = conn.execute("SELECT * FROM scheduler_runs WHERE id=?", (run_id,)).fetchone()
+        return dict(r) if r else None
+
+
+def scheduler_window_done(task_id: str, window_key: str) -> bool:
+    """Return True if a non-failed run already exists for (task_id, window_key)."""
+    with get_conn() as conn:
+        r = conn.execute(
+            "SELECT 1 FROM scheduler_runs WHERE task_id=? AND window_key=? AND status IN ('success','timeout') LIMIT 1",
+            (task_id, window_key),
+        ).fetchone()
+        return r is not None
+
+
+def scheduler_latest(task_id: str) -> dict | None:
+    with get_conn() as conn:
+        r = conn.execute(
+            "SELECT * FROM scheduler_runs WHERE task_id=? ORDER BY id DESC LIMIT 1",
+            (task_id,),
+        ).fetchone()
+        return dict(r) if r else None
+
+
+def scheduler_running_tasks() -> list[str]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT task_id FROM scheduler_runs WHERE status='running'"
+        ).fetchall()
+        return [r["task_id"] for r in rows]

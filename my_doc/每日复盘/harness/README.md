@@ -1,5 +1,7 @@
 # Harness 层使用说明
 
+> ⚠️ 本目录是每日复盘系统的"厨房"，已随项目迁移至 `etf-strategies/dashboard`（见上级 README 的 DEPRECATED 说明）。本目录继续作为**唯一事实源**（prompts/经验/配置），dashboard 调度器读取同一份 prompt 与 持仓.md，不删除任何文件。
+
 这是每日复盘项目的"厨房"——所有用于生成报告的工具、模板和经验都在这里。
 
 ## 目录说明

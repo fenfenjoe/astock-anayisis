@@ -263,7 +263,7 @@ from backtest.strategies.{snake_case_name} import {ClassName}
 ## 第五步：运行测试
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/etf-strategies
+cd etf-strategies
 python -m pytest tests/test_strategies.py -v -k "{ClassName}" --tb=short
 ```
 
@@ -279,7 +279,7 @@ python -m pytest tests/test_strategies.py -v -k "{ClassName}" --tb=short
 ## 第六步：运行回测
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/etf-strategies
+cd etf-strategies
 python run_backtest.py
 ```
 

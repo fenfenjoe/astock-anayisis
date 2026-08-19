@@ -12,7 +12,7 @@
 > 此步骤仅用于状态播报，不阻塞任何操作。
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py --list-running
+python .claude/scripts/task_scheduler.py --list-running
 ```
 
 解析 JSON：
@@ -29,7 +29,7 @@ cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py 
 ## 1. 运行调度器
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py --check
+python .claude/scripts/task_scheduler.py --check
 ```
 
 解析 JSON，读取 `should_run` 字段。
@@ -41,7 +41,7 @@ cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py 
 绝大部分迭代走此路径。输出 Dev Loop 状态行，如有运行任务一并展示：
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/devloop_scanner.py --status
+python .claude/scripts/devloop_scanner.py --status
 ```
 
 解析 JSON，按以下格式输出：
@@ -77,7 +77,7 @@ stuck 格式（仅在 `healthy=false` 时追加）：每个僵死项 ` ⚠{id} {
 > 🚨 **先标记完成再派发**。如果 subagent 执行失败，下次调度时间（第二天/下个小时）自动重试。
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py --complete {task_id}
+python .claude/scripts/task_scheduler.py --complete {task_id}
 ```
 
 ### 3.2 读取任务文件
@@ -99,7 +99,7 @@ cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py 
 > 任务完成时（无论成功与否），执行以下命令标记调度器任务为已完成。
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py --complete {task_id}
+python .claude/scripts/task_scheduler.py --complete {task_id}
 ```
 ```
 
@@ -114,7 +114,7 @@ cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py 
 ### 3.5 标记运行中（纯信息）
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py --mark-running {task_id}
+python .claude/scripts/task_scheduler.py --mark-running {task_id}
 ```
 
 ### 3.6 输出状态行
@@ -122,7 +122,7 @@ cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/task_scheduler.py 
 先运行 devloop_scanner 获取最新状态：
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis && python .claude/scripts/devloop_scanner.py --status
+python .claude/scripts/devloop_scanner.py --status
 ```
 
 输出格式：

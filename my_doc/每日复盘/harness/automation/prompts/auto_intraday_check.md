@@ -16,7 +16,7 @@
 
 ### 1.1 交易日 + 盘中时间
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 python -c "
 import json, sys
 from datetime import datetime, time

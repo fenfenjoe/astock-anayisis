@@ -22,7 +22,7 @@
 ### 0.1 扫描 OPEN BUG
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 echo "=== Harness BUGs ==="
 if test -f "my_doc/每日复盘/harness/automation/bugs/BUG_INDEX.md"; then
   grep -E "OPEN|IN_PROGRESS" "my_doc/每日复盘/harness/automation/bugs/BUG_INDEX.md" || echo "无 OPEN/IN_PROGRESS BUG"
@@ -75,7 +75,7 @@ fi
 ## 第三步：回归测试（强制）
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis/my_doc/每日复盘/harness/automation
+cd my_doc/每日复盘/harness/automation
 python -m pytest tests/ -v --tb=short
 ```
 
@@ -103,7 +103,7 @@ python -m pytest tests/ -v --tb=short
 ### 4.2 移动文件
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 mv my_doc/每日复盘/harness/automation/bugs/open/BUG-{NNN}.md \
    my_doc/每日复盘/harness/automation/bugs/closed/
 ```
@@ -117,7 +117,7 @@ mv my_doc/每日复盘/harness/automation/bugs/open/BUG-{NNN}.md \
 ### 4.4 Git 提交
 
 ```bash
-cd E:/ideaworkspace/astock-anayisis
+
 git add my_doc/每日复盘/harness/automation/bugs/
 git add {修复的源文件}
 git commit -m "fix(BUG-{NNN}): [auto-fix] {BUG 标题}

@@ -3,6 +3,7 @@
 # ===================================
 #
 # 启动:
+#   cp .env.example .env   # 填入 ANTHROPIC_AUTH_TOKEN（见下）
 #   docker compose up -d
 #
 # 查看日志（含首次启动的 admin 密码）:
@@ -13,9 +14,17 @@
 #
 # 完全重置（删除数据卷）:
 #   docker compose down -v
+#
+# 每日复盘定时任务说明:
+#   - 容器内已装 Claude Code CLI，调度器用 `claude -p` 执行 my_doc/每日复盘/ 的 prompt
+#   - 认证走环境变量 ANTHROPIC_AUTH_TOKEN + ANTHROPIC_BASE_URL（火山方舟 ARK），
+#     从 .env 读取（模板见 .env.example，值来自宿主 ~/.claude/settings.json 的 env 块）
+#   - 仓库根通过 `../` 挂载到 /repo（DASHBOARD_REPO_ROOT），claude 子进程以 /repo
+#     为工作目录读写 prompt/报告/持仓/交易日历——与本地运行共用同一份文件
+#   - DASHBOARD_SCHEDULER_ENABLED=1 打开 auto 调度；若你同时在宿主跑 /loop 驱动
+#     同一批任务，请改回 0（防双跑）
 
 name: etf-dashboard
-version: '3.8'
 
 services:
   dashboard:
@@ -31,6 +40,18 @@ services:
     # 环境变量（可选覆盖）
     environment:
       - TZ=Asia/Shanghai
+      # 每日复盘调度器：仓库根挂载点 + auto 调度开关
+      - DASHBOARD_REPO_ROOT=/repo
+      - DASHBOARD_SCHEDULER_ENABLED=${DASHBOARD_SCHEDULER_ENABLED:-1}
+      # claude -p 认证（方舟 ARK，必须从 .env 提供令牌，否则 compose 启动即报错）
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?请在 etf-strategies/.env 中设置 ANTHROPIC_AUTH_TOKEN}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://ark.cn-beijing.volces.com/api/plan}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-deepseek-v4-flash-ga-260731}
+      - ANTHROPIC_DEFAULT_HAIKU_MODEL=${ANTHROPIC_DEFAULT_HAIKU_MODEL:-deepseek-v4-pro[1m]}
+      - ANTHROPIC_DEFAULT_OPUS_MODEL=${ANTHROPIC_DEFAULT_OPUS_MODEL:-deepseek-v4-flash[1m]}
+      - ANTHROPIC_DEFAULT_SONNET_MODEL=${ANTHROPIC_DEFAULT_SONNET_MODEL:-deepseek-v4-flash[1m]}
+      - API_TIMEOUT_MS=${API_TIMEOUT_MS:-3000000}
+      - CLAUDE_CODE_SUBAGENT_MODEL=${CLAUDE_CODE_SUBAGENT_MODEL:-deepseek-v4-flash[1m]}
       # 首次启动时预设 admin 密码（不设则自动生成，查看日志获取）
       # - DASHBOARD_ADMIN_PASSWORD=your-secure-password
       # JWT 签名密钥（不设则自动生成并持久化到 data/.secret_key）
@@ -41,6 +62,7 @@ services:
       - dashboard_data:/app/dashboard/data   # SQLite DB + .secret_key
       - dashboard_cache:/app/cache           # K线 parquet 缓存
       - dashboard_report:/app/report         # 回测 HTML 报告
+      - ../:/repo                            # 仓库根（每日复盘 prompt/报告/持仓/交易日历）
 
     logging:
       driver: "json-file"

@@ -14,6 +14,12 @@
     document.write('<script src="https://unpkg.com/echarts@5.5.0/dist/echarts.min.js"><\/script>');
   }
 </script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+  if (typeof marked === 'undefined') {
+    document.write('<script src="https://unpkg.com/marked/marked.min.js"><\/script>');
+  }
+</script>
 <script>
   window.addEventListener('load', function() {
     if (typeof echarts === 'undefined') {
@@ -72,6 +78,18 @@
     </button>
   </div>
 </header>
+
+<!-- ═══ TOP NAV (每日复盘集成视图) ═══ -->
+<nav class="topnav" id="topnav">
+  <button class="topnav-item topnav-active" data-view="view-strategies" onclick="switchView('view-strategies')">📊 策略全景</button>
+  <button class="topnav-item" data-view="view-portfolio" onclick="switchView('view-portfolio')">💰 持仓/资产</button>
+  <button class="topnav-item" data-view="view-signals" onclick="switchView('view-signals')">📡 每日信号</button>
+  <button class="topnav-item" data-view="view-reports" onclick="switchView('view-reports')">📄 报告</button>
+  <button class="topnav-item" data-view="view-scheduler" onclick="switchView('view-scheduler')">⏰ 定时任务</button>
+</nav>
+
+<!-- ═══ VIEW: 策略全景（原全部内容）═══ -->
+<div class="view view-active" id="view-strategies">
 
 <!-- ═══ KPI CARDS ═══ -->
 <section class="kpi-grid" id="kpi-grid">
@@ -199,6 +217,141 @@
   </div>
 </section>
 
+</div><!-- /#view-strategies -->
+
+<!-- ═══ VIEW: 持仓/资产 ═══ -->
+<div class="view" id="view-portfolio">
+  <section class="panel">
+    <div class="panel-header">
+      <h2 class="panel-title">💰 持仓 / 资产</h2>
+      <div class="panel-controls">
+        <span class="legend-inline" id="pf-account-source"></span>
+        <span class="legend-inline muted" id="pf-refreshed-at"></span>
+        <button class="btn btn-sm" onclick="pfAddRow()" title="添加一行">➕ 添加持仓</button>
+        <button class="btn btn-primary btn-sm" onclick="pfSave()">💾 保存</button>
+        <button class="btn btn-accent btn-sm" onclick="pfRefreshValuation()" title="后台同步最新行情并重算市值">🔄 刷新市值</button>
+      </div>
+    </div>
+
+    <div class="kpi-grid kpi-grid-inline" id="pf-summary">
+      <div class="kpi-card"><div class="kpi-label">总资产</div><div class="kpi-value" id="pf-total-assets">—</div><div class="kpi-sub">市值 + 可用现金</div></div>
+      <div class="kpi-card"><div class="kpi-label">总市值</div><div class="kpi-value" id="pf-mkt-value">—</div><div class="kpi-sub" id="pf-mkt-value-sub">—</div></div>
+      <div class="kpi-card"><div class="kpi-label">总成本</div><div class="kpi-value" id="pf-cost-value">—</div><div class="kpi-sub" id="pf-cost-value-sub">—</div></div>
+      <div class="kpi-card kpi-warning"><div class="kpi-label">总盈亏</div><div class="kpi-value" id="pf-pnl">—</div><div class="kpi-sub" id="pf-pnl-sub">—</div></div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="pf-table">
+        <thead>
+          <tr>
+            <th class="col-name">名称</th>
+            <th class="col-num">代码</th>
+            <th class="col-num">持仓数量（份）</th>
+            <th class="col-num">成本价（元）</th>
+            <th class="col-num">最新价</th>
+            <th class="col-num">市值</th>
+            <th class="col-num">盈亏</th>
+            <th class="col-num">盈亏%</th>
+            <th class="col-act">操作</th>
+          </tr>
+        </thead>
+        <tbody id="pf-tbody">
+          <tr><td colspan="9" class="loading-cell">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pf-extra">
+      <label class="pf-label">可用现金（元）</label>
+      <input class="select-mini" id="pf-cash" type="number" step="0.01" min="0" placeholder="0">
+      <span class="legend-inline muted">总资产 = Σ市值 + 可用现金</span>
+    </div>
+
+    <!-- 东财实验区 -->
+    <div class="em-card" id="pf-eastmoney">
+      <h3 class="em-title">⚠️ 东方财富自动获取 <span class="em-badge">实验功能</span></h3>
+      <p class="em-warn">东财无官方个人账户 API，本功能走社区逆向接口（脆弱、存在失效/风控风险）。凭据仅用本地密钥加密存储，绝不外传。拉取失败自动回退到手动配置。</p>
+      <div class="em-body">
+        <label class="pf-label">东财账号</label>
+        <input class="select-mini" id="em-account" type="text" placeholder="账号（保存后显示尾号）" autocomplete="off">
+        <label class="pf-label">密码</label>
+        <input class="select-mini" id="em-password" type="password" placeholder="密码（仅本地加密存储）" autocomplete="new-password">
+        <span class="legend-inline" id="em-status"></span>
+        <button class="btn btn-sm" onclick="emSave()">💾 保存凭据</button>
+        <button class="btn btn-accent btn-sm" onclick="emRefresh()">🔄 拉取持仓</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ═══ VIEW: 每日信号 ═══ -->
+<div class="view" id="view-signals">
+  <section class="panel">
+    <div class="panel-header">
+      <h2 class="panel-title">📡 每日信号</h2>
+      <div class="panel-controls">
+        <select class="select-mini" id="sig-date" onchange="sigLoad()"></select>
+        <button class="btn btn-sm" onclick="sigLoadLatest()">最新</button>
+        <button class="btn btn-sm" id="sig-toggle" onclick="sigToggle()">表格视图</button>
+      </div>
+    </div>
+    <div id="sig-content"><p class="muted">加载中...</p></div>
+  </section>
+</div>
+
+<!-- ═══ VIEW: 报告 ═══ -->
+<div class="view" id="view-reports">
+  <section class="panel">
+    <div class="panel-header">
+      <h2 class="panel-title">📄 报告</h2>
+      <div class="panel-controls">
+        <button class="btn btn-sm" onclick="repImport()" title="重扫 reports/ 目录">🔄 重新导入</button>
+      </div>
+    </div>
+    <div class="rep-layout">
+      <div class="rep-side">
+        <div id="rep-date-list" class="rep-dates"><p class="muted">加载中...</p></div>
+      </div>
+      <div class="rep-main">
+        <div id="rep-types" class="rep-types"></div>
+        <div id="rep-content"><p class="muted">选择左侧日期查看报告</p></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ═══ VIEW: 定时任务 ═══ -->
+<div class="view" id="view-scheduler">
+  <section class="panel">
+    <div class="panel-header">
+      <h2 class="panel-title">⏰ 定时任务（每日复盘）</h2>
+      <div class="panel-controls">
+        <span class="legend-inline" id="sched-engine"></span>
+        <button class="btn btn-sm" onclick="schedLoad()">🔄 刷新</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="sched-table">
+        <thead>
+          <tr>
+            <th>任务</th>
+            <th class="col-num">时间</th>
+            <th class="col-num">需交易日</th>
+            <th class="col-num">最近状态</th>
+            <th class="col-num">最近运行</th>
+            <th class="col-act">操作</th>
+          </tr>
+        </thead>
+        <tbody id="sched-tbody">
+          <tr><td colspan="6" class="loading-cell">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3 class="em-title">运行日志</h3>
+    <div id="sched-runs" class="sched-runs"><p class="muted">加载中...</p></div>
+  </section>
+</div>
+
 <!-- Toast Container -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -207,5 +360,6 @@
 <!-- ═══ SCRIPTS ═══ -->
 <script src="/static/js/auth.js"></script>
 <script src="/static/js/dashboard.js"></script>
+<script src="/static/js/daily.js"></script>
 </body>
 </html>

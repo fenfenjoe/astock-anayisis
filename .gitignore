@@ -40,6 +40,15 @@ etf-strategies/report/*.html
 # Temporary scripts
 _*.py
 
+# Secrets（docker compose 的 .env 含 ANTHROPIC_AUTH_TOKEN，勿提交）
+.env
+.env.local
+.env.*
+!.env.example
+
+# 企业微信通知凭证（corpid/agentid/secret/touser，勿提交）
+etf-strategies/dashboard/data/notify_config.json
+
 # OS
 .DS_Store
 Thumbs.db
