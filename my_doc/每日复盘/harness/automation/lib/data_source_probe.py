@@ -2,13 +2,13 @@
 数据源连通性探测 — 所有自动化 Prompt 的 Step 2.5 引用此脚本。
 
 功能：
-  1. 探测所有数据源是否可达（push2 / 腾讯 / 同花顺 / push2ex / mootdx）
+  1. 探测所有数据源是否可达（push2 / push2his / 腾讯 / 同花顺 / push2ex / mootdx / datacenter）
   2. 输出 JSON 状态文件供 Prompt 读取
   3. 根据状态给出数据采集路径建议
 
 用法：
   python data_source_probe.py --output probe_status.json
-  返回 JSON: { "push2": "ok"|"fail", "tencent": "ok"|"fail", ...,
+  返回 JSON: { "push2": "ok"|"fail", "push2his": "ok"|"fail", ...,
                 "paths": {...}, "timestamp": "..." }
 """
 
@@ -23,15 +23,48 @@ from pathlib import Path
 
 
 def _probe_push2() -> str:
-    """东财 push2 连通性探测 — 最常失败的数据源"""
+    """东财 push2 连通性探测 — 最常失败的数据源。
+
+    用实际业务端点 clist（行业涨跌排名）而非轻量 ulist 判定：
+    东财对 push2 是**端点级风控**——轻量请求（ulist 单标的 1 字段）放行，
+    批量分页请求（clist 全行业）被拦。测 ulist 会误报 ok（实测 2026-08-19：
+    ulist 可达而 clist 被 RemoteDisconnected 拒绝）。探测参数贴近
+    industry_comparison() 业务调用（fs=m:90+t:2, pz=100），确保探测结果
+    真实反映行业排名端点可用性。
+    """
     try:
-        import urllib.request
-        url = "https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&fields=f12&secids=1.600519"
+        url = (
+            "https://push2.eastmoney.com/api/qt/clist/get"
+            "?pn=1&pz=100&po=1&np=1&fltt=2&invt=2&fs=m:90+t:2"
+            "&fields=f12,f14,f3"
+        )
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        resp = urllib.request.urlopen(req, timeout=6)
+        resp = urllib.request.urlopen(req, timeout=8)
         data = json.loads(resp.read().decode("utf-8"))
         diff = (data.get("data") or {}).get("diff") or []
         return "ok" if diff else "fail"
+    except Exception:
+        return "fail"
+
+
+def _probe_push2his() -> str:
+    """东财 push2his（个股/板块资金流）— 独立子域名，与 push2 分开风控。
+
+    push2his.eastmoney.com 与 push2.eastmoney.com 是不同子域名，风控独立：
+    push2 可用不代表 push2his 可用（反之亦然），因此单独探测，供
+    fund_flow 路径判定使用。
+    """
+    try:
+        url = (
+            "https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get"
+            "?secid=1.600519&fields1=f1,f2,f3,f7&fields2=f51,f52"
+            "&lmt=5"
+        )
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        resp = urllib.request.urlopen(req, timeout=8)
+        data = json.loads(resp.read().decode("utf-8"))
+        klines = (data.get("data") or {}).get("klines") or []
+        return "ok" if klines else "fail"
     except Exception:
         return "fail"
 
@@ -116,6 +149,7 @@ def get_data_paths(status: dict) -> dict:
     返回 { data_type: { primary: str, fallback: str, note: str }, ... }
     """
     push2_ok = status.get("push2") == "ok"
+    push2his_ok = status.get("push2his") == "ok"
     tencent_ok = status.get("tencent") == "ok"
     ths_ok = status.get("ths") == "ok"
     push2ex_ok = status.get("push2ex") == "ok"
@@ -152,8 +186,8 @@ def get_data_paths(status: dict) -> dict:
             "note": "⚠️ push2 不可达，北向资金数据源自同花顺 hsgtApi 或本地缓存",
         }
 
-    # 3. 个股资金流
-    if push2_ok:
+    # 3. 个股资金流（push2his 独立子域名，独立风控）
+    if push2his_ok:
         paths["fund_flow"] = {
             "primary": "东财 push2his 个股资金流（日级120日）",
             "fallback": "mootdx 量价估算 + 腾讯换手率",
@@ -163,7 +197,7 @@ def get_data_paths(status: dict) -> dict:
         paths["fund_flow"] = {
             "primary": "mootdx 量价估算 + 腾讯换手率",
             "fallback": "标记'数据缺失'",
-            "note": "⚠️ push2 不可达，资金流数据基于 mootdx 量价 + 腾讯换手率估算，精度有限",
+            "note": "⚠️ push2his 不可达，资金流数据基于 mootdx 量价 + 腾讯换手率估算，精度有限",
         }
 
     # 4. 融资融券
@@ -225,6 +259,11 @@ def get_data_paths(status: dict) -> dict:
 
 
 def main():
+    # Windows 控制台默认 GBK，note 中的 ⚠️(U+26A0) 会触发 UnicodeEncodeError
+    # （实测 2026-08-19：push2 fail 时 note 含 ⚠️，print 崩溃）。强制 UTF-8 输出。
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
     parser = argparse.ArgumentParser(description="数据源连通性探测")
     parser.add_argument("--output", default="",
                         help="输出 JSON 文件路径（默认 stdout）")
@@ -235,6 +274,7 @@ def main():
     # 执行探测
     status = {
         "push2": _probe_push2(),
+        "push2his": _probe_push2his(),
         "tencent": _probe_tencent(),
         "ths": _probe_ths(),
         "push2ex": _probe_push2ex(),

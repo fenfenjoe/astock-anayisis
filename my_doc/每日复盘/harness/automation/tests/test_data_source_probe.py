@@ -21,6 +21,7 @@ def _status(**overrides):
     """构造默认全 ok 的状态 dict，可按需覆盖"""
     base = {
         "push2": "ok",
+        "push2his": "ok",
         "tencent": "ok",
         "ths": "ok",
         "push2ex": "ok",
@@ -66,7 +67,7 @@ class TestAllOk:
 
 
 class TestPush2Down:
-    """push2 不可达 — 关键数据全部走 fallback"""
+    """push2 不可达 — 行业排名/北向走 fallback；push2his 独立不受影响"""
 
     def test_industry_ranking_fallback(self):
         paths = get_data_paths(_status(push2="fail"))
@@ -78,10 +79,11 @@ class TestPush2Down:
         assert "同花顺" in paths["northbound"]["primary"]
         assert "push2 不可达" in paths["northbound"]["note"]
 
-    def test_fund_flow_fallback(self):
+    def test_fund_flow_unaffected_by_push2(self):
+        """push2his 独立子域名：push2 失败不影响 fund_flow 主源"""
         paths = get_data_paths(_status(push2="fail"))
-        assert "mootdx" in paths["fund_flow"]["primary"]
-        assert "估算" in paths["fund_flow"]["note"]
+        assert "push2his" in paths["fund_flow"]["primary"]
+        assert paths["fund_flow"]["note"] == ""
 
     def test_hot_themes_unaffected(self):
         """题材热度走同花顺，不受 push2 影响"""
@@ -94,6 +96,26 @@ class TestPush2Down:
         paths = get_data_paths(_status(push2="fail"))
         assert "datacenter" in paths["margin"]["primary"]
         assert paths["margin"]["note"] == ""
+
+
+class TestPush2hisDown:
+    """push2his 不可达 — 仅 fund_flow 走 fallback，push2 其他数据不受影响"""
+
+    def test_fund_flow_fallback_when_push2his_down(self):
+        paths = get_data_paths(_status(push2his="fail"))
+        assert "mootdx" in paths["fund_flow"]["primary"]
+        assert "push2his 不可达" in paths["fund_flow"]["note"]
+
+    def test_industry_ranking_unaffected_by_push2his(self):
+        """push2（行业排名）与 push2his 独立，push2his 失败不影响行业排名"""
+        paths = get_data_paths(_status(push2his="fail"))
+        assert "push2" in paths["industry_ranking"]["primary"]
+        assert paths["industry_ranking"]["note"] == ""
+
+    def test_northbound_unaffected_by_push2his(self):
+        paths = get_data_paths(_status(push2his="fail"))
+        assert "push2" in paths["northbound"]["primary"]
+        assert paths["northbound"]["note"] == ""
 
 
 class TestMultiSourceDown:
