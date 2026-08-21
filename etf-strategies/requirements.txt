@@ -1,4 +1,4 @@
-# ETF Dashboard & Backtest — Python dependencies
+# ETF Dashboard & Backtest - Python dependencies
 # Install: pip install -r requirements.txt
 
 # Web framework
@@ -21,5 +21,5 @@ urllib3>=2.0.0
 # Charts & reports
 matplotlib>=3.7.0
 
-# Eastmoney credential encryption (Fernet, dashboard 东财实验功能)
+# Eastmoney credential encryption (Fernet, dashboard Eastmoney experimental)
 cryptography>=41.0.0
