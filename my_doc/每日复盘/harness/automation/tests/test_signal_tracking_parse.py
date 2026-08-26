@@ -263,3 +263,65 @@ class TestAggregatesCompat:
         db = update_aggregation(db)
         assert 'aggregation' in db
         assert db['aggregation']['by_urgency']['high']['count'] == 2
+
+
+# ============================================================
+# 新列解析（v2.0 信号质量闭环）
+# ============================================================
+
+_NEW_COL_HEADER = (
+    "| 优先级 | 标的 | 触发条件 | 操作类型 | 状态 | 方向 | 紧急度 | 预期触发率 | 目标/止损 | 有效时段 | 仓位 | 信号ID |\n"
+    "|:---:|------|----------|:------:|:---:|:---:|:---:|:---:|--------|:---:|:---:|--------|\n"
+)
+
+def _mk_new_md(rows: list[str]) -> str:
+    return f"## 信号总表\n\n{_NEW_COL_HEADER + chr(10).join(rows)}\n"
+
+
+class TestParseNewColumns:
+    def test_expected_trigger_rate(self):
+        md = _mk_new_md([
+            "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40 | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        assert records[0]['expected_trigger_rate'] == 40.0
+
+    def test_expected_trigger_rate_dash(self):
+        """P0 预期触发率为 — → None"""
+        md = _mk_new_md([
+            "| P0 | 全持仓 | 普跌否决 | 风控 | 已过期 | 卖出 | 高 | — | — | 9:30-10:00 | 0 | SIG-20260826-01 |",
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        assert len(records) == 0  # 已过期不追踪
+
+    def test_target_pct_parsing(self):
+        md = _mk_new_md([
+            "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40 | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        rec = records[0]
+        assert rec['target_pct'] == 3.0
+        assert rec['stop_pct'] == -2.0
+        assert rec['target_price'] is None
+        assert rec['stop_price'] is None
+
+    def test_target_price_parsing(self):
+        """显式价格格式"""
+        md = _mk_new_md([
+            "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已执行 | 买入 | 高 | 40 | 目标1.75/止损1.66 | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        rec = records[0]
+        assert rec['target_price'] == 1.75
+        assert rec['stop_price'] == 1.66
+        assert rec['target_pct'] is None
+
+    def test_target_only(self):
+        """只有目标无止损"""
+        md = _mk_new_md([
+            "| P1 | 农业ETF(159825) | 放量突破0.74 | 建仓 | 已触发 | 买入 | 低 | 30 | 目标0.76 | 10:30后 | 观察 | SIG-20260826-05 |",
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        rec = records[0]
+        assert rec['target_price'] == 0.76
+        assert rec['stop_price'] is None

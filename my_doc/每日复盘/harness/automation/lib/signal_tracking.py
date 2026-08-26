@@ -12,6 +12,7 @@
   - settle_due_signals()      — 结算到期信号（高紧急度2日 / 低紧急度到预期收益日）
 """
 
+import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -270,6 +271,37 @@ def _map_trade_type(操作类型: str, 方向: str) -> str:
     return 'buy'
 
 
+def _parse_expected_rate(raw: str):
+    """解析 '40' / '40%' → 40.0；'—'/空 → None"""
+    if not raw or raw == '—':
+        return None
+    m = re.search(r'(\d+(?:\.\d+)?)', raw)
+    return float(m.group(1)) if m else None
+
+
+def _parse_target_stop(raw: str) -> dict:
+    """解析目标/止损列：'目标+3%/止损-2%'（百分比）或 '目标1.75/止损1.66'（显式价）。
+    返回 {target_pct, stop_pct, target_price, stop_price}，无值均为 None。"""
+    result = {'target_pct': None, 'stop_pct': None, 'target_price': None, 'stop_price': None}
+    if not raw or raw == '—':
+        return result
+    for part in raw.replace('，', '/').split('/'):
+        part = part.strip()
+        m = re.match(r'目标\s*([+-]?\d+(?:\.\d+)?)\s*%', part)
+        if m:
+            result['target_pct'] = float(m.group(1)); continue
+        m = re.match(r'止损\s*([+-]?\d+(?:\.\d+)?)\s*%', part)
+        if m:
+            result['stop_pct'] = float(m.group(1)); continue
+        m = re.match(r'目标\s*(\d+(?:\.\d+)?)', part)
+        if m:
+            result['target_price'] = float(m.group(1)); continue
+        m = re.match(r'止损\s*(\d+(?:\.\d+)?)', part)
+        if m:
+            result['stop_price'] = float(m.group(1)); continue
+    return result
+
+
 def _parse_table_rows(md_text: str, section: str) -> tuple[list[str], list[list[str]]]:
     """从 markdown 中解析某节标题下的表格。
     返回 (header, rows)：header 为表头列名列表，rows 为数据行（已去分隔线）。"""
@@ -329,6 +361,8 @@ def parse_signal_markdown(md_text: str, today: str = '') -> list[dict]:
     c_exp = _col(header, '预期收益日')
     c_qty = _col(header, '仓位')
     c_id = _col(header, '信号ID')
+    c_exp_rate = _col(header, '预期触发率')
+    c_tgt_stop = _col(header, '目标/止损')
 
     records = []
     for row in rows:
@@ -356,6 +390,7 @@ def parse_signal_markdown(md_text: str, today: str = '') -> list[dict]:
 
         urgency_val = _URGENCY_MAP.get(urgency, 'low')
 
+        ts = _parse_target_stop(g(c_tgt_stop))
         records.append({
             'signal_id': signal_id,
             'ticker': ticker,
@@ -364,6 +399,11 @@ def parse_signal_markdown(md_text: str, today: str = '') -> list[dict]:
             'direction': 'sell' if '卖' in direction else 'buy',
             'priority': priority or 'P2',
             'urgency': urgency_val,
+            'expected_trigger_rate': _parse_expected_rate(g(c_exp_rate)),
+            'target_pct': ts['target_pct'],
+            'stop_pct': ts['stop_pct'],
+            'target_price': ts['target_price'],
+            'stop_price': ts['stop_price'],
             'expected_return_date': expected_date if expected_date and expected_date != '—' else '',
             'trigger_date': today,
             'entry_price': None,   # 需调用方从盘中数据补充
