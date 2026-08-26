@@ -347,8 +347,8 @@ if not os.path.exists(f):
     sys.exit(0)
 content = open(f, 'r', encoding='utf-8').read()
 required = [('我的持仓','持仓表'),('大市表现复盘','指数+成交量'),('早盘预判复盘','方向对比'),
-            ('持仓复盘','逐只'),('做T建议复盘','做T对比'),('信号执行复盘','决策/执行'),
-            ('核心回顾','经验教训'),('操作预案','次日预案')]
+            ('持仓复盘','逐只'),('做T预判复盘','做T对比'),('信号执行复盘','决策/执行'),
+            ('经验沉淀','经验教训'),('次日核心变量','次日预案')]
 failures = check_sections(content, required, path_label=f)
 if failures:
     for f_item in failures:
@@ -420,7 +420,7 @@ import re, sys
 
 with open('my_doc/每日复盘/每日调仓.md', 'r', encoding='utf-8') as f:
     content = f.read()
-match = re.search(r'## 1\.\s*当前持仓\s*\n\s*\n(\|.+\|\s*\n(?:\|.+\|\s*\n)+)', content)
+match = re.search(r'## 1\.\s*当前持仓\s*\n(?:[^\n]*\n)*?(\|.+\|\s*\n(?:\|.+\|\s*\n)+)', content)
 if not match:
     print('D1:FAIL: 无法解析每日调仓.md的当前持仓表')
     sys.exit(1)
@@ -451,6 +451,15 @@ for code, (name, shares, cost) in src_holdings.items():
 for code in cfg_holdings:
     if code not in src_holdings:
         errors.append(f'STALE in config: {cfg_holdings[code][0]}({code})')
+
+# 可用金额一致性（v5.0 新增）
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation/lib')
+from position_sync import parse_available_cash
+cash_src = parse_available_cash(content)
+cash_cfg = re.search(r'可用金额:\s*([\d,]+)', cfg)
+if cash_src is not None and (not cash_cfg or int(cash_cfg.group(1).replace(',', '')) != cash_src):
+    cfg_v = cash_cfg.group(1) if cash_cfg else '缺失'
+    errors.append('可用金额不一致: src=%s config=%s' % (cash_src, cfg_v))
 
 if errors:
     print(f'D1:FAIL: {len(errors)} inconsistencies:')
