@@ -176,55 +176,111 @@ class TestMergeNewSignals:
 
 
 # ============================================================
-# settle_due_signals
+# settle_due_signals（目标价结算模式：hit/stopped/miss + T+3 窗口）
 # ============================================================
 
 class TestSettleDueSignals:
-    def test_high_urgency_settles(self):
-        """高紧急度：触发超2日 → 结算"""
+    def _hist(self, ticker, closes_by_date: dict) -> dict:
+        return {ticker: closes_by_date}
+
+    def test_t3_expiry_miss(self):
+        """买入信号 T+3 到期未达目标 → 按 T+3 收盘结算，outcome=miss"""
         db = {'_schema': '1.0', 'signals': [{
             'signal_id': 'SIG-01', 'ticker': '512800', 'trade_type': 'buy',
             'urgency': 'high', 'entry_price': 1.00, 'shares': 1000,
-            'trigger_date': '2026-07-27', 'status': 'triggered',
+            'target_price': 1.10, 'trigger_date': '2026-07-27', 'status': 'triggered',
         }]}
-        settle_due_signals(db, {'512800': 1.10}, '2026-07-29')
-        assert db['signals'][0]['status'] == 'settled'
-        assert db['signals'][0]['pnl'] == pytest.approx(100.0)
-
-    def test_low_urgency_at_expiry(self):
-        """低紧急度：到预期收益日 → 结算"""
-        db = {'_schema': '1.0', 'signals': [{
-            'signal_id': 'SIG-02', 'ticker': '518880', 'trade_type': 'sell',
-            'urgency': 'low', 'entry_price': 8.00, 'cost_basis': 7.50, 'shares': 500,
-            'trigger_date': '2026-07-27', 'expected_return_date': '2026-08-03',
-            'status': 'executed',
-        }]}
-        settle_due_signals(db, {'518880': 8.20}, '2026-08-04')
+        hist = {'512800': {'2026-07-27': 1.02, '2026-07-28': 1.04, '2026-07-29': 1.03}}
+        settle_due_signals(db, hist, '2026-07-29')
         sig = db['signals'][0]
         assert sig['status'] == 'settled'
-        # 卖出: P&L=(卖价8.00-成本7.50)*500 = 250; 避免损失=(8.00-8.20)*500 = -100
-        assert sig['pnl'] == pytest.approx(250.0)
-        assert sig['avoided_loss'] == pytest.approx(-100.0)
+        assert sig['outcome'] == 'miss'
+        assert sig['settle_price'] == pytest.approx(1.03)  # T+3 收盘
+        assert sig['pnl'] == pytest.approx(30.0)
+        assert sig['holding_days'] == 3
 
-    def test_not_due_not_settled(self):
-        """未到期 → 不结算"""
+    def test_t3_target_hit(self):
+        """窗口内第2天收盘达到目标 → 达标，按目标价结算，持有天数=2"""
+        db = {'_schema': '1.0', 'signals': [{
+            'signal_id': 'SIG-02', 'ticker': '512800', 'trade_type': 'buy',
+            'urgency': 'high', 'entry_price': 1.00, 'shares': 1000,
+            'target_price': 1.10, 'trigger_date': '2026-07-27', 'status': 'triggered',
+        }]}
+        hist = {'512800': {'2026-07-27': 1.02, '2026-07-28': 1.11, '2026-07-29': 1.05}}
+        settle_due_signals(db, hist, '2026-07-29')
+        sig = db['signals'][0]
+        assert sig['outcome'] == 'hit'
+        assert sig['settle_price'] == pytest.approx(1.10)
+        assert sig['pnl'] == pytest.approx(100.0)
+        assert sig['holding_days'] == 2
+
+    def test_t3_stop_hit(self):
+        """窗口内触发止损 → outcome=stopped，按止损价结算"""
         db = {'_schema': '1.0', 'signals': [{
             'signal_id': 'SIG-03', 'ticker': '512800', 'trade_type': 'buy',
             'urgency': 'high', 'entry_price': 1.00, 'shares': 1000,
-            'trigger_date': '2026-07-28', 'status': 'triggered',
+            'target_price': 1.10, 'stop_price': 0.98,
+            'trigger_date': '2026-07-27', 'status': 'triggered',
         }]}
-        settle_due_signals(db, {'512800': 1.10}, '2026-07-28')
+        hist = {'512800': {'2026-07-27': 0.97, '2026-07-28': 1.02, '2026-07-29': 1.05}}
+        settle_due_signals(db, hist, '2026-07-29')
+        sig = db['signals'][0]
+        assert sig['outcome'] == 'stopped'
+        assert sig['settle_price'] == pytest.approx(0.98)
+        assert sig['pnl'] == pytest.approx(-20.0)
+        assert sig['holding_days'] == 1
+
+    def test_t3_target_pct_resolve(self):
+        """只有 target_pct 时由触发价换算目标价"""
+        db = {'_schema': '1.0', 'signals': [{
+            'signal_id': 'SIG-04', 'ticker': '518880', 'trade_type': 'buy',
+            'urgency': 'high', 'entry_price': 9.00, 'shares': 500,
+            'target_pct': 3.0, 'trigger_date': '2026-07-27', 'status': 'triggered',
+        }]}
+        hist = {'518880': {'2026-07-27': 9.10, '2026-07-28': 9.30, '2026-07-29': 9.20}}  # 9.30 >= 9.27
+        settle_due_signals(db, hist, '2026-07-29')
+        sig = db['signals'][0]
+        assert sig['outcome'] == 'hit'
+        assert sig['settle_price'] == pytest.approx(9.27)  # 9.00 * 1.03
+        assert sig['pnl'] == pytest.approx(135.0)
+
+    def test_sell_signal_direction(self):
+        """卖出信号：窗口内收盘价 <= 目标价 → 达标（卖对了）"""
+        db = {'_schema': '1.0', 'signals': [{
+            'signal_id': 'SIG-05', 'ticker': '512800', 'trade_type': 'sell',
+            'urgency': 'high', 'entry_price': 1.00, 'cost_basis': 0.90, 'shares': 1000,
+            'target_price': 0.95, 'trigger_date': '2026-07-27', 'status': 'triggered',
+        }]}
+        hist = {'512800': {'2026-07-27': 0.99, '2026-07-28': 0.94, '2026-07-29': 0.96}}
+        settle_due_signals(db, hist, '2026-07-29')
+        sig = db['signals'][0]
+        assert sig['outcome'] == 'hit'
+        assert sig['pnl'] == pytest.approx(100.0)  # (1.00-0.90)*1000 卖出本身
+        assert sig['avoided_loss'] == pytest.approx(50.0)  # (1.00-0.95)*1000
+
+    def test_not_due_not_settled(self):
+        """未到 T+3 → 不结算"""
+        db = {'_schema': '1.0', 'signals': [{
+            'signal_id': 'SIG-06', 'ticker': '512800', 'trade_type': 'buy',
+            'urgency': 'high', 'entry_price': 1.00, 'shares': 1000,
+            'target_price': 1.10, 'trigger_date': '2026-07-28', 'status': 'triggered',
+        }]}
+        hist = {'512800': {'2026-07-28': 1.02, '2026-07-29': 1.03, '2026-07-30': 1.04}}
+        settle_due_signals(db, hist, '2026-07-28')  # 今天是触发日
         assert db['signals'][0]['status'] == 'triggered'
 
-    def test_missing_price_not_settled(self):
-        """无现价 → 不结算（等待下次）"""
+    def test_no_target_price_falls_back_t3(self):
+        """无目标价 → 退化为 T+3 收盘结算"""
         db = {'_schema': '1.0', 'signals': [{
-            'signal_id': 'SIG-04', 'ticker': '999999', 'trade_type': 'buy',
+            'signal_id': 'SIG-07', 'ticker': '512800', 'trade_type': 'buy',
             'urgency': 'high', 'entry_price': 1.00, 'shares': 1000,
             'trigger_date': '2026-07-27', 'status': 'triggered',
         }]}
-        settle_due_signals(db, {}, '2026-07-29')
-        assert db['signals'][0]['status'] == 'triggered'
+        hist = {'512800': {'2026-07-27': 1.02, '2026-07-28': 1.04, '2026-07-29': 1.03}}
+        settle_due_signals(db, hist, '2026-07-29')
+        sig = db['signals'][0]
+        assert sig['outcome'] == 'miss'
+        assert sig['settle_price'] == pytest.approx(1.03)
 
 
 # ============================================================

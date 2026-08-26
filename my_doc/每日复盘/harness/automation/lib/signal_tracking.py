@@ -9,7 +9,7 @@
 新增（2026-08-07 修复 BUG-XXX: signal_tracking.json 从未被写入）：
   - parse_signal_markdown()   — 解析每日信号.md，提取已触发/已执行的信号记录
   - merge_new_signals()       — 将解析出的新信号并入追踪库（去重）
-  - settle_due_signals()      — 结算到期信号（高紧急度2日 / 低紧急度到预期收益日）
+  - settle_due_signals()      — 目标价结算：T+3 窗口内 hit/stopped/miss（v2.0 改）
 """
 
 import re
@@ -466,15 +466,27 @@ def merge_new_signals(tracking: dict, new_records: list[dict]) -> dict:
     return tracking
 
 
-def settle_due_signals(tracking: dict, price_lookup: dict, today: str = '') -> dict:
-    """结算到期信号。返回更新后的 dict（不写磁盘）。
+def _resolve_target_price(sig: dict) -> tuple:
+    """计算信号目标价/止损价：显式价格优先，否则用百分比×触发价。"""
+    entry = sig.get('entry_price') or 0.0
+    target = sig.get('target_price')
+    if target is None and sig.get('target_pct') is not None and entry:
+        target = round(entry * (1 + sig['target_pct'] / 100.0), 4)
+    stop = sig.get('stop_price')
+    if stop is None and sig.get('stop_pct') is not None and entry:
+        stop = round(entry * (1 + sig['stop_pct'] / 100.0), 4)
+    return target, stop
 
-    price_lookup: {ticker: current_price} — 今日收盘价表。
-    规则：
-      - status in {open, triggered, executed, partial_executed} 才结算
-      - 高紧急度: trigger_date + 2个交易日（用 days_since>=2 近似）
-      - 低紧急度: expected_return_date <= today
-    买入: P&L=(现价-入场价)*份额；卖出: P&L=(入场价-成本)*份额, 避免损失=(入场价-现价)*份额
+
+def settle_due_signals(tracking: dict, price_history: dict, today: str = '') -> dict:
+    """目标价结算：触发后 T+3 交易日内，收盘达到目标价→达标(hit)；触发止损→stopped；
+    否则按 T+3 收盘价结算(miss)。返回更新后的 dict（不写磁盘）。
+
+    price_history: {ticker: {date_iso: close_float}} — 触发日至 T+3 的每日收盘价，
+    由调用方（复盘 prompt 脚本）用腾讯财经日K填充。
+    仅结算 status ∈ {open, triggered, executed, partial_executed} 且已到期的信号。
+
+    T+3 窗口：含触发日共 3 个交易日（触发日、T+1、T+2），到期日 = 触发日后推 2 个交易日。
     """
     if not today:
         today = date.today().isoformat()
@@ -482,54 +494,69 @@ def settle_due_signals(tracking: dict, price_lookup: dict, today: str = '') -> d
     for sig in tracking.get('signals', []):
         if sig.get('status') not in ('open', 'triggered', 'executed', 'partial_executed'):
             continue
-
-        # 判定是否到期
-        due = False
-        reason = ''
         try:
             trigger_date = date.fromisoformat(sig['trigger_date'])
             today_date = date.fromisoformat(today)
         except Exception:
             continue
 
-        if sig.get('urgency') == 'high':
-            # 触发日 + 2 自然日视为到期（交易日近似，够用）
-            if (today_date - trigger_date).days >= 2:
-                due = True
-                reason = '高紧急度2日自动结算'
-        elif sig.get('urgency') == 'low':
-            if sig.get('expected_return_date'):
-                try:
-                    if today_date >= date.fromisoformat(sig['expected_return_date']):
-                        due = True
-                        reason = f'低紧急度预期收益日{sig["expected_return_date"]}到期'
-                except Exception:
-                    pass
+        # T+3 结算日（含触发日共 3 个交易日 → 后推 2 个交易日）
+        settle_date = trigger_date
+        for _ in range(2):
+            settle_date = next_trading_day(settle_date)
+        if today_date < settle_date:
+            continue  # 未到期
 
-        if not due:
+        ticker = sig.get('ticker', '')
+        hist = price_history.get(ticker, {})
+        if not hist:
+            continue  # 无价格数据，等待下次
+
+        window_dates = sorted(d for d in hist
+                              if trigger_date.isoformat() <= d <= settle_date.isoformat())
+        closes = [hist[d] for d in window_dates]
+        if not closes:
             continue
 
-        # 结算
-        ticker = sig.get('ticker', '')
-        current_price = price_lookup.get(ticker, 0.0)
-        if current_price <= 0:
-            continue  # 无现价无法结算，等待下次
-
+        target_price, stop_price = _resolve_target_price(sig)
+        is_buy = sig.get('trade_type') == 'buy'
+        entry = sig.get('entry_price') or 0.0
         shares = sig.get('shares', 0)
-        if sig.get('trade_type') == 'buy':
-            entry = sig.get('entry_price') or 0.0
-            sig['pnl'] = round((current_price - entry) * shares, 2)
-            sig['avoided_loss'] = 0.0
-        else:  # sell
+
+        # 达标/止损判定（按日期顺序，取最先发生的）
+        outcome = 'miss'
+        settle_price = closes[-1]  # 默认 T+3 收盘
+        hit_idx = len(window_dates) - 1
+        for i, (d, close) in enumerate(zip(window_dates, closes)):
+            if target_price is not None:
+                if (is_buy and close >= target_price) or (not is_buy and close <= target_price):
+                    outcome = 'hit'; settle_price = target_price; hit_idx = i
+                    break
+            if stop_price is not None:
+                if (is_buy and close <= stop_price) or (not is_buy and close >= stop_price):
+                    outcome = 'stopped'; settle_price = stop_price; hit_idx = i
+                    break
+
+        if is_buy:
+            pnl = calc_buy_pnl(entry, settle_price, shares)
+            avoided_loss = 0.0
+        else:
             sell_price = sig.get('entry_price') or 0.0
             cost = sig.get('cost_basis', sell_price) or sell_price
-            sig['pnl'] = round((sell_price - cost) * shares, 2)
-            sig['avoided_loss'] = round((sell_price - current_price) * shares, 2)
+            pnl = calc_sell_pnl(sell_price, cost, shares)
+            avoided_loss = calc_avoided_loss(sell_price, settle_price, shares)
 
-        sig['status'] = 'settled'
+        sig['pnl'] = round(pnl, 2)
+        sig['avoided_loss'] = round(avoided_loss, 2)
+        sig['outcome'] = outcome
+        sig['settle_price'] = settle_price
+        sig['settle_date'] = today
         sig['exit_date'] = today
+        sig['holding_days'] = hit_idx + 1
+        sig['status'] = 'settled'
         sig.setdefault('status_history', []).append({
-            'date': today, 'status': 'settled', 'note': reason,
+            'date': today, 'status': 'settled',
+            'note': f'T+3目标价结算: {outcome} @{settle_price}',
         })
 
     return tracking
