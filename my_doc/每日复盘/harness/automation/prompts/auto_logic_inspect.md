@@ -121,52 +121,26 @@ else:
 **检查方法**：
 ```bash
 
-python -c "
+python -X utf8 -c "
 import os, sys
-from datetime import date
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.staging_verify import check_sections
 
 f = 'my_doc/每日复盘/harness/staging/今日-早盘分析.md'
 if not os.path.exists(f):
     print('B1:FAIL: staging/今日-早盘分析.md 不存在')
     sys.exit(0)
 
-with open(f, 'r', encoding='utf-8') as fh:
-    content = fh.read()
-
-required_sections = [
-    '昨日盘面回顾',
-    '当前持仓快照',
-    '7维打分',
-    '各持仓做T建议',
-    '跨品种联动约束',
-    '前次预测回顾',
-    '核心聚焦议题',
-    '信号汇总'
-]
-
-failures = []
-for section in required_sections:
-    if section not in content:
-        failures.append(f'MISSING: 「{section}」')
-    else:
-        # 检查节后是否有实际内容（至少50字符非空白）
-        idx = content.index(section)
-        after = content[idx+len(section):idx+len(section)+500]
-        if len(after.strip()) < 50:
-            failures.append(f'EMPTY: 「{section}」')
-
-# 检查日期是否指向明天
-tomorrow = date.today().strftime('%Y-%m-%d')
-# 允许 staging 文件日期是明天（由昨天复盘生成）或昨天（如果复盘用了旧 staging）
-# 仅检查文件修改时间是否在合理范围内
-
+content = open(f, 'r', encoding='utf-8').read()
+required = ['昨日盘面回顾','当前持仓快照','7维打分','各持仓做T建议',
+            '跨品种联动约束','前次预测回顾','核心聚焦议题','信号汇总']
+failures = check_sections(content, required, path_label=f)
 if failures:
     for f_item in failures:
         print(f'B1:FAIL: {f_item}')
 else:
     print('B1:PASS: 所有 8 个章节完整')
 " 2>&1
-```
 
 ### B2: staging/今日-复盘分析.md 章节完整性
 
@@ -180,61 +154,26 @@ else:
 
 ```bash
 
-python -c "
+python -X utf8 -c "
 import os, sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.staging_verify import check_sections, check_lessons_and_vars
 
 f = 'my_doc/每日复盘/harness/staging/今日-复盘分析.md'
 if not os.path.exists(f):
     print('B2:FAIL: staging/今日-复盘分析.md 不存在')
     sys.exit(0)
 
-with open(f, 'r', encoding='utf-8') as fh:
-    content = fh.read()
-
-required_sections = [
-    '我的持仓',
-    '核心回顾',
-    '特别关注项',
-    '跨品种联动约束',
-    '前次预测评估'
-]
-
-failures = []
-for section in required_sections:
-    if section not in content:
-        failures.append(f'MISSING: 「{section}」')
-    else:
-        idx = content.index(section)
-        after = content[idx+len(section):idx+len(section)+500]
-        if len(after.strip()) < 50:
-            failures.append(f'EMPTY: 「{section}」')
-
-# 额外检查：核心教训至少2条
-import re
-lessons = re.findall(r'\d+\.\s*\*\*.*?\*\*', content)
-# 在「核心教训」区域至少找到2条
-lesson_section = content.split('核心教训')
-if len(lesson_section) >= 2:
-    lesson_text = lesson_section[1].split('###')[0] if '###' in lesson_section[1] else lesson_section[1][:1000]
-    lesson_count = len(re.findall(r'\d+\.\s*\*\*', lesson_text))
-    if lesson_count < 2:
-        failures.append(f'核心教训不足: 仅{lesson_count}条（需要≥2条）')
-
-# 额外检查：核心变量至少3个
-var_section = content.split('核心变量')
-if len(var_section) >= 2:
-    var_text = var_section[1].split('###')[0] if '###' in var_section[1] else var_section[1][:1500]
-    var_count = len(re.findall(r'-\s*\*\*', var_text))
-    if var_count < 3:
-        failures.append(f'核心变量不足: 仅{var_count}个（需要≥3个）')
-
+content = open(f, 'r', encoding='utf-8').read()
+required = ['我的持仓','核心回顾','特别关注项','跨品种联动约束','前次预测评估']
+failures = check_sections(content, required, path_label=f)
+failures += check_lessons_and_vars(content)
 if failures:
     for f_item in failures:
         print(f'B2:FAIL: {f_item}')
 else:
     print('B2:PASS: 所有 5 个章节完整，核心教训≥2条，核心变量≥3个')
 " 2>&1
-```
 
 ### B3: ETF 代码-名称交叉校验
 
@@ -242,38 +181,18 @@ else:
 
 ```bash
 
-python -c "
-import re, sys
+python -X utf8 -c "
+import sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.staging_verify import check_etf_code_names
 
-# 1. 读取权威持仓配置
-with open('my_doc/每日复盘/harness/config/持仓.md', 'r', encoding='utf-8') as f:
-    config = f.read()
-
-code_to_name = {}
-for line in config.split('\n'):
-    parts = [p.strip() for p in line.split('|')[1:-1]]
-    if len(parts) >= 2 and parts[1].isdigit() and len(parts[1]) == 6:
-        code_to_name[parts[1]] = parts[0]
-
-print(f'权威映射: {code_to_name}')
-
-# 2. 检查 staging 文件
+config = open('my_doc/每日复盘/harness/config/持仓.md', encoding='utf-8').read()
 errors = []
-for staging_file in [
-    'my_doc/每日复盘/harness/staging/今日-早盘分析.md',
-    'my_doc/每日复盘/harness/staging/今日-复盘分析.md'
-]:
+for staging_file in ['my_doc/每日复盘/harness/staging/今日-早盘分析.md',
+                     'my_doc/每日复盘/harness/staging/今日-复盘分析.md']:
     try:
-        with open(staging_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        for line in content.split('\n'):
-            parts = [p.strip() for p in line.split('|')[1:-1]]
-            if len(parts) >= 2 and parts[1].isdigit() and len(parts[1]) == 6:
-                code = parts[1]
-                name_in_staging = parts[0]
-                name_in_config = code_to_name.get(code)
-                if name_in_config and name_in_staging != name_in_config:
-                    errors.append(f'{staging_file}: 代码{code} staging=\"{name_in_staging}\" config=\"{name_in_config}\"')
+        content = open(staging_file, encoding='utf-8').read()
+        errors += check_etf_code_names(config, content, staging_file)
     except FileNotFoundError:
         print(f'WARNING: {staging_file} 不存在，跳过校验')
 
@@ -284,7 +203,6 @@ if errors:
 else:
     print('B3:PASS: All staging code-name mappings match config/持仓.md')
 " 2>&1
-```
 
 ### B4: Staging 新鲜度 — 复盘后必须刷新为明日可执行 prompt
 
@@ -857,4 +775,5 @@ E 组 (经验与元数据):
 | PENDING_CONFIRMATION.md 不存在 | 创建含表头的空模板 |
 | 非交易日但 staging 不存在 | 预期的正常情况，WARN 不 FAIL |
 | 交易日但 reports/{today}/ 目录不存在 | FAIL — 创建 BUG（复盘可能未执行） |
+
 

@@ -110,3 +110,57 @@ def check_review_staging(task_state: dict, staging_results: list, tomorrow: str)
             failures.append(f'TOO_SMALL: {r["path"]} 仅{r.get("size", 0)}字节，疑似未填充内容')
 
     return failures
+
+
+def check_sections(content: str, required_sections: list, min_after_chars: int = 50,
+                   path_label: str = '') -> list:
+    """检查章节存在性 + 节后非空（从 auto_logic_inspect B1/B2 下沉）。
+    required_sections: 章节关键词列表
+    返回错误列表（空=通过）。"""
+    failures = []
+    for section in required_sections:
+        if section not in content:
+            failures.append(f'MISSING: 「{section}」')
+        else:
+            idx = content.index(section)
+            after = content[idx + len(section):idx + len(section) + 500]
+            if len(after.strip()) < min_after_chars:
+                failures.append(f'EMPTY: 「{section}」')
+    return failures
+
+
+def check_lessons_and_vars(content: str, min_lessons: int = 2, min_vars: int = 3) -> list:
+    """复盘 staging 核心教训≥2 / 核心变量≥3 检查（从 B2 下沉）。"""
+    failures = []
+    lesson_section = content.split('核心教训')
+    if len(lesson_section) >= 2:
+        lesson_text = lesson_section[1].split('###')[0] if '###' in lesson_section[1] else lesson_section[1][:1000]
+        lesson_count = len(re.findall(r'\d+\.\s*\*\*', lesson_text))
+        if lesson_count < min_lessons:
+            failures.append(f'核心教训不足: 仅{lesson_count}条（需要≥{min_lessons}条）')
+    var_section = content.split('核心变量')
+    if len(var_section) >= 2:
+        var_text = var_section[1].split('###')[0] if '###' in var_section[1] else var_section[1][:1500]
+        var_count = len(re.findall(r'-\s*\*\*', var_text))
+        if var_count < min_vars:
+            failures.append(f'核心变量不足: 仅{var_count}个（需要≥{min_vars}个）')
+    return failures
+
+
+def check_etf_code_names(config_content: str, staging_content: str, path_label: str = '') -> list:
+    """ETF 代码-名称交叉校验（staging vs config/持仓.md，从 B3 下沉）。"""
+    code_to_name = {}
+    for line in config_content.split('\n'):
+        parts = [p.strip() for p in line.split('|')[1:-1]]
+        if len(parts) >= 2 and parts[1].isdigit() and len(parts[1]) == 6:
+            code_to_name[parts[1]] = parts[0]
+
+    errors = []
+    for line in staging_content.split('\n'):
+        parts = [p.strip() for p in line.split('|')[1:-1]]
+        if len(parts) >= 2 and parts[1].isdigit() and len(parts[1]) == 6:
+            code = parts[1]
+            name_in_config = code_to_name.get(code)
+            if name_in_config and parts[0] != name_in_config:
+                errors.append(f'{path_label}: 代码{code} staging="{parts[0]}" config="{name_in_config}"')
+    return errors

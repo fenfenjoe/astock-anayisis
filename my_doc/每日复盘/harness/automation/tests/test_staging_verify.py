@@ -9,7 +9,14 @@ from pathlib import Path
 LIB_DIR = Path(__file__).resolve().parent.parent / "lib"
 sys.path.insert(0, str(LIB_DIR))
 
-from staging_verify import verify_staging_content, verify_staging_file, check_review_staging
+from staging_verify import (
+    verify_staging_content,
+    verify_staging_file,
+    check_review_staging,
+    check_sections,
+    check_lessons_and_vars,
+    check_etf_code_names,
+)
 
 
 def _mk_content(tomorrow='2026-08-27', today='2026-08-26', size=600):
@@ -107,3 +114,51 @@ class TestCheckReviewStaging:
         # r1 通过；r2 的 STALE（mtime 早于复盘完成）短路（continue），仅报 STALE
         assert len(failures) == 1
         assert any('STALE' in f and 'b.md' in f for f in failures)
+
+
+class TestCheckSections:
+    def test_all_present(self):
+        content = "昨日盘面回顾\n" + "内容" * 30 + "\n当前持仓快照\n" + "内容" * 30
+        assert check_sections(content, ['昨日盘面回顾', '当前持仓快照']) == []
+
+    def test_missing(self):
+        assert any('MISSING' in e for e in check_sections('只有一段', ['昨日盘面回顾']))
+
+    def test_empty_section(self):
+        content = "昨日盘面回顾\n\n下一节"
+        assert any('EMPTY' in e for e in check_sections(content, ['昨日盘面回顾'], min_after_chars=10))
+
+
+class TestCheckLessonsAndVars:
+    def test_sufficient(self):
+        content = ("核心教训\n1. **教训一**：abc\n2. **教训二**：def\n"
+                   "核心变量\n- **变量1**：x\n- **变量2**：y\n- **变量3**：z")
+        assert check_lessons_and_vars(content) == []
+
+    def test_insufficient_lessons(self):
+        content = "核心教训\n1. **仅一条**：abc\n核心变量\n- **a**\n- **b**\n- **c**"
+        failures = check_lessons_and_vars(content)
+        assert any('教训不足' in e for e in failures)
+
+    def test_insufficient_vars(self):
+        content = "核心教训\n1. **a**\n2. **b**\n核心变量\n- **仅两个**\n- **变量**"
+        failures = check_lessons_and_vars(content)
+        assert any('变量不足' in e for e in failures)
+
+
+class TestCheckEtfCodeNames:
+    def _config(self):
+        return ("| 股票名称 | 代码 | 持仓数量（份） | 成本价（元） |\n"
+                "| 黄金ETF | 518880 | 3,900 | 9.056 |\n"
+                "| 电网设备ETF | 159326 | 7,900 | 1.975 |")
+
+    def test_match(self):
+        staging = "| 黄金ETF | 518880 | 3,900 | 9.533 |\n| 电网设备ETF | 159326 | 7,900 | 1.671 |"
+        assert check_etf_code_names(self._config(), staging) == []
+
+    def test_mismatch(self):
+        staging = "| 恒生科技ETF | 159326 | 7,900 | 1.671 |"
+        errors = check_etf_code_names(self._config(), staging, 's.md')
+        assert len(errors) == 1
+        assert '159326' in errors[0]
+        assert '恒生科技ETF' in errors[0]
