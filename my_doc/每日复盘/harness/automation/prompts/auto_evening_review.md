@@ -700,6 +700,13 @@ from collections import defaultdict
 with open('my_doc/每日复盘/每日调仓.md', 'r', encoding='utf-8') as f:
     content = f.read()
 
+# 1a. 解析可用金额（## 0. 可用金额，v5.0 新增）
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation/lib')
+from position_sync import parse_available_cash, verify_cash_change
+cash = parse_available_cash(content)
+print(f'=== 可用金额: {cash} 元 ===' if cash is not None
+      else 'WARN: 每日调仓.md 可用金额缺失或非数字（config 将保留旧值）')
+
 # 提取 ## 1. 当前持仓 表格（兼容多种空白格式）
 match = re.search(r'## 1\.\s*当前持仓\s*\n\s*\n(\|.+\|\s*\n(?:\|.+\|\s*\n)+)', content)
 if not match:
@@ -756,6 +763,14 @@ if trade_match:
 else:
     print('=== 今日无调仓记录 ===')
 
+# 1b. 可用金额交叉验证（期望新值 = 旧值 + Σ卖出 − Σ买入，v5.0 新增）
+if cash is not None and old_cash is not None and today_trades:
+    trade_records = [{'direction': t['direction'],
+                      'qty': int(t['qty'].replace(',', '')),
+                      'price': float(t['price'])} for t in today_trades]
+    for warn in verify_cash_change(old_cash, cash, trade_records):
+        print(f'WARN: {warn}')
+
 # 1c. 为每个持仓匹配今日操作（v4.1 新增）
 holdings_with_trades = []
 for h in holdings:
@@ -785,9 +800,13 @@ if sold_by_code:
 # ============================================================
 old_config_path = 'my_doc/每日复盘/harness/config/持仓.md'
 old_holdings = {}
+old_cash = None
 if os.path.exists(old_config_path):
     with open(old_config_path, 'r', encoding='utf-8') as f:
         old = f.read()
+    m_cash = re.search(r'可用金额:\s*([\d,]+)', old)
+    if m_cash:
+        old_cash = float(m_cash.group(1).replace(',', ''))
     for line in old.split('\n'):
         parts = [p.strip() for p in line.split('|')[1:-1]]
         if len(parts) >= 3 and parts[1].isdigit() and len(parts[1]) == 6:
@@ -812,7 +831,14 @@ if changed: print(f'变更: {[(f\"{old[0]}:{old[2]}→{new[2]}份 @{old[3]}→{n
 if not added and not removed and not changed: print('持仓无变化')
 
 # 覆写 config/持仓.md
-header = '# 当前持仓\n\n> 本文件由每日复盘自动同步自 每日调仓.md，反映最新持仓状态。\n> 最后更新: 自动同步\n\n'
+header = '# 当前持仓\n\n> 本文件由每日复盘自动同步自 每日调仓.md，反映最新持仓状态。\n> 最后更新: 自动同步\n'
+if cash is not None:
+    header += f'可用金额: {cash} 元\n'
+elif old_cash is not None:
+    header += f'可用金额: {int(old_cash)} 元\n'
+else:
+    header += '可用金额: 未知 元\n'
+header += '\n'
 new_table = '| 股票名称 | 代码 | 持仓数量（份） | 成本价（元） |\n| -------- | ------ | -------------- | ------------ |\n'
 for h in holdings:
     new_table += f'| {h[0]} | {h[1]} | {h[2]} | {h[3]} |\n'
@@ -885,6 +911,14 @@ for code, (name, shares, cost) in src_holdings.items():
 for code in cfg_holdings:
     if code not in src_holdings:
         errors.append(f'STALE in config: {cfg_holdings[code][0]}({code}) — 已不在每日调仓.md当前持仓中，必须移除！')
+
+# 可用金额一致性（v5.0 新增）
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation/lib')
+from position_sync import parse_available_cash
+cash_src = parse_available_cash(content)
+cash_cfg = re.search(r'可用金额:\s*([\d,]+)', cfg)
+if cash_src is not None and (not cash_cfg or int(cash_cfg.group(1).replace(',', '')) != cash_src):
+    errors.append(f'可用金额不一致: src={cash_src} config={cash_cfg.group(1) if cash_cfg else "缺失"}')
 
 if errors:
     print(f'[FAIL] 持仓同步验证失败 ({len(errors)} errors):')
