@@ -704,6 +704,7 @@ with open('my_doc/每日复盘/每日调仓.md', 'r', encoding='utf-8') as f:
 sys.path.insert(0, 'my_doc/每日复盘/harness/automation/lib')
 from position_sync import parse_available_cash, verify_cash_change
 cash = parse_available_cash(content)
+old_cash = None  # 旧 config 可用金额（§2 读取后填充，供 1b 交叉验证）
 print(f'=== 可用金额: {cash} 元 ===' if cash is not None
       else 'WARN: 每日调仓.md 可用金额缺失或非数字（config 将保留旧值）')
 
@@ -946,6 +947,25 @@ else:
 
 > ⚠️ 持仓表已在第十步（同步持仓配置）中更新为最新数据，此处直接使用。
 
+### 11.0 归档当日 Staging 原件（‼️ 必须先归档，再生成次日）
+
+> ⚠️ **顺序铁律**：11.1/11.2 会**覆盖** `staging/今日-早盘分析.md` 与 `staging/今日-复盘分析.md`。
+> 若先覆盖再归档，归档到的将是"次日内容"，当日实际执行的 staging 原件永久丢失
+> （8/25 起退化为"仅写归档说明.md"即此根因，BUG-002）。
+> 因此归档必须在覆盖**之前**执行：此时 `今日-早盘分析.md` = 今晨早盘实际执行的 staging，
+> `今日-复盘分析.md` = 今日复盘实际使用的 staging（前一日生成）。
+
+```bash
+mkdir -p "harness/archive/{today}"
+cp harness/staging/今日-早盘分析.md "harness/archive/{today}/早盘分析-staging.md"
+cp harness/staging/今日-复盘分析.md "harness/archive/{today}/复盘分析-staging.md"
+ls -la "harness/archive/{today}/"
+```
+
+**核对**：归档目录下 `早盘分析-staging.md`/`复盘分析-staging.md` 均存在、非空，
+且内容为**当日版本**（早盘文件含当日早盘分析内容、复盘文件为今日复盘所用基线）。
+核对通过后才允许进入 11.1 覆盖生成次日 staging。
+
 ### 11.1 生成 `harness/staging/今日-早盘分析.md`（供明日早盘使用）
 
 > ⚠️ 标题必须用"今日"而非"明日"——该文件在 `{tomorrow_date}` 被执行时，对消费者而言就是"今日"。
@@ -1006,17 +1026,14 @@ else:
     print(f'[PASS] Staging 文件已正确生成，目标日期 {tomorrow}')
 " 2>&1
 
-**如果校验失败**：必须修正 staging 文件中的错误名称，重新运行校验直到通过，才能继续归档。
+**如果校验失败**：必须修正 staging 文件中的错误名称，重新运行校验直到通过，才能继续后续步骤（11.5 验证）。
 
-### 11.4 归档今日 Staging
+### 11.4 归档确认（已在 11.0 完成）
 
-> ⚠️ 必须先 `mkdir -p` 创建目标目录，否则 `cp` 会因目录不存在而失败（导致 staging 内容永久丢失）。
-
-```bash
-mkdir -p "harness/archive/{today}"
-cp harness/staging/今日-早盘分析.md "harness/archive/{today}/早盘分析-staging.md"
-cp harness/staging/今日-复盘分析.md "harness/archive/{today}/复盘分析-staging.md"
-```
+> ✅ 当日 staging 原件已在 **11.0**（覆盖生成前）归档至 `harness/archive/{today}/`。
+> 此处仅需确认归档文件仍存在（无需再次复制——重复 cp 会用次日内容覆盖原件）。
+> 若 11.0 归档缺失或文件为空，**回到 11.0 前状态无法恢复当日原件**（当日 staging 已被覆盖），
+> 此时只能按 BUG-002 的降级流程补写"归档说明.md"审计摘要并在日志中标注。
 
 ### 11.5 Staging 生成验证（‼️ 硬性门禁，禁止跳过）
 
