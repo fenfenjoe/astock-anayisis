@@ -132,8 +132,8 @@ if not os.path.exists(f):
     sys.exit(0)
 
 content = open(f, 'r', encoding='utf-8').read()
-required = ['昨日盘面回顾','当前持仓快照','7维打分','各持仓做T建议',
-            '跨品种联动约束','前次预测回顾','核心聚焦议题','信号汇总']
+required = ['我的持仓','事件日历','核心矛盾','数据收集','板块机会扫描',
+            '持仓映射','操作清单','上期预判回顾','上期信号回顾','信号生成指令']
 failures = check_sections(content, required, path_label=f)
 if failures:
     for f_item in failures:
@@ -165,7 +165,7 @@ if not os.path.exists(f):
     sys.exit(0)
 
 content = open(f, 'r', encoding='utf-8').read()
-required = ['我的持仓','核心回顾','特别关注项','跨品种联动约束','前次预测评估']
+required = ['我的持仓','特别关注项','板块扫描验证','做T验证','信号执行复盘','核心回顾']
 failures = check_sections(content, required, path_label=f)
 failures += check_lessons_and_vars(content)
 if failures:
