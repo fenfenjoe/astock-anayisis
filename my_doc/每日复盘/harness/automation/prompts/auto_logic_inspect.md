@@ -549,7 +549,7 @@ from lib.consistency_check import check_consistency, render_report, CHECK_TARGET
 
 contents = {}
 errors = []
-for label, path in CHECK_TARGETS:
+for label, path, role in CHECK_TARGETS:
     try:
         contents[label] = open(path, encoding='utf-8').read()
     except FileNotFoundError:

@@ -1,0 +1,8 @@
+[2026-08-26T17:17:53+0800] BUG_FIX 开始
+[2026-08-26T17:17:53+0800] 扫描: 3 OPEN (BUG-004 P2, BUG-005 P1, BUG-006 P3), 0 IN_PROGRESS, 2 MANUAL_REVIEW (BUG-002, BUG-003)
+[2026-08-26T17:17:53+0800] 选择: BUG-005 (P1) — D4 信号模型一致性检查脚本失效：CHECK_TARGETS 解包错误（优先级最高且 auto_fix_eligible=true）
+[2026-08-26T17:17:53+0800] 诊断: 确定性修复 — auto_logic_inspect.md D4 按二元组解包 `for label, path in CHECK_TARGETS:`，lib CHECK_TARGETS 为三元组 (label, path, role) → ValueError: too many values to unpack (expected 2)
+[2026-08-26T17:17:53+0800] 修复: auto_logic_inspect.md D4 解包改为 `for label, path, role in CHECK_TARGETS:`（与 lib 对齐，其余逻辑不变；lib/ 与 tests/ 未改动）
+[2026-08-26T17:17:53+0800] 回归测试: PASS — 全量 pytest 208 passed；D4 实测输出 D4:PASS，7 个目标文件信号标记齐全
+[2026-08-26T17:17:53+0800] 归档: BUG-005 → FIXED → closed/BUG-005.md；BUG_INDEX.md 统计 OPEN 3→2、FIXED 0→1，巡检历史追加记录
+[2026-08-26T17:17:53+0800] BUG_FIX 结束
