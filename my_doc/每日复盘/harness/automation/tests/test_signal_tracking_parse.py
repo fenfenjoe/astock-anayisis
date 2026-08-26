@@ -287,12 +287,19 @@ class TestParseNewColumns:
         assert records[0]['expected_trigger_rate'] == 40.0
 
     def test_expected_trigger_rate_dash(self):
-        """P0 预期触发率为 — → None"""
+        """P0 预期触发率为 — → None（覆盖 —→None 解析路径）"""
         md = _mk_new_md([
-            "| P0 | 全持仓 | 普跌否决 | 风控 | 已过期 | 卖出 | 高 | — | — | 9:30-10:00 | 0 | SIG-20260826-01 |",
+            "| P0 | 全持仓ETF(510300) | 普跌否决 | 风控 | 已触发 | 卖出 | 高 | — | — | 9:30-10:00 | 0 | SIG-20260826-01 |",
         ])
         records = parse_signal_markdown(md, '2026-08-26')
-        assert len(records) == 0  # 已过期不追踪
+        assert len(records) == 1  # 已触发需追踪
+        rec = records[0]
+        assert rec['priority'] == 'P0'
+        assert rec['expected_trigger_rate'] is None
+        assert rec['target_pct'] is None
+        assert rec['stop_pct'] is None
+        assert rec['target_price'] is None
+        assert rec['stop_price'] is None
 
     def test_target_pct_parsing(self):
         md = _mk_new_md([
