@@ -189,6 +189,15 @@
       "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_pending_remind.md",
       "window_minutes": 7,
       "description": "待确认事项提醒 (每2小时 :13)"
+    },
+    {
+      "task_id": "signal_quality_weekly",
+      "target_time": "16:30",
+      "days_of_week": [2],
+      "trading_day_required": false,
+      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_signal_quality_weekly.md",
+      "window_minutes": 7,
+      "description": "信号质量周报 (每周三收盘后)"
     }
   ]
 }
