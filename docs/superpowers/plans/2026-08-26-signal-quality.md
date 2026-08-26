@@ -835,6 +835,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 **Files:**
 - Modify: `my_doc/每日复盘/harness/prompts/复盘分析-模板.md`
+- Modify: `my_doc/每日复盘/harness/automation/prompts/auto_evening_review.md`（§7.6.2 旧签名调用更新——Task 2 review Important 发现）
 
 **Interfaces:**
 - Consumes: `generate_quality_dashboard`（Task 3）、`settle_due_signals` 新签名（Task 2）、`parse_signal_markdown`/`merge_new_signals`（现有）
@@ -912,11 +913,65 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 | 低紧急度信号: 目标达成率 | XX% |
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 更新 auto_evening_review.md §7.6.2（自动复盘结算脚本）**
+
+将 `my_doc/每日复盘/harness/automation/prompts/auto_evening_review.md` §7.6.2 的嵌入式脚本与结算规则说明整体替换为（**Task 2 review Important：旧 `{ticker: float}` 签名会导致 `TypeError: 'float' object is not iterable`**）：
+
+````markdown
+#### 7.6.2 结算到期信号
+
+扫描追踪库中 status ∈ {open, triggered, executed, partial_executed} 的信号，检查是否满足结算条件并结算：
 
 ```bash
-git add my_doc/每日复盘/harness/prompts/复盘分析-模板.md
-git commit -m "feat: 复盘模板2c/2d扩展（质量仪表盘+强制入库+目标价结算）
+python -c "
+import sys, json
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation/lib')
+from signal_tracking import settle_due_signals, update_aggregation
+from datetime import date, timedelta
+
+tracking_file = 'my_doc/每日复盘/harness/automation/config/signal_tracking.json'
+
+with open(tracking_file, 'r', encoding='utf-8') as f:
+    db = json.load(f)
+
+# 1. 构建每日收盘价表 {ticker: {date: close}}（v2.0 目标价结算需要窗口内每日收盘价）
+#    ⚠️ 需要你先用 a-stock-data（腾讯日K）拉取每个待结算信号 触发日→窗口末（触发日+2交易日）的每日收盘价。
+#    无法获取完整窗口的标的本次不结算（等待下次）。
+price_history = {
+    # '512800': {'2026-08-25': 0.798, '2026-08-26': 0.805, '2026-08-27': 0.812},
+    # '159326': {'2026-08-25': 1.692, '2026-08-26': 1.700, '2026-08-27': 1.695},
+}
+
+# 2. 结算到期信号（3 交易日窗口：触发日+其后2交易日；hit/stopped/miss）
+before = sum(1 for s in db['signals'] if s.get('status') == 'settled')
+db = settle_due_signals(db, price_history, date.today().isoformat())
+after = sum(1 for s in db['signals'] if s.get('status') == 'settled')
+
+# 3. 更新聚合统计
+db = update_aggregation(db)
+
+with open(tracking_file, 'w', encoding='utf-8') as f:
+    json.dump(db, f, indent=2, ensure_ascii=False)
+
+print(f'到期结算完成: 本次新结算 {after - before} 条, 累计已结算 {after} 条')
+print(f'追踪={db[\"aggregates\"][\"total_signals_tracked\"]} 已结算={db[\"aggregates\"][\"total_resolved\"]} '
+      f'P&L={db[\"aggregates\"][\"total_pnl_amount\"]} 胜率={db[\"aggregates\"][\"win_rate\"]}')
+"
+```
+
+**结算规则**（v2.0 目标价模式，lib 内置）：
+- 窗口 = 触发日 + 其后 2 个交易日（共 3 个交易日收盘点）
+- 窗口内任一日收盘达到目标价 → **hit**（按目标价结算，持有天数=达标日）
+- 触发止损价 → **stopped**（按止损价结算）
+- 未达目标 → **miss**（按窗口末日收盘结算）
+- P&L：买入=(结算价-入场价)×份额；卖出=(卖出价-成本)×份额，避免损失=(卖出价-结算价)×份额
+````
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add my_doc/每日复盘/harness/prompts/复盘分析-模板.md my_doc/每日复盘/harness/automation/prompts/auto_evening_review.md
+git commit -m "feat: 复盘模板2c/2d扩展（质量仪表盘+强制入库+目标价结算）+ 自动复盘结算脚本同步
 Co-Authored-By: Claude <noreply@anthropic.com>"
 ```
 
