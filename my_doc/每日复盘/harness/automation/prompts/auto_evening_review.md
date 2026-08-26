@@ -935,52 +935,41 @@ else:
 
 ```bash
 
-python -c "
-import re, sys
+python -X utf8 -c "
+import sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from datetime import date, timedelta
+from lib.staging_verify import verify_staging_file
 
-# 1. 读取权威持仓配置
-with open('my_doc/每日复盘/harness/config/持仓.md', 'r', encoding='utf-8') as f:
-    config = f.read()
+today = date.today()
+tomorrow = (today + timedelta(days=1)).strftime('%Y-%m-%d')
+today_str = today.strftime('%Y-%m-%d')
+print(f'今天: {today_str}')
+print(f'预期 staging 目标日期: {tomorrow}')
 
-# 提取 config/持仓.md 的代码→名称映射
-code_to_name = {}
-for line in config.split('\n'):
-    parts = [p.strip() for p in line.split('|')[1:-1]]
-    if len(parts) >= 2 and parts[1].isdigit() and len(parts[1]) == 6:
-        code_to_name[parts[1]] = parts[0]
-
-print(f'权威映射 (config/持仓.md): {code_to_name}')
-
-# 2. 检查 staging 文件
-errors = []
-for staging_file in [
+staging_files = [
     'my_doc/每日复盘/harness/staging/今日-早盘分析.md',
     'my_doc/每日复盘/harness/staging/今日-复盘分析.md'
-]:
-    try:
-        with open(staging_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        for line in content.split('\n'):
-            parts = [p.strip() for p in line.split('|')[1:-1]]
-            if len(parts) >= 2 and parts[1].isdigit() and len(parts[1]) == 6:
-                code = parts[1]
-                name_in_staging = parts[0]
-                name_in_config = code_to_name.get(code)
-                if name_in_config and name_in_staging != name_in_config:
-                    errors.append(f'{staging_file}: 代码{code}在staging中为\"{name_in_staging}\"，但config/持仓.md中为\"{name_in_config}\"')
-    except FileNotFoundError:
-        print(f'WARNING: {staging_file} 不存在，跳过校验')
+]
+
+errors = []
+for f in staging_files:
+    errs, meta = verify_staging_file(f, tomorrow, today_str)
+    if meta:
+        print(f'{f}: {meta["size_kb"]:.1f}KB, {meta["chars"]} chars, mtime={meta["mtime"]} ({meta["hours_ago"]}h ago)')
+    errors.extend(errs)
 
 if errors:
-    print(f'[FAIL] {len(errors)} code-name mismatches:')
+    print(f'[FAIL] Staging生成验证失败 ({len(errors)} errors):')
     for e in errors:
-        print(f'  {e}')
-    print('Fix staging file names before archiving')
+        print(f'  ❌ {e}')
+    print('')
+    print('*** 必须回到 Step 11.1/11.2 重新生成 staging，直到验证通过 ***')
+    print('*** 禁止在 staging 验证失败的情况下继续后续步骤 ***')
     sys.exit(1)
 else:
-    print('[PASS] All staging code-name mappings match config/持仓.md')
+    print(f'[PASS] Staging 文件已正确生成，目标日期 {tomorrow}')
 " 2>&1
-```
 
 **如果校验失败**：必须修正 staging 文件中的错误名称，重新运行校验直到通过，才能继续归档。
 
@@ -1311,4 +1300,5 @@ python .claude/scripts/task_scheduler.py --clear-running evening_review
 ```
 
 > ⚠️ 如果复盘因异常中断，此步骤不会执行。此时 `check_running()` 的 stale 检测会在 45 分钟后自动清除该锁，后续迭代恢复正常。
+
 
