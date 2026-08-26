@@ -708,8 +708,8 @@ old_cash = None  # 旧 config 可用金额（§2 读取后填充，供 1b 交叉
 print(f'=== 可用金额: {cash} 元 ===' if cash is not None
       else 'WARN: 每日调仓.md 可用金额缺失或非数字（config 将保留旧值）')
 
-# 提取 ## 1. 当前持仓 表格（兼容多种空白格式）
-match = re.search(r'## 1\.\s*当前持仓\s*\n\s*\n(\|.+\|\s*\n(?:\|.+\|\s*\n)+)', content)
+# 提取 ## 1. 当前持仓 表格（兼容多种空白格式 + 标题与表格间的 可用金额/持仓： 等非表格行）
+match = re.search(r'## 1\.\s*当前持仓\s*\n(?:[^\n]*\n)*?(\|.+\|\s*\n(?:\|.+\|\s*\n)+)', content)
 if not match:
     print('ERROR: 无法解析每日调仓.md的当前持仓表')
     sys.exit(1)
@@ -879,7 +879,7 @@ import re, sys
 # 读取每日调仓.md的当前持仓
 with open('my_doc/每日复盘/每日调仓.md', 'r', encoding='utf-8') as f:
     content = f.read()
-match = re.search(r'## 1\.\s*当前持仓\s*\n\s*\n(\|.+\|\s*\n(?:\|.+\|\s*\n)+)', content)
+match = re.search(r'## 1\.\s*当前持仓\s*\n(?:[^\n]*\n)*?(\|.+\|\s*\n(?:\|.+\|\s*\n)+)', content)
 if not match:
     print('VERIFY_ERROR: 无法解析每日调仓.md')
     sys.exit(1)
