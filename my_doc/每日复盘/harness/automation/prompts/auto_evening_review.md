@@ -457,35 +457,31 @@ print(f'聚合: 追踪={db[\"aggregates\"][\"total_signals_tracked\"]} 已结算
 
 #### 7.6.2 结算到期信号
 
-> ✅ **2026-08-07 修复（BUG-XXX）**：旧版脚本是骨架（P&L 计算全是注释）。已改为调用 `lib/signal_tracking.py` 的 `settle_due_signals`。
-
 扫描追踪库中 status ∈ {open, triggered, executed, partial_executed} 的信号，检查是否满足结算条件并结算：
 
 ```bash
-
 python -c "
 import sys, json
 sys.path.insert(0, 'my_doc/每日复盘/harness/automation/lib')
 from signal_tracking import settle_due_signals, update_aggregation
-from datetime import date
+from datetime import date, timedelta
 
 tracking_file = 'my_doc/每日复盘/harness/automation/config/signal_tracking.json'
 
 with open(tracking_file, 'r', encoding='utf-8') as f:
     db = json.load(f)
 
-# 1. 构建今日收盘价表 {ticker: price}
-#    ⚠️ 需要你先用 a-stock-data 获取当日所有持仓ETF/信号标的的收盘价，
-#    填入 price_lookup。无法获取的标的本次不结算（等待下次）。
-price_lookup = {
-    # '512800': 0.798,   # 银行ETF — 示例，替换为真实收盘价
-    # '159326': 1.692,   # 电网设备ETF
-    # '513100': 2.263,   # 纳指ETF
+# 1. 构建每日收盘价表 {ticker: {date: close}}（v2.0 目标价结算需要窗口内每日收盘价）
+#    ⚠️ 需要你先用 a-stock-data（腾讯日K）拉取每个待结算信号 触发日→窗口末（触发日+2交易日）的每日收盘价。
+#    无法获取完整窗口的标的本次不结算（等待下次）。
+price_history = {
+    # '512800': {'2026-08-25': 0.798, '2026-08-26': 0.805, '2026-08-27': 0.812},
+    # '159326': {'2026-08-25': 1.692, '2026-08-26': 1.700, '2026-08-27': 1.695},
 }
 
-# 2. 结算到期信号
+# 2. 结算到期信号（3 交易日窗口：触发日+其后2交易日；hit/stopped/miss）
 before = sum(1 for s in db['signals'] if s.get('status') == 'settled')
-db = settle_due_signals(db, price_lookup, date.today().isoformat())
+db = settle_due_signals(db, price_history, date.today().isoformat())
 after = sum(1 for s in db['signals'] if s.get('status') == 'settled')
 
 # 3. 更新聚合统计
@@ -500,11 +496,12 @@ print(f'追踪={db[\"aggregates\"][\"total_signals_tracked\"]} 已结算={db[\"a
 "
 ```
 
-**结算规则**（lib 内置）：
-- 高紧急度: 触发日 + 2 自然日 → 自动结算
-- 低紧急度: expected_return_date ≤ 今日 → 自动结算
-- 手动结算: 用户执行了反向操作（减仓后回补 / 加仓后卖出）
-- P&L：买入=(现价-入场价)×份额；卖出=(入场价-成本)×份额，避免损失=(入场价-现价)×份额
+**结算规则**（v2.0 目标价模式，lib 内置）：
+- 窗口 = 触发日 + 其后 2 个交易日（共 3 个交易日收盘点）
+- 窗口内任一日收盘达到目标价 → **hit**（按目标价结算，持有天数=达标日）
+- 触发止损价 → **stopped**（按止损价结算）
+- 未达目标 → **miss**（按窗口末日收盘结算）
+- P&L：买入=(结算价-入场价)×份额；卖出=(卖出价-成本)×份额，避免损失=(卖出价-结算价)×份额
 
 #### 7.6.3 填充信号收益追踪章节
 
