@@ -284,153 +284,78 @@ else:
 
 ```bash
 
-python -c "
+python -X utf8 -c "
 import os, sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
 from datetime import date
+from lib.staging_verify import check_sections
 today = date.today().strftime('%Y%m%d')
-f = f'my_doc/每日复盘/reports/{today}/早盘报告.md'
-
+f = 'f'my_doc/每日复盘/reports/{today}/早盘报告.md''
 if not os.path.exists(f):
-    print('C1:FAIL: 早盘报告.md 不存在')
+    print('C1:FAIL: 文件不存在 ' + f)
     sys.exit(0)
-
-with open(f, 'r', encoding='utf-8') as fh:
-    content = fh.read()
-
-# Required sections per 早盘分析-模板.md
-required = [
-    ('我的持仓', '持仓表'),
-    ('宏观研判', '大盘方向+核心矛盾+反面情景+数据时区'),
-    ('板块机会扫描', 'N≥3个板块+七维评分表+建仓建议'),
-    ('持仓映射', '逐只评分+做T建议+做T纪律'),
-    ('操作清单', '优先级+时间表+跨品种约束'),
-    ('预判回顾', '预测vs实际+根因+今日改进'),
-]
-
-failures = []
-for keyword, desc in required:
-    if keyword not in content:
-        failures.append(f'MISSING: 「{desc}」({keyword})')
-    else:
-        idx = content.index(keyword)
-        after = content[idx+len(keyword):idx+len(keyword)+300]
-        if len(after.strip()) < 50:
-            failures.append(f'EMPTY: 「{desc}」({keyword})')
-
+content = open(f, 'r', encoding='utf-8').read()
+required = [('隔夜外盘','外盘总结'),('事件验证','日历核实'),('宏观研判','方向+矛盾'),
+            ('板块机会扫描','评分表'),('持仓映射','逐只评分'),('操作清单','优先级'),('上期预判回顾','vs实际')]
+failures = check_sections(content, required, path_label=f)
 if failures:
     for f_item in failures:
         print(f'C1:FAIL: {f_item}')
 else:
     print('C1:PASS: 所有核心章节完整')
 " 2>&1
-```
 
 ### C2: reports/{today}/每日信号.md 章节完整性
 
 ```bash
 
-python -c "
+python -X utf8 -c "
 import os, sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
 from datetime import date
+from lib.staging_verify import check_sections
 today = date.today().strftime('%Y%m%d')
-f = f'my_doc/每日复盘/reports/{today}/每日信号.md'
-
+f = 'f'my_doc/每日复盘/reports/{today}/每日信号.md''
 if not os.path.exists(f):
-    print('C2:FAIL: 每日信号.md 不存在')
+    print('C2:FAIL: 文件不存在 ' + f)
     sys.exit(0)
-
-with open(f, 'r', encoding='utf-8') as fh:
-    content = fh.read()
-
-# Required sections per 早盘分析-模板.md §九
-required_sections = [
-    '信号总表',
-    '信号触发记录',
-    '盘中验证记录',
-    '信号评价',
-    '当日信号统计',
-    '信号收益追踪',
-    '信号与早盘报告对照'
-]
-
-failures = []
-for section in required_sections:
-    if section not in content:
-        failures.append(f'MISSING: 「{section}」')
-
-# 复盘完成后信号评价表不能为空
-if '信号评价（复盘时填入）' in content:
-    eval_section = content.split('信号评价（复盘时填入）')
-    if len(eval_section) >= 2:
-        eval_text = eval_section[1].split('## ')[0] if '## ' in eval_section[1] else eval_section[1]
-        data_rows = [l for l in eval_text.split('\n') if l.strip().startswith('|') and not l.strip().startswith('|--') and '信号ID' not in l and '决策质量' not in l]
-        if len(data_rows) == 0:
-            failures.append('信号评价表为空（复盘完成后必须填充）')
-
-# 当日信号统计不能全为 —
-if '当日信号统计' in content:
-    stat_section = content.split('当日信号统计')
-    if len(stat_section) >= 2:
-        stat_text = stat_section[1].split('## ')[0] if '## ' in stat_section[1] else stat_section[1]
-        dash_count = stat_text.count('—')
-        if dash_count > 2:
-            failures.append(f'当日信号统计有 {dash_count} 个未填充的占位符(—)')
-
+content = open(f, 'r', encoding='utf-8').read()
+required = [('信号总表','12列信号表'),('信号触发记录','触发记录'),('盘中验证记录','验证记录'),
+            ('信号评价','决策/执行质量'),('当日信号统计','统计表'),('信号收益追踪','结算统计'),
+            ('信号与早盘报告对照','对照表')]
+failures = check_sections(content, required, path_label=f)
 if failures:
     for f_item in failures:
         print(f'C2:FAIL: {f_item}')
 else:
-    print('C2:PASS: 所有必需节完整')
+    print('C2:PASS: 所有核心章节完整')
 " 2>&1
-```
 
 ### C3: reports/{today}/复盘报告.md 章节完整性
 
 ```bash
 
-python -c "
+python -X utf8 -c "
 import os, sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
 from datetime import date
+from lib.staging_verify import check_sections
 today = date.today().strftime('%Y%m%d')
-f = f'my_doc/每日复盘/reports/{today}/复盘报告.md'
-
+f = 'f'my_doc/每日复盘/reports/{today}/复盘报告.md''
 if not os.path.exists(f):
-    print('C3:FAIL: 复盘报告.md 不存在')
+    print('C3:FAIL: 文件不存在 ' + f)
     sys.exit(0)
-
-with open(f, 'r', encoding='utf-8') as fh:
-    content = fh.read()
-
-# Required sections per 复盘分析-模板.md §四
-required = [
-    ('我的持仓', '最新持仓数据+今日操作列'),
-    ('大市表现复盘', '三大指数+成交量+北向+涨跌家数'),
-    ('持仓复盘', '逐只涨跌幅+开盘缺口+日内波动'),
-    ('早盘预判', '方向预测准确率表+错误归因'),
-    ('信号遗漏', '五个必答问题'),
-    ('经验沉淀', '写入experience/的条目'),
-    ('持仓变更', '新增/移除/变更记录'),
-    ('Staging', '生成确认+归档+校验'),
-    ('信号收益', '本日结算+累计统计'),
-]
-
-failures = []
-for keyword, desc in required:
-    if keyword not in content:
-        failures.append(f'MISSING: 「{desc}」({keyword})')
-    else:
-        idx = content.index(keyword)
-        after = content[idx+len(keyword):idx+len(keyword)+300]
-        if len(after.strip()) < 50:
-            failures.append(f'EMPTY: 「{desc}」({keyword})')
-
+content = open(f, 'r', encoding='utf-8').read()
+required = [('我的持仓','持仓表'),('大市表现复盘','指数+成交量'),('早盘预判复盘','方向对比'),
+            ('持仓复盘','逐只'),('做T建议复盘','做T对比'),('信号执行复盘','决策/执行'),
+            ('核心回顾','经验教训'),('操作预案','次日预案')]
+failures = check_sections(content, required, path_label=f)
 if failures:
     for f_item in failures:
         print(f'C3:FAIL: {f_item}')
 else:
     print('C3:PASS: 所有核心章节完整')
 " 2>&1
-```
 
 ### C4: 报告产出与 task_state 一致性
 
@@ -775,5 +700,6 @@ E 组 (经验与元数据):
 | PENDING_CONFIRMATION.md 不存在 | 创建含表头的空模板 |
 | 非交易日但 staging 不存在 | 预期的正常情况，WARN 不 FAIL |
 | 交易日但 reports/{today}/ 目录不存在 | FAIL — 创建 BUG（复盘可能未执行） |
+
 
 

@@ -114,18 +114,22 @@ def check_review_staging(task_state: dict, staging_results: list, tomorrow: str)
 
 def check_sections(content: str, required_sections: list, min_after_chars: int = 50,
                    path_label: str = '') -> list:
-    """检查章节存在性 + 节后非空（从 auto_logic_inspect B1/B2 下沉）。
-    required_sections: 章节关键词列表
+    """检查章节存在性 + 节后非空（从 auto_logic_inspect B1/B2/C1/C2/C3 下沉）。
+    required_sections: 章节关键词列表，或 (keyword, desc) 元组列表（desc 用于错误信息）
     返回错误列表（空=通过）。"""
     failures = []
-    for section in required_sections:
+    for item in required_sections:
+        if isinstance(item, (tuple, list)) and len(item) >= 2:
+            section, desc = item[0], item[1]
+        else:
+            section, desc = item, item
         if section not in content:
-            failures.append(f'MISSING: 「{section}」')
+            failures.append(f'MISSING: 「{desc}」({section})')
         else:
             idx = content.index(section)
             after = content[idx + len(section):idx + len(section) + 500]
             if len(after.strip()) < min_after_chars:
-                failures.append(f'EMPTY: 「{section}」')
+                failures.append(f'EMPTY: 「{desc}」({section})')
     return failures
 
 
