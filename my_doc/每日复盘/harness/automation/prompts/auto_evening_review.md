@@ -527,6 +527,48 @@ print(f'追踪={db[\"aggregates\"][\"total_signals_tracked\"]} 已结算={db[\"a
 | 高紧急度: 胜率 / 平均持有天数 | {XX}% / {X.X}天 |
 | 低紧急度: 胜率 / 平均持有天数 | {XX}% / {X.X}天 |
 
+#### 7.6.4 信号质量仪表盘（v2.0 核心）
+
+调用 `lib/signal_quality.py` 自动生成 8 项质量指标，渲染进复盘报告：
+
+```bash
+
+python -X utf8 -c "
+import json, sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.signal_quality import generate_quality_dashboard
+db = json.load(open('my_doc/每日复盘/harness/automation/config/signal_tracking.json', encoding='utf-8'))
+settled = [s for s in db['signals'] if s.get('status') == 'settled']
+print(json.dumps(generate_quality_dashboard(db['signals'], settled), ensure_ascii=False, indent=1))
+" 2>&1
+```
+
+将输出渲染为（P1 周触发率目标≥40% / 目标达成率≥50% / 盈亏比≥1.5 / 方向准确率≥60%）：
+
+```markdown
+### 信号质量仪表盘
+
+| 维度 | 指标 | 数值 | 阈值/目标 | 状态 |
+|------|------|------|----------|:---:|
+| 触达 | P1 触发率（累计）| {trigger_rate_p1}% | ≥40% | ✅/⚠️ |
+| 触达 | 全量触发率 | {trigger_rate_all}% | — | — |
+| 结果 | 目标达成率 | {target_hit_rate}% | ≥50% | ✅/⚠️ |
+| 结果 | 平均达标天数 | {avg_hit_days} 天 | 1-2 天 | ✅/⚠️ |
+| 结果 | 平均盈亏比 | {avg_profit_loss_ratio} | ≥1.5 | ✅/⚠️ |
+| 结果 | 单笔最大亏损 | {max_loss} 元 | 风控线内 | ✅/⚠️ |
+| 方向 | 方向准确率 | {direction_accuracy}% | ≥60% | ✅/⚠️ |
+| 校准 | 预期vs实际偏差 | {avg_gap}pp | ±20pp 内 | ✅/⚠️ |
+| 价值 | 信号期望价值 | {signal_expected_value} 元/单 | 为正 | ✅/⚠️ |
+```
+
+> 目标/止损 来自信号表的 `目标/止损` 列（12 列信号表第 9 列），目标达成率评估依据；目标价设定是否过高看"目标达成率"与"平均达标天数"。
+
+**预警与校准（必答）**：
+- P1 周触发率 <40% → ⚠️ 预警：触发条件过严或信号类型需调整（给出具体建议）
+- 目标达成率 <50% → 检查目标价设定是否过高（对照实际 T+3 走势）
+- 预期触发率系统性高估（avg_gap < −20）→ 生成者偏乐观，建议下调预期
+- 将校准结论沉淀到 `harness/experience/投资经验.md` 信号设计章节
+
 ### 关注列表升级专项统计（v2.0）
 
 | 指标 | 数值 |

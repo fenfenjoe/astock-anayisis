@@ -730,6 +730,42 @@ else:
 - D2 PASS/WARN → 记录日志（WARN 不创建 BUG）
 - D3 WARN → 创建 BUG（`auto_fix_eligible=false`，MANUAL_REVIEW — 需要判断信号是否确实应保持 open）
 
+### D4: 信号模型一致性（模板/自动化/编排层无漂移）— v2.0 架构防漂移
+
+> 背景：同一套信号规则曾在 手动模板 + 自动化 prompt + SKILL.md 三处各写一份，
+> v2.0 同步时自动化层曾被漏掉（A 区修复）。本检查让漂移可被自动发现。
+
+```bash
+
+python -X utf8 -c "
+import sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.consistency_check import check_consistency, render_report, CHECK_TARGETS
+
+contents = {}
+errors = []
+for label, path in CHECK_TARGETS:
+    try:
+        contents[label] = open(path, encoding='utf-8').read()
+    except FileNotFoundError:
+        errors.append(f'{label}: 文件不存在 {path}')
+
+if errors:
+    print('D4:WARN: 文件读取失败:')
+    for e in errors:
+        print(f'  {e}')
+    exit(0)
+
+res = check_consistency(contents)
+print('D4:' + ('PASS' if res['overall'] else 'FAIL') + ': 信号模型一致性')
+print(render_report(res))
+" 2>&1
+```
+
+**处理**：
+- D4 FAIL → 创建 BUG（`auto_fix_eligible=true`，确定性修复 — 按缺失标记同步对应文件；参照 `harness/prompts/早盘分析-模板.md` 第九节为单一事实源）
+- D4 PASS → 记录日志
+
 ---
 
 ## E 组：经验与元数据健康（2 条）
