@@ -6,6 +6,7 @@ Staging 生成验证 — 每日复盘 B8 瘦身（从 auto_evening_review.md 11.
 """
 
 import re
+from datetime import datetime
 
 
 def verify_staging_content(content: str, tomorrow: str, today_str: str, path_label: str = '') -> list:
@@ -63,3 +64,49 @@ def verify_staging_file(path: str, tomorrow: str, today_str: str) -> tuple:
 
 def _dates_in(content: str) -> list:
     return re.findall(r'\d{4}-\d{2}-\d{2}', content)
+
+
+def check_review_staging(task_state: dict, staging_results: list, tomorrow: str) -> list:
+    """复盘后 staging 新鲜度检查（从 auto_logic_inspect B4 下沉）。
+    task_state: 解析后的 task_state dict（tasks.evening_review.status/completed_at）
+    staging_results: [{path, content, mtime(datetime), size, missing}] 由调用方读取
+    tomorrow: 明日日期 'YYYY-MM-DD'
+    返回失败列表（空=通过）。evening_review 未完成 → 豁免返回 []。"""
+    er = task_state.get('tasks', {}).get('evening_review', {})
+    if er.get('status') != 'completed':
+        return []  # evening_review 未完成，staging 新鲜度豁免
+
+    failures = []
+    er_completed_time = er.get('completed_at')
+    today_str = tomorrow  # 用于"未来日期"判断的基准（明日即最新）
+
+    for r in staging_results:
+        if r.get('missing'):
+            failures.append(f'MISSING: {r["path"]}')
+            continue
+
+        mtime = r.get('mtime')
+        if er_completed_time and mtime is not None:
+            try:
+                er_time = datetime.fromisoformat(er_completed_time)
+                if mtime < er_time:
+                    failures.append(
+                        f'STALE: {r["path"]} mtime={mtime.strftime("%Y-%m-%d %H:%M")} '
+                        f'< evening_review完成={er_completed_time}')
+                    continue
+            except (ValueError, TypeError):
+                pass  # 无法解析时间戳，跳过时间比对
+
+        content = r.get('content', '')
+        dates = _dates_in(content[:500])
+        if tomorrow not in dates:
+            future_dates = [d for d in dates if d > today_str]
+            if not future_dates:
+                failures.append(
+                    f'OUTDATED: {r["path"]} 文件内日期={dates[:3]} '
+                    f'不含明日({tomorrow})或未来日期，疑似未刷新')
+
+        if r.get('size', 0) < 500:
+            failures.append(f'TOO_SMALL: {r["path"]} 仅{r.get("size", 0)}字节，疑似未填充内容')
+
+    return failures

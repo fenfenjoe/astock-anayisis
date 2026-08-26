@@ -9,7 +9,7 @@ from pathlib import Path
 LIB_DIR = Path(__file__).resolve().parent.parent / "lib"
 sys.path.insert(0, str(LIB_DIR))
 
-from staging_verify import verify_staging_content, verify_staging_file
+from staging_verify import verify_staging_content, verify_staging_file, check_review_staging
 
 
 def _mk_content(tomorrow='2026-08-27', today='2026-08-26', size=600):
@@ -58,3 +58,52 @@ class TestVerifyStagingFile:
         errors, meta = verify_staging_file(str(p), '2026-08-27', '2026-08-26')
         assert errors == []
         assert meta['size_kb'] > 0
+
+
+class TestCheckReviewStaging:
+    def _result(self, path='s1.md', content='', mtime=None, size=600, missing=False):
+        from datetime import datetime
+        if mtime is None:
+            mtime = datetime(2026, 8, 26, 16, 0)
+        return {'path': path, 'content': content, 'mtime': mtime, 'size': size, 'missing': missing}
+
+    def _state(self, status='completed', completed_at='2026-08-26T15:52:00'):
+        return {'tasks': {'evening_review': {'status': status, 'completed_at': completed_at}}}
+
+    def test_not_completed_exempt(self):
+        assert check_review_staging(self._state(status='running'), [], '2026-08-27') == []
+
+    def test_valid(self):
+        content = '# 今日早盘分析 — 2026-08-27\n' + 'x' * 600
+        r = self._result(content=content, size=620)
+        assert check_review_staging(self._state(), [r], '2026-08-27') == []
+
+    def test_missing_file(self):
+        r = self._result(missing=True)
+        failures = check_review_staging(self._state(), [r], '2026-08-27')
+        assert any('MISSING' in f for f in failures)
+
+    def test_stale_mtime_before_review(self):
+        from datetime import datetime
+        r = self._result(mtime=datetime(2026, 8, 26, 14, 0))  # 早于复盘完成 15:52
+        failures = check_review_staging(self._state(), [r], '2026-08-27')
+        assert any('STALE' in f for f in failures)
+
+    def test_outdated_no_tomorrow(self):
+        r = self._result(content='# 今日早盘分析 — 2026-08-26\n' + 'x' * 600)  # 旧日期
+        failures = check_review_staging(self._state(), [r], '2026-08-27')
+        assert any('OUTDATED' in f for f in failures)
+
+    def test_too_small(self):
+        r = self._result(content='短', size=100)
+        failures = check_review_staging(self._state(), [r], '2026-08-27')
+        assert any('TOO_SMALL' in f for f in failures)
+
+    def test_mixed_multiple(self):
+        from datetime import datetime
+        r1 = self._result(path='a.md', content='# 今日早盘分析 — 2026-08-27\n' + 'x' * 600, size=620)
+        r2 = self._result(path='b.md', content='旧内容', size=50, mtime=datetime(2026, 8, 25, 9, 0))
+        failures = check_review_staging(self._state(), [r1, r2], '2026-08-27')
+        # r1 通过；r2 的 STALE（mtime 早于复盘完成）短路（continue），仅报 STALE
+        assert len(failures) == 1
+        assert any('STALE' in f and 'b.md' in f for f in failures)

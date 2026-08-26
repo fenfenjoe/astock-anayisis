@@ -296,79 +296,42 @@ else:
 
 ```bash
 
-python -c "
+python -X utf8 -c "
 import os, json, sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
 from datetime import date, datetime
+from lib.staging_verify import check_review_staging
 
 today = date.today().strftime('%Y%m%d')
 failures = []
 
 # 1. 读取 task_state 确认 evening_review 是否完成
 state_file = 'my_doc/每日复盘/harness/automation/config/task_state.json'
-er_completed = False
-er_completed_time = None
+state = {}
 if os.path.exists(state_file):
     with open(state_file, 'r') as f:
         state = json.load(f)
-    er = state.get('tasks', {}).get('evening_review', {})
-    if er.get('status') == 'completed':
-        er_completed = True
-        er_completed_time = er.get('completed_at', None)
 
-if not er_completed:
-    print('B4:PASS: evening_review 尚未完成，staging freshess豁免')
-    sys.exit(0)
-
-# 2. 检查两个 staging 文件的修改时间
+# 2. 读取两个 staging 文件信息
 staging_files = [
     'my_doc/每日复盘/harness/staging/今日-早盘分析.md',
     'my_doc/每日复盘/harness/staging/今日-复盘分析.md'
 ]
-
+results = []
 for sf in staging_files:
     if not os.path.exists(sf):
-        failures.append(f'MISSING: {sf}')
+        results.append({'path': sf, 'missing': True})
         continue
-
-    # 文件修改时间必须晚于 evening_review 完成时间（如果记录存在）
-    mtime = datetime.fromtimestamp(os.path.getmtime(sf))
-    mtime_str = mtime.strftime('%Y-%m-%d %H:%M')
-
-    if er_completed_time:
-        try:
-            er_time = datetime.fromisoformat(er_completed_time)
-            if mtime < er_time:
-                failures.append(f'STALE: {sf} mtime={mtime_str} < evening_review完成={er_completed_time}')
-                continue
-        except:
-            pass  # 无法解析时间戳，跳过时间比对
-
-    # 3. 检查 staging 内容是否指向明日（而非昨日或今日）
     with open(sf, 'r', encoding='utf-8') as fh:
         content = fh.read()
+    results.append({
+        'path': sf, 'content': content, 'missing': False,
+        'mtime': datetime.fromtimestamp(os.path.getmtime(sf)),
+        'size': os.path.getsize(sf),
+    })
 
-    # 关键的日期标记：staging文件头应包含明日日期
-    # 早盘分析：'今日早盘分析 — YYYY-MM-DD' 其中 YYYY-MM-DD 应为明日
-    # 复盘分析：'执行日期：**YYYY-MM-DD' 其中 YYYY-MM-DD 应为明日
-    import re
-    dates_found = re.findall(r'(\d{4}-\d{2}-\d{2})', content[:500])
-    tomorrow = date.today().strftime('%Y-%m-%d')
-
-    if tomorrow not in dates_found:
-        # 检查是否有比今天更新的日期
-        future_dates = [d for d in dates_found if d > date.today().strftime('%Y-%m-%d')]
-        today_str = date.today().strftime('%Y-%m-%d')
-        past_dates = [d for d in dates_found if d <= today_str]
-
-        if not future_dates:
-            failures.append(f'OUTDATED: {sf} 文件内日期={dates_found[:3]} 不含明日({tomorrow})或未来日期，疑似未刷新')
-        else:
-            pass  # 有未来日期，可能已刷新但用了不同的日期格式
-
-    # 4. 检查 staging 大小是否合理（空文件<500字节=未填充）
-    size = os.path.getsize(sf)
-    if size < 500:
-        failures.append(f'TOO_SMALL: {sf} 仅{size}字节，疑似未填充内容')
+# 3. 新鲜度判定（lib 纯函数：豁免/STALE/OUTDATED/TOO_SMALL）
+failures = check_review_staging(state, results, date.today().strftime('%Y-%m-%d'))
 
 if failures:
     for f_item in failures:
@@ -376,7 +339,6 @@ if failures:
 else:
     print('B4:PASS: staging 文件新鲜，指向明日且内容充实')
 " 2>&1
-```
 
 **处理**：
 - PASS → 记录日志
@@ -895,3 +857,4 @@ E 组 (经验与元数据):
 | PENDING_CONFIRMATION.md 不存在 | 创建含表头的空模板 |
 | 非交易日但 staging 不存在 | 预期的正常情况，WARN 不 FAIL |
 | 交易日但 reports/{today}/ 目录不存在 | FAIL — 创建 BUG（复盘可能未执行） |
+
