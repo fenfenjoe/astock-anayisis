@@ -2,77 +2,34 @@
   "_schema": "1.0",
   "_description": "跨日信号追踪数据库: 记录所有已触发信号的完整生命周期和P&L",
   "_created": "2026-07-24",
-  "_updated": "2026-08-18",
+  "_updated": "2026-08-26",
   "_rules": {
     "high_urgency_tracking_days": 2,
     "low_urgency_default_days": 5,
     "archive_after_days": 90,
     "archive_path": "harness/archive/signal_tracking_{year}.json"
   },
-  "signals": [
-    {
-      "signal_id": "SIG-20260810-06-UP",
-      "ticker": "512010",
-      "name": "医药ETF",
-      "trade_type": "buy",
-      "direction": "buy",
-      "priority": "P2",
-      "urgency": "low",
-      "expected_return_date": "",
-      "trigger_date": "2026-08-10",
-      "entry_price": null,
-      "shares": 0,
-      "status": "triggered",
-      "status_history": [
-        {
-          "date": "2026-08-10",
-          "status": "triggered",
-          "note": "从每日信号.md解析录入"
-        }
-      ]
-    },
-    {
-      "signal_id": "SIG-20260818-01",
-      "ticker": "159326",
-      "name": "电网设备ETF",
-      "trade_type": "buy",
-      "direction": "buy",
-      "priority": "P1",
-      "urgency": "high",
-      "expected_return_date": "",
-      "trigger_date": "2026-08-18",
-      "entry_price": null,
-      "shares": 3950,
-      "status": "triggered",
-      "status_history": [
-        {
-          "date": "2026-08-18",
-          "status": "triggered",
-          "note": "从每日信号.md解析录入"
-        }
-      ]
-    }
-  ],
+  "signals": [],
   "aggregates": {
-    "total_signals_tracked": 2,
+    "total_signals_tracked": 0,
     "total_resolved": 0,
-    "total_open": 2,
+    "total_open": 0,
     "total_pnl_amount": 0.0,
-    "total_avoided_loss": 0.0,
+    "total_avoided_loss": 0,
     "win_count": 0,
     "lose_count": 0,
     "by_urgency": {
       "high": {
-        "count": 1,
+        "count": 0,
         "resolved": 0,
         "total_pnl": 0.0,
-        "total_avoided_loss": 0.0
+        "total_avoided_loss": 0
       },
       "low": {
-        "count": 1,
+        "count": 0,
         "resolved": 0,
         "total_pnl": 0.0,
-        "total_avoided_loss": 0.0
+        "total_avoided_loss": 0
       }
     },
     "by_priority": {
@@ -82,12 +39,12 @@
         "total_pnl": 0.0
       },
       "P1": {
-        "count": 1,
+        "count": 0,
         "resolved": 0,
         "total_pnl": 0.0
       },
       "P2": {
-        "count": 1,
+        "count": 0,
         "resolved": 0,
         "total_pnl": 0.0
       }
@@ -97,13 +54,13 @@
   "aggregation": {
     "by_urgency": {
       "high": {
-        "count": 1,
+        "count": 0,
         "settled": 0,
         "total_pnl": 0.0,
         "win_count": 0
       },
       "low": {
-        "count": 1,
+        "count": 0,
         "settled": 0,
         "total_pnl": 0.0,
         "win_count": 0
@@ -117,39 +74,19 @@
         "win_count": 0
       },
       "P1": {
-        "count": 1,
+        "count": 0,
         "settled": 0,
         "total_pnl": 0.0,
         "win_count": 0
       },
       "P2": {
-        "count": 1,
+        "count": 0,
         "settled": 0,
         "total_pnl": 0.0,
         "win_count": 0
       }
     },
-    "by_trade_type": {
-      "buy": {
-        "count": 2,
-        "settled": 0,
-        "total_pnl": 0.0,
-        "win_count": 0
-      }
-    },
-    "by_ticker": {
-      "512010": {
-        "count": 1,
-        "settled": 0,
-        "total_pnl": 0.0,
-        "win_count": 0
-      },
-      "159326": {
-        "count": 1,
-        "settled": 0,
-        "total_pnl": 0.0,
-        "win_count": 0
-      }
-    }
+    "by_trade_type": {},
+    "by_ticker": {}
   }
 }

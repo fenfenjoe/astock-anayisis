@@ -343,7 +343,8 @@ def parse_signal_markdown(md_text: str, today: str = '') -> list[dict]:
     """解析每日信号.md，提取已触发/已执行的信号记录。
 
     只录入状态 ∈ {已触发, 已执行, 部分执行} 的信号（未触发的已过期/已废弃不追踪）。
-    返回记录列表（entry_price 由调用方补充，见 merge 前的校验）。
+    只返回可追踪收益的信号：必须同时具备 入场价（来自盘中验证记录）+ 份额，
+    否则无法结算 P&L，不追踪收益（2026-08-26 优化）。
     today: 'YYYY-MM-DD'，缺省用 date.today()。
     """
     if not today:
@@ -415,6 +416,9 @@ def parse_signal_markdown(md_text: str, today: str = '') -> list[dict]:
     for rec in records:
         if rec['entry_price'] is None and rec['signal_id'] in verify_prices:
             rec['entry_price'] = verify_prices[rec['signal_id']]
+    # 无入场价或无份额的信号无法结算 P&L → 不追踪收益（与 settle_due_signals 的
+    # "无入场价或份额无法结算" 口径一致，避免追踪库积累永不结算的僵尸信号）
+    records = [r for r in records if r.get('entry_price') and r.get('shares', 0) > 0]
     return records
 
 
@@ -433,11 +437,9 @@ def _extract_trigger_prices(md_text: str) -> dict:
         key_data = g(c_data)
         if not signal_id.startswith('SIG-') or not key_data:
             continue
-        # 优先级: "当前X.XXX" → "开盘X.XXX" → 数据列开头的裸数字(如 "0.808, -0.37%")
+        # 优先级: "当前X.XXX" → "现价X.XXX"(真实记录格式) → "开盘X.XXX" → 数据列开头的裸数字(如 "0.808, -0.37%")
         price = None
-        m = re.search(r'当前([\d.]+)', key_data)
-        if not m:
-            m = re.search(r'开盘([\d.]+)', key_data)
+        m = re.search(r'(?:当前|现价|开盘)([\d.]+)', key_data)
         if m:
             price = m.group(1)
         else:

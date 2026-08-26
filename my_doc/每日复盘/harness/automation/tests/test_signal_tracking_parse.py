@@ -123,6 +123,7 @@ class TestParseLegacyFormat:
     """旧格式兼容 — 8列（信号ID开头）"""
 
     def test_legacy_8col(self):
+        """旧 8 列格式无仓位列 → 份额=0，不可追踪收益"""
         md = (
             "## 信号总表\n\n"
             "| 信号ID | 优先级 | 标的 | 操作类型 | 触发条件 | 有效时段 | 状态 | 操作来源 |\n"
@@ -131,9 +132,8 @@ class TestParseLegacyFormat:
             "| SIG-20260720-02 | P1 | 半导体ETF(512480) | 正T | 条件 | 全天 | 已过期 | 早盘分析 |\n"
         )
         records = parse_signal_markdown(md, '2026-07-20')
-        ids = {r['signal_id'] for r in records}
-        assert 'SIG-20260720-01' in ids
-        assert 'SIG-20260720-02' not in ids
+        # 旧格式无 仓位 列 → shares=0，无法计算收益，不追踪
+        assert records == []
 
 
 # ============================================================
@@ -350,14 +350,29 @@ _NEW_COL_HEADER = (
     "|:---:|------|----------|:------:|:---:|:---:|:---:|:---:|--------|:---:|:---:|--------|\n"
 )
 
-def _mk_new_md(rows: list[str]) -> str:
-    return f"## 信号总表\n\n{_NEW_COL_HEADER + chr(10).join(rows)}\n"
+_VERIFY_HEADER = (
+    "| 验证时间 | 信号ID | 标的 | 操作类型 | 仓位 | 当前状态 | 关键数据 | 判断 |\n"
+    "|----------|--------|------|:------:|:---:|:------:|----------|------|\n"
+)
+
+def _vrow(signal_id: str, name: str, op: str, qty: str, key_data: str,
+          status: str = '已触发') -> str:
+    """组装一条盘中验证记录行（真实格式：关键数据以 '现价X.XXX' 开头）"""
+    return f"| 10:00 | {signal_id} | {name} | {op} | {qty} | {status} | {key_data} | 触发 |"
+
+def _mk_new_md(rows: list[str], verify: list[str] | None = None) -> str:
+    md = f"## 信号总表\n\n{_NEW_COL_HEADER + chr(10).join(rows)}\n"
+    if verify:
+        md += f"\n## 盘中验证记录\n\n{_VERIFY_HEADER + chr(10).join(verify)}\n"
+    return md
 
 
 class TestParseNewColumns:
     def test_expected_trigger_rate(self):
         md = _mk_new_md([
             "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40 | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ], verify=[
+            _vrow('SIG-20260826-06', '电网ETF(159326)', '正T', '1,975份', '现价1.70'),
         ])
         records = parse_signal_markdown(md, '2026-08-26')
         assert records[0]['expected_trigger_rate'] == 40.0
@@ -366,17 +381,21 @@ class TestParseNewColumns:
         """预期触发率 '40%' 格式 → 40.0"""
         md = _mk_new_md([
             "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40% | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ], verify=[
+            _vrow('SIG-20260826-06', '电网ETF(159326)', '正T', '1,975份', '现价1.70'),
         ])
         records = parse_signal_markdown(md, '2026-08-26')
         assert records[0]['expected_trigger_rate'] == 40.0
 
     def test_expected_trigger_rate_dash(self):
-        """P0 预期触发率为 — → None（覆盖 —→None 解析路径）"""
+        """预期触发率为 — → None（覆盖 —→None 解析路径；P0 带价+份额仍入库）"""
         md = _mk_new_md([
-            "| P0 | 全持仓ETF(510300) | 普跌否决 | 风控 | 已触发 | 卖出 | 高 | — | — | 9:30-10:00 | 0 | SIG-20260826-01 |",
+            "| P0 | 全持仓ETF(510300) | 普跌否决 | 风控 | 已触发 | 卖出 | 高 | — | — | 9:30-10:00 | 1,000份 | SIG-20260826-01 |",
+        ], verify=[
+            _vrow('SIG-20260826-01', '全持仓ETF(510300)', '风控', '1,000份', '现价1.234'),
         ])
         records = parse_signal_markdown(md, '2026-08-26')
-        assert len(records) == 1  # 已触发需追踪
+        assert len(records) == 1
         rec = records[0]
         assert rec['priority'] == 'P0'
         assert rec['expected_trigger_rate'] is None
@@ -388,6 +407,8 @@ class TestParseNewColumns:
     def test_target_pct_parsing(self):
         md = _mk_new_md([
             "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40 | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ], verify=[
+            _vrow('SIG-20260826-06', '电网ETF(159326)', '正T', '1,975份', '现价1.70'),
         ])
         records = parse_signal_markdown(md, '2026-08-26')
         rec = records[0]
@@ -400,6 +421,8 @@ class TestParseNewColumns:
         """显式价格格式"""
         md = _mk_new_md([
             "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已执行 | 买入 | 高 | 40 | 目标1.75/止损1.66 | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ], verify=[
+            _vrow('SIG-20260826-06', '电网ETF(159326)', '正T', '1,975份', '现价1.70', status='已执行'),
         ])
         records = parse_signal_markdown(md, '2026-08-26')
         rec = records[0]
@@ -410,9 +433,60 @@ class TestParseNewColumns:
     def test_target_only(self):
         """只有目标无止损"""
         md = _mk_new_md([
-            "| P1 | 农业ETF(159825) | 放量突破0.74 | 建仓 | 已触发 | 买入 | 低 | 30 | 目标0.76 | 10:30后 | 观察 | SIG-20260826-05 |",
+            "| P1 | 农业ETF(159825) | 放量突破0.74 | 建仓 | 已触发 | 买入 | 低 | 30 | 目标0.76 | 10:30后 | 1,000份 | SIG-20260826-05 |",
+        ], verify=[
+            _vrow('SIG-20260826-05', '农业ETF(159825)', '建仓', '1,000份', '现价0.74'),
         ])
         records = parse_signal_markdown(md, '2026-08-26')
         rec = records[0]
         assert rec['target_price'] == 0.76
         assert rec['stop_price'] is None
+
+
+# ============================================================
+# 收益追踪过滤（2026-08-26 优化：无入场价/无份额的信号不追踪收益）
+# ============================================================
+
+class TestReturnTrackableFilter:
+    """只有同时具备 入场价 + 份额 的信号才可追踪收益（无法结算 P&L 的不入库）。"""
+
+    def test_no_entry_price_not_tracked(self):
+        """已触发但盘中验证记录无价格 → 不追踪（无法计算 P&L）"""
+        md = _mk_new_md([
+            "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40 | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        assert records == []
+
+    def test_no_shares_not_tracked(self):
+        """有价格但仓位=观察(0份) → 不追踪（无实际持仓，P&L 恒为 0）"""
+        md = _mk_new_md([
+            "| P2 | 有色512400 | 放量企稳 | 企稳观察 | 已触发 | 观察 | 低 | — | — | 10:30后 | 观察 | SIG-20260826-08 |",
+        ], verify=[
+            _vrow('SIG-20260826-08', '有色512400', '企稳观察', '观察', '现价1.972(+4.01%)量比2.40'),
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        assert records == []
+
+    def test_trackable_signal_kept(self):
+        """有价格 + 份额 → 正常追踪（entry_price 取自盘中验证记录）"""
+        md = _mk_new_md([
+            "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40 | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ], verify=[
+            _vrow('SIG-20260826-06', '电网ETF(159326)', '正T', '1,975份', '现价1.708(+0.7%)量比1.2'),
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        assert len(records) == 1
+        assert records[0]['entry_price'] == pytest.approx(1.708)
+        assert records[0]['shares'] == 1975
+
+    def test_xianjia_price_extraction_priority(self):
+        """真实 现价X.XXX 格式被提取（当前→现价→开盘→裸数字 优先级）"""
+        md = _mk_new_md([
+            "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40 | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ], verify=[
+            _vrow('SIG-20260826-06', '电网ETF(159326)', '正T', '1,975份', '现价9.553(+0.21%)>9.20 ✅，量比0.89缩量'),
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        assert len(records) == 1
+        assert records[0]['entry_price'] == pytest.approx(9.553)
