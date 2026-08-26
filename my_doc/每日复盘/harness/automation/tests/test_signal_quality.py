@@ -144,6 +144,11 @@ class TestMaxLoss:
         settled = [_sig('A', pnl=100.0), _sig('B', pnl=-50.0), _sig('C', pnl=-80.0)]
         assert calc_max_loss(settled) == pytest.approx(-80.0)
 
+    def test_all_positive(self):
+        """全为盈利 → 无最大亏损，返回 0.0"""
+        settled = [_sig('A', pnl=100.0), _sig('B', pnl=50.0)]
+        assert calc_max_loss(settled) == 0.0
+
     def test_empty(self):
         assert calc_max_loss([]) == 0.0
 

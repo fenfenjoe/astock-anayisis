@@ -464,7 +464,7 @@ python -c "
 import sys, json
 sys.path.insert(0, 'my_doc/每日复盘/harness/automation/lib')
 from signal_tracking import settle_due_signals, update_aggregation
-from datetime import date, timedelta
+from datetime import date
 
 tracking_file = 'my_doc/每日复盘/harness/automation/config/signal_tracking.json'
 

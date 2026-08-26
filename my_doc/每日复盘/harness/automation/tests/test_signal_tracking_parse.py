@@ -180,9 +180,6 @@ class TestMergeNewSignals:
 # ============================================================
 
 class TestSettleDueSignals:
-    def _hist(self, ticker, closes_by_date: dict) -> dict:
-        return {ticker: closes_by_date}
-
     def test_t3_expiry_miss(self):
         """买入信号 T+3 到期未达目标 → 按 T+3 收盘结算，outcome=miss"""
         db = {'_schema': '1.0', 'signals': [{
@@ -282,6 +279,29 @@ class TestSettleDueSignals:
         assert sig['outcome'] == 'miss'
         assert sig['settle_price'] == pytest.approx(1.03)
 
+    def test_missing_entry_price_not_settled(self):
+        """入场价缺失 → 不结算（防幽灵P&L）"""
+        db = {'_schema': '1.0', 'signals': [{
+            'signal_id': 'SIG-08', 'ticker': '512800', 'trade_type': 'buy',
+            'urgency': 'high', 'entry_price': None, 'shares': 1000,
+            'target_price': 1.10, 'trigger_date': '2026-07-27', 'status': 'triggered',
+        }]}
+        hist = {'512800': {'2026-07-27': 1.02, '2026-07-28': 1.11, '2026-07-29': 1.05}}
+        settle_due_signals(db, hist, '2026-07-29')
+        assert db['signals'][0]['status'] == 'triggered'
+
+    def test_p0_not_settled(self):
+        """P0 风控信号不结算（纪律无P&L）"""
+        db = {'_schema': '1.0', 'signals': [{
+            'signal_id': 'SIG-09', 'ticker': '512800', 'trade_type': 'sell',
+            'urgency': 'high', 'priority': 'P0', 'entry_price': 1.00,
+            'cost_basis': 0.90, 'shares': 1000, 'target_price': 0.95,
+            'trigger_date': '2026-07-27', 'status': 'triggered',
+        }]}
+        hist = {'512800': {'2026-07-27': 0.99, '2026-07-28': 0.94, '2026-07-29': 0.96}}
+        settle_due_signals(db, hist, '2026-07-29')
+        assert db['signals'][0]['status'] == 'triggered'
+
 
 # ============================================================
 # update_aggregation → aggregates 兼容
@@ -338,6 +358,14 @@ class TestParseNewColumns:
     def test_expected_trigger_rate(self):
         md = _mk_new_md([
             "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40 | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        assert records[0]['expected_trigger_rate'] == 40.0
+
+    def test_expected_trigger_rate_pct_form(self):
+        """预期触发率 '40%' 格式 → 40.0"""
+        md = _mk_new_md([
+            "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40% | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
         ])
         records = parse_signal_markdown(md, '2026-08-26')
         assert records[0]['expected_trigger_rate'] == 40.0

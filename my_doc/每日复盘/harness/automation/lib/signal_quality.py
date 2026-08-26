@@ -50,24 +50,27 @@ def calc_avg_profit_loss_ratio(settled: list) -> float:
         return 0.0
     avg_win = sum(wins) / len(wins)
     avg_loss = abs(sum(losses) / len(losses))
-    if avg_loss == 0:
-        return 0.0
     return round(avg_win / avg_loss, 2)
 
 
 def calc_direction_accuracy(settled: list) -> float:
     """方向准确率 = 信号方向与结算方向一致比例（百分比）。
     buy: settle_price >= entry_price → 正确；sell: settle_price <= entry_price → 正确。"""
-    if not settled:
-        return 0.0
     correct = 0
+    total = 0
     for s in settled:
-        is_buy = s.get('trade_type') == 'buy'
+        trade_type = s.get('trade_type')
+        if trade_type not in ('buy', 'sell'):
+            continue
+        is_buy = trade_type == 'buy'
         entry = s.get('entry_price') or 0.0
         settle_p = s.get('settle_price') or 0.0
         if (is_buy and settle_p >= entry) or (not is_buy and settle_p <= entry):
             correct += 1
-    return round(correct / len(settled) * 100, 1)
+        total += 1
+    if not total:
+        return 0.0
+    return round(correct / total * 100, 1)
 
 
 def calc_expected_vs_actual(signals: list) -> dict:
@@ -99,9 +102,9 @@ def calc_signal_expected_value(settled: list) -> float:
 
 
 def calc_max_loss(settled: list) -> float:
-    """单笔最大亏损 = min(pnl)（短线风控）。"""
+    """单笔最大亏损 = min(pnl)（短线风控）。无亏损（全为盈利）返回 0.0。"""
     pnls = [s.get('pnl', 0.0) for s in settled]
-    if not pnls:
+    if not pnls or min(pnls) >= 0:
         return 0.0
     return round(min(pnls), 2)
 

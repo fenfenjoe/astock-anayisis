@@ -247,14 +247,12 @@ _URGENCY_MAP = {'高': 'high', '低': 'low'}
 
 def _extract_ticker(标的: str) -> str:
     """从 '银行ETF(512800)' 提取 6 位代码；提取失败返回空串。"""
-    import re
     m = re.search(r'(\d{6})', 标的)
     return m.group(1) if m else ''
 
 
 def _parse_quantity(仓位: str) -> int:
     """从 '-1,100份（约-25%）' 提取份额绝对值。"""
-    import re
     m = re.search(r'([\d,]+)\s*份', 仓位)
     return int(m.group(1).replace(',', '')) if m else 0
 
@@ -494,6 +492,8 @@ def settle_due_signals(tracking: dict, price_history: dict, today: str = '') -> 
     for sig in tracking.get('signals', []):
         if sig.get('status') not in ('open', 'triggered', 'executed', 'partial_executed'):
             continue
+        if sig.get('priority') == 'P0':
+            continue  # P0 风控信号不结算（纪律无 P&L，spec §6.1）
         try:
             trigger_date = date.fromisoformat(sig['trigger_date'])
             today_date = date.fromisoformat(today)
@@ -522,6 +522,8 @@ def settle_due_signals(tracking: dict, price_history: dict, today: str = '') -> 
         is_buy = sig.get('trade_type') == 'buy'
         entry = sig.get('entry_price') or 0.0
         shares = sig.get('shares', 0)
+        if not entry or not shares:
+            continue  # 无入场价或份额无法结算，等待补充
 
         # 达标/止损判定（按日期顺序，取最先发生的）
         outcome = 'miss'
@@ -541,7 +543,7 @@ def settle_due_signals(tracking: dict, price_history: dict, today: str = '') -> 
             pnl = calc_buy_pnl(entry, settle_price, shares)
             avoided_loss = 0.0
         else:
-            sell_price = sig.get('entry_price') or 0.0
+            sell_price = entry
             cost = sig.get('cost_basis', sell_price) or sell_price
             pnl = calc_sell_pnl(sell_price, cost, shares)
             avoided_loss = calc_avoided_loss(sell_price, settle_price, shares)
