@@ -99,13 +99,13 @@
 
 ```python
 calc_trigger_rate(signals, priority=None)        # 触发率（P1 分层，周/累计）
-calc_target_hit_rate(settled)                    # 目标达成率 = 达标 ÷ 已触发
+calc_target_hit_rate(settled)                    # 目标达成率 = 达标 ÷ 已结算（函数仅接收 settled）
 calc_avg_hit_days(settled)                       # 平均达标天数（快进快出验证，目标1-2天）
-calc_avg_profit_loss_ratio(settled)              # 平均盈亏比 = 达标均收益 ÷ 未达标均亏损
-calc_direction_accuracy(settled)                 # 方向准确率（信号方向 vs T+3 价格方向）
-calc_expected_vs_actual(signals)                 # 预期触发率 vs 实际触发率偏差（生成者校准）
-calc_signal_expected_value(settled)              # 信号期望价值 = 达成率×达标均收益 − 未达标率×未达标均亏损
-calc_max_loss(settled)                           # 单笔最大亏损（短线风控）
+calc_avg_profit_loss_ratio(settled)              # 平均盈亏比 = 平均盈利单 ÷ 平均亏损单（按 pnl 正负，非 outcome）
+calc_direction_accuracy(settled)                 # 方向准确率（buy: settle≥entry; sell: settle≤entry）
+calc_expected_vs_actual(signals)                 # 预期触发率 vs 实际触发率偏差（avg_gap=实际−预期均值, 负=偏乐观）
+calc_signal_expected_value(settled)              # 信号期望价值 = 平均单次 P&L（触发率在仪表盘单独显示）
+calc_max_loss(settled)                           # 单笔最大亏损（短线风控，min pnl）
 generate_quality_dashboard(signals, settled, price_lookup, today)  # 汇总为仪表盘数据
 ```
 
