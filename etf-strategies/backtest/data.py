@@ -60,6 +60,8 @@ def get_kline(code, start="2012-05-28", end="2026-07-01", refresh=False):
     df = pd.DataFrame(rows)
     df["date"] = pd.to_datetime(df["date"])
     df = df.set_index("date").sort_index()
+    # DAT-001: 无重复索引（东财 API 异常时可能返回重复日期，去重保留最新）
+    df = df[~df.index.duplicated(keep="last")]
     for c in ["open", "close", "high", "low", "vol", "amount", "amp"]:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")

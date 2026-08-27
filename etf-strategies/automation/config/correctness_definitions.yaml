@@ -11,7 +11,7 @@ engine:
   - id: ENG-001
     statement: "信号滞后为恰好 1 个交易日"
     verification: "held_weights[t] == target_weights[t-1] for all t > 0 (by construction in engine)"
-    test: "tests/test_engine.py::test_signal_lag"
+    test: "tests/test_engine.py::test_signal_lag_prevents_lookahead"
     severity: CRITICAL
 
   - id: ENG-002
@@ -43,7 +43,7 @@ data:
   - id: DAT-002
     statement: "load_prices 对多资产对齐后 dropna，任意行有 NaN 则剔除该行"
     verification: "not prices.isna().any().any() (after alignment)"
-    test: "tests/test_data.py::test_load_prices_alignment"
+    test: "tests/test_data.py::test_load_prices_aligns_common_dates"
     severity: HIGH
 
   - id: DAT-003

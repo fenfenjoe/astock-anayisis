@@ -52,3 +52,18 @@ def test_returns_result_object(synth_prices):
     assert isinstance(result, BacktestResult)
     assert len(result.nav) == len(prices)
     assert abs(result.nav.iloc[0] - 1.0) < 1e-10
+
+
+def test_nav_positive(synth_prices):
+    """ENG-002: NAV 起始值为 1.0 且永不为负"""
+    prices = synth_prices[["510300"]]
+    weights = pd.DataFrame({"510300": 1.0}, index=prices.index)
+    result = backtest(prices, weights, cost=Cost(slippage=0, commission_rate=0))
+    assert abs(result.nav.iloc[0] - 1.0) < 1e-10
+    assert (result.nav > 0).all()
+    # 全仓下跌也应为正（价格恒正，最多趋近0但不会为负）
+    down = pd.DataFrame({"A": [100 * (0.99 ** i) for i in range(10)]},
+                        index=prices.index)
+    w = pd.DataFrame({"A": 1.0}, index=down.index)
+    r2 = backtest(down, w, cost=Cost(slippage=0, commission_rate=0))
+    assert (r2.nav > 0).all()

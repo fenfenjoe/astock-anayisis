@@ -66,3 +66,54 @@ def test_load_prices_aligns_common_dates():
     assert list(df.columns) == ["510300", "511260"]
     assert df.isna().sum().sum() == 0
     assert len(df) > 0
+
+
+def test_kline_order(tmp_path, monkeypatch):
+    """DAT-001: get_kline 返回价格按日期升序排列，无重复索引"""
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setattr("backtest.data.CACHE_DIR", cache_dir)
+    # 故意乱序 + 重复日期，验证 get_kline 排序/去重
+    fake_rows = [
+        {"date": "2026-01-05", "open": 3.55, "close": 3.58, "high": 3.59,
+         "low": 3.54, "vol": 1.3e6, "amount": 4.6e6, "amp": 1.5},
+        {"date": "2026-01-02", "open": 3.50, "close": 3.52, "high": 3.53,
+         "low": 3.49, "vol": 1.0e6, "amount": 3.5e6, "amp": 1.1},
+        {"date": "2026-01-02", "open": 3.50, "close": 3.52, "high": 3.53,
+         "low": 3.49, "vol": 1.0e6, "amount": 3.5e6, "amp": 1.1},  # 重复
+        {"date": "2026-01-03", "open": 3.52, "close": 3.55, "high": 3.56,
+         "low": 3.51, "vol": 1.2e6, "amount": 4.2e6, "amp": 1.4},
+    ]
+    monkeypatch.setattr("backtest.data.eastmoney_kline",
+                        lambda code, **kw: fake_rows)
+    df = get_kline("510300", start="2026-01-01", end="2026-01-31", refresh=True)
+    assert df.index.is_monotonic_increasing
+    assert not df.index.duplicated().any()
+    assert list(df.index) == sorted(df.index)
+
+
+def test_cache_fallback(tmp_path, monkeypatch):
+    """DAT-003: API 调用失败时降级到 parquet 缓存，两者均失败才抛 RuntimeError"""
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setattr("backtest.data.CACHE_DIR", cache_dir)
+    # 第一步：先正常拉取，生成 parquet 缓存
+    fake_rows = [
+        {"date": "2026-01-02", "open": 3.50, "close": 3.52, "high": 3.53,
+         "low": 3.49, "vol": 1.0e6, "amount": 3.5e6, "amp": 1.1},
+        {"date": "2026-01-03", "open": 3.52, "close": 3.55, "high": 3.56,
+         "low": 3.51, "vol": 1.2e6, "amount": 4.2e6, "amp": 1.4},
+    ]
+    monkeypatch.setattr("backtest.data.eastmoney_kline",
+                        lambda code, **kw: fake_rows)
+    get_kline("510300", start="2026-01-01", end="2026-06-30", refresh=True)
+    # 第二步：API 抛异常 → 应降级读缓存，而非抛错
+    def boom(code, **kw):
+        raise ConnectionError("API down")
+    monkeypatch.setattr("backtest.data.eastmoney_kline", boom)
+    df = get_kline("510300", start="2026-01-01", end="2026-06-30", refresh=True)
+    assert len(df) == 2
+    assert (df["close"] > 0).all()
+    # 第三步：API 异常 + 无缓存 → 抛 RuntimeError
+    empty_dir = tmp_path / "no_cache"
+    monkeypatch.setattr("backtest.data.CACHE_DIR", empty_dir)
+    with pytest.raises(RuntimeError, match="东财API请求失败且无本地缓存"):
+        get_kline("510300", start="2026-01-01", end="2026-06-30", refresh=True)

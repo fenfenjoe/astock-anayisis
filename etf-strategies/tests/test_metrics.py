@@ -50,3 +50,22 @@ def test_excess_return_vs_benchmark():
     b = _make_result([0.0] + [0.005] * 251)
     m = compute_metrics(r, benchmark=b)
     assert m["excess_return"] > 0
+
+
+def test_annual_return():
+    """MET-001: 年化收益率 = (final_nav)^(252/总交易日数) - 1"""
+    rets = [0.0] + [0.01] * 251  # 252 交易日，nav_final = 1.01^251
+    r = _make_result(rets)
+    m = compute_metrics(r)
+    expected = (1.01 ** 251) ** (252 / 252) - 1
+    assert abs(m["annual_return"] - expected) < 1e-6
+
+
+def test_sharpe():
+    """MET-002: 夏普 = 年化收益 / 年化波动（日 std × sqrt(252)）"""
+    rets = [0.0] + [0.01] * 251
+    r = _make_result(rets)
+    m = compute_metrics(r)
+    ann_vol = pd.Series(rets).std() * np.sqrt(252)
+    assert ann_vol > 0
+    assert abs(m["sharpe"] - m["annual_return"] / ann_vol) < 1e-6
