@@ -290,7 +290,7 @@ sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
 from datetime import date
 from lib.staging_verify import check_sections
 today = date.today().strftime('%Y%m%d')
-f = 'f'my_doc/每日复盘/reports/{today}/早盘报告.md''
+f = f'my_doc/每日复盘/reports/{today}/早盘报告.md'
 if not os.path.exists(f):
     print('C1:FAIL: 文件不存在 ' + f)
     sys.exit(0)
@@ -315,7 +315,7 @@ sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
 from datetime import date
 from lib.staging_verify import check_sections
 today = date.today().strftime('%Y%m%d')
-f = 'f'my_doc/每日复盘/reports/{today}/每日信号.md''
+f = f'my_doc/每日复盘/reports/{today}/每日信号.md'
 if not os.path.exists(f):
     print('C2:FAIL: 文件不存在 ' + f)
     sys.exit(0)
@@ -341,7 +341,7 @@ sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
 from datetime import date
 from lib.staging_verify import check_sections
 today = date.today().strftime('%Y%m%d')
-f = 'f'my_doc/每日复盘/reports/{today}/复盘报告.md''
+f = f'my_doc/每日复盘/reports/{today}/复盘报告.md'
 if not os.path.exists(f):
     print('C3:FAIL: 文件不存在 ' + f)
     sys.exit(0)
@@ -361,7 +361,7 @@ else:
 
 ```bash
 
-python -c "
+python -X utf8 -c "
 import json, os
 from datetime import date
 today = date.today().strftime('%Y%m%d')
@@ -474,7 +474,7 @@ else:
 
 ```bash
 
-python -c "
+python -X utf8 -c "
 import json
 from datetime import date
 
