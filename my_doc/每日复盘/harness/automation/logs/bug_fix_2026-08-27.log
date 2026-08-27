@@ -1,0 +1,8 @@
+[2026-08-27T09:20:00+0800] BUG_FIX 开始
+[2026-08-27T09:20:10+0800] 扫描: 1 OPEN (BUG-006 P3), 0 IN_PROGRESS, 0 MANUAL_REVIEW
+[2026-08-27T09:20:12+0800] 选择: BUG-006 (P3) — E2 BUG_INDEX 统计口径误报：closed 目录 WONT_FIX 被误计 FIXED（唯一 OPEN 且 auto_fix_eligible=true）
+[2026-08-27T09:20:20+0800] 诊断: 确定性修复 — E2 按目录文件数统计（open/closed 目录 .md 计数）而非按 BUG 文件内 **状态**: 字段；BUG-001 置于 closed/ 但状态 WONT_FIX 被误计 FIXED，且 FIXED 文件滞留 open/ 亦会误计 OPEN（BUG-002/003 属此类）
+[2026-08-27T09:20:30+0800] 修复: auto_logic_inspect.md E2 统计口径改为跨 open/closed 按 BUG 文件内 **状态**: 字段计数 — OPEN/IN_PROGRESS 计 OPEN，FIXED 计 FIXED，WONT_FIX 计 WONT_FIX，与 BUG_INDEX 统计表 OPEN/FIXED/WONT_FIX 三行比对；目录位置不再作为统计依据
+[2026-08-27T09:20:50+0800] 回归测试: PASS — 全量 pytest 208 passed；E2 实测输出 E2:PASS（修复前旧口径 E2:FAIL 复现，修复后 BUG_INDEX OPEN=1/FIXED=4/WONT_FIX=1 与实际状态一致）
+[2026-08-27T09:21:00+0800] 归档: BUG-006 → FIXED → closed/BUG-006.md；顺带将状态 FIXED 但滞留 open/ 的 BUG-002/003 移至 closed/（目录与状态一致）；BUG_INDEX.md 统计 OPEN 1→0、FIXED 4→5，BUG_TABLE 状态更新，巡检历史追加记录
+[2026-08-27T09:21:10+0800] BUG_FIX 结束

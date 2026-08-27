@@ -9,9 +9,9 @@
 
 | 状态 | 数量 |
 |------|------|
-| OPEN | 1 |
+| OPEN | 0 |
 | IN_PROGRESS | 0 |
-| FIXED | 4 |
+| FIXED | 5 |
 | VERIFIED | 0 |
 | WONT_FIX | 1 |
 | MANUAL_REVIEW | 0 |
@@ -36,7 +36,7 @@
 | BUG-003 | P2 | 复盘报告缺「做T建议复盘/核心回顾/操作预案」章节（结构漂移） | 2026-08-26 | 逻辑巡检 | FIXED | auto_logic_inspect.md C3 | 报告章节命名被替代；C3 已适配新命名并实测 PASS（用户确认 2B） |
 | BUG-004 | P2 | D1 持仓解析失败：每日调仓.md 表格前"持仓："说明行致正则失配 | 2026-08-26 | 逻辑巡检 | FIXED | 每日调仓.md + D1 脚本 | 格式漂移，解析失败（内容实际一致）；解析正则已容忍标题与表格间非表格行（D1+复盘模板 4.5） |
 | BUG-005 | P1 | D4 信号模型一致性检查脚本失效：CHECK_TARGETS 解包错误 | 2026-08-26 | 逻辑巡检 | FIXED | auto_logic_inspect.md D4 | lib 升三元组、prompt 未同步 |
-| BUG-006 | P3 | E2 BUG_INDEX 统计口径误报：closed 目录 WONT_FIX 被误计 FIXED | 2026-08-26 | 逻辑巡检 | OPEN | auto_logic_inspect.md E2 | 按目录文件数而非状态字段统计 |
+| BUG-006 | P3 | E2 BUG_INDEX 统计口径误报：closed 目录 WONT_FIX 被误计 FIXED | 2026-08-26 | 逻辑巡检 | FIXED | auto_logic_inspect.md E2 | 按目录文件数而非状态字段统计；E2 已改为按文件内 **状态**: 字段计数（OPEN/IN_PROGRESS/FIXED/WONT_FIX 分别统计），实测 E2:PASS，回归 208 passed |
 <!-- BUG_TABLE_END -->
 
 ---
@@ -51,6 +51,7 @@
 | 2026-08-26 | auto_fix(BUG-005) | 0 | 1 | 4 |
 | 2026-08-26 | 人工确认(1A/2B/3) | 0 | 2 | 2(BUG-004/006) |
 | 2026-08-26 | auto_fix(BUG-004) | 0 | 1 | 1(BUG-006) |
+| 2026-08-27 | auto_fix(BUG-006) | 0 | 1 | 0 |
 
 ---
 

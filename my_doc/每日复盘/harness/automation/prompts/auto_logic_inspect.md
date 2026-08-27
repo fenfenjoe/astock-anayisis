@@ -606,24 +606,50 @@ print(render_report(res))
 python -c "
 import os, re
 
-# 统计实际文件
-open_bugs = len([f for f in os.listdir('my_doc/每日复盘/harness/automation/bugs/open') if f.endswith('.md')]) if os.path.exists('my_doc/每日复盘/harness/automation/bugs/open') else 0
-closed_bugs = len([f for f in os.listdir('my_doc/每日复盘/harness/automation/bugs/closed') if f.endswith('.md')]) if os.path.exists('my_doc/每日复盘/harness/automation/bugs/closed') else 0
+def count_status(base_dir):
+    \"\"\"统计目录下 BUG 文件的状态字段计数（以文件内 **状态**: 为准，非目录位置）\"\"\"
+    counts = {}
+    if os.path.exists(base_dir):
+        for f in os.listdir(base_dir):
+            if not f.endswith('.md'):
+                continue
+            path = os.path.join(base_dir, f)
+            try:
+                with open(path, 'r', encoding='utf-8') as fh:
+                    content = fh.read()
+                m = re.search(r'\*\*状态\*\*:\s*(\w+)', content)
+                status = m.group(1) if m else 'UNKNOWN'
+                counts[status] = counts.get(status, 0) + 1
+            except Exception:
+                counts['UNKNOWN'] = counts.get('UNKNOWN', 0) + 1
+    return counts
+
+# 跨 open/closed 按状态字段统计实际 BUG 状态（目录位置可能滞后，以状态字段为准）
+actual = {}
+for d in ['open', 'closed']:
+    for k, v in count_status('my_doc/每日复盘/harness/automation/bugs/' + d).items():
+        actual[k] = actual.get(k, 0) + v
+
+open_bugs = actual.get('OPEN', 0) + actual.get('IN_PROGRESS', 0)
+fixed_bugs = actual.get('FIXED', 0)
+wontfix_bugs = actual.get('WONT_FIX', 0)
 
 # 读取 BUG_INDEX.md 中的统计
 try:
     with open('my_doc/每日复盘/harness/automation/bugs/BUG_INDEX.md', 'r', encoding='utf-8') as f:
         index = f.read()
-    # 提取统计表数据
-    open_match = re.search(r'OPEN\s*\|\s*(\d+)', index)
-    fixed_match = re.search(r'FIXED\s*\|\s*(\d+)', index)
+    # 提取统计表数据（统计表为 '| OPEN | N |' 形式；BUG_TABLE 状态列后非数字，不会误匹配）
+    open_match = re.search(r'\|\s*OPEN\s*\|\s*(\d+)\s*\|', index)
+    fixed_match = re.search(r'\|\s*FIXED\s*\|\s*(\d+)\s*\|', index)
+    wontfix_match = re.search(r'\|\s*WONT_FIX\s*\|\s*(\d+)\s*\|', index)
     idx_open = int(open_match.group(1)) if open_match else -1
     idx_fixed = int(fixed_match.group(1)) if fixed_match else -1
+    idx_wontfix = int(wontfix_match.group(1)) if wontfix_match else -1
 
-    if idx_open == open_bugs and idx_fixed == closed_bugs:
-        print(f'E2:PASS: BUG_INDEX 统计 (OPEN={idx_open}, FIXED={idx_fixed}) 与实际文件一致 (open={open_bugs}, closed={closed_bugs})')
+    if idx_open == open_bugs and idx_fixed == fixed_bugs and idx_wontfix == wontfix_bugs:
+        print(f'E2:PASS: BUG_INDEX 统计 (OPEN={idx_open}, FIXED={idx_fixed}, WONT_FIX={idx_wontfix}) 与实际 BUG 状态一致 (open={open_bugs}, fixed={fixed_bugs}, wont_fix={wontfix_bugs})')
     else:
-        print(f'E2:FAIL: BUG_INDEX 统计 (OPEN={idx_open}, FIXED={idx_fixed}) != 实际文件 (open={open_bugs}, closed={closed_bugs})')
+        print(f'E2:FAIL: BUG_INDEX 统计 (OPEN={idx_open}, FIXED={idx_fixed}, WONT_FIX={idx_wontfix}) != 实际 BUG 状态 (open={open_bugs}, fixed={fixed_bugs}, wont_fix={wontfix_bugs})')
 except Exception as e:
     print(f'E2:FAIL: 读取 BUG_INDEX.md 失败: {e}')
 " 2>&1
