@@ -23,7 +23,7 @@ from dashboard import scheduler_cli as cli  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def _no_cloud(monkeypatch):
-    """禁用云端存储（_cs_* 置 None → portfolio 走本地降级模式）。
+    """禁用云端存储（_cs_* 置 None → portfolio/scheduler 走本地降级模式）。
 
     本机 cloud.json 已配置真实 AK 时，否则测试会误连 TOS（读写云端而非 tmp 文件）。
     """
@@ -31,6 +31,8 @@ def _no_cloud(monkeypatch):
     monkeypatch.setattr(portfolio, "_cs_put", None)
     monkeypatch.setattr(portfolio, "_cs_del", None)
     monkeypatch.setattr(portfolio, "_cs_list", None)
+    monkeypatch.setattr(scheduler, "_cs_get", None)
+    monkeypatch.setattr(scheduler, "_cs_list", None)
 
 
 # ═══════════════════════════════════════════════════════════════
