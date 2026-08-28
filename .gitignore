@@ -69,3 +69,8 @@ etf-strategies/dashboard/data/.secret_key
 !.dsh/profiles/**
 !.dsh/.credentials.example.yaml
 .dsh/profiles/*/node_modules/
+
+# Runtime data (OpenViking local store / agent db / dashboard cache)
+data/
+etf-strategies/agent/data/
+etf-strategies/dashboard/data/cache.db
