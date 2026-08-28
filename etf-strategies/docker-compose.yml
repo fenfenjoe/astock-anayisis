@@ -43,8 +43,9 @@ services:
       # 每日复盘调度器：仓库根挂载点 + auto 调度开关
       - DASHBOARD_REPO_ROOT=/repo
       - DASHBOARD_SCHEDULER_ENABLED=${DASHBOARD_SCHEDULER_ENABLED:-1}
-      # claude -p 认证（方舟 ARK，必须从 .env 提供令牌，否则 compose 启动即报错）
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:?请在 etf-strategies/.env 中设置 ANTHROPIC_AUTH_TOKEN}
+      # 执行引擎：auto（容器内已装 dsh → 默认走 dsh，无需 claude 凭据）。
+      # 仅当需要 claude -p 兜底（DASHBOARD_SCHEDULER_ENGINE=claude）时才填 ANTHROPIC_AUTH_TOKEN。
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-}
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://ark.cn-beijing.volces.com/api/plan}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-deepseek-v4-flash-ga-260731}
       - ANTHROPIC_DEFAULT_HAIKU_MODEL=${ANTHROPIC_DEFAULT_HAIKU_MODEL:-deepseek-v4-pro[1m]}
@@ -52,6 +53,8 @@ services:
       - ANTHROPIC_DEFAULT_SONNET_MODEL=${ANTHROPIC_DEFAULT_SONNET_MODEL:-deepseek-v4-flash[1m]}
       - API_TIMEOUT_MS=${API_TIMEOUT_MS:-3000000}
       - CLAUDE_CODE_SUBAGENT_MODEL=${CLAUDE_CODE_SUBAGENT_MODEL:-deepseek-v4-flash[1m]}
+      # dsh 调度引擎凭据（容器内 dsh 读环境变量；本地跑则用 ~/.dsh/.credentials.yaml）
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       # 严格零本地（可选）：DB_MODE=memory + CLOUD_RESTORE_ON_START=1
       - DB_MODE=${DB_MODE:-}
       - CLOUD_RESTORE_ON_START=${CLOUD_RESTORE_ON_START:-}
