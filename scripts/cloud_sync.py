@@ -170,6 +170,18 @@ def upload_mode(cfg, s3, bucket, dry_run):
             rel = f.relative_to(local).as_posix() if local.is_dir() else f.name
             upload(f, f"{prefix}/{rel}")
 
+    # 3. 日志零持久：上传成功后清空本地日志（云已存档；配置 LOGS_PURGE_LOCAL=0 关闭）
+    if os.environ.get("LOGS_PURGE_LOCAL", "1") == "1" and ok_all:
+        for local, prefix in SYNC_MAP:
+            if prefix.startswith("logs/") and local.is_dir() and local.exists():
+                for f in local.rglob("*"):
+                    if f.is_file():
+                        try:
+                            f.unlink()
+                        except OSError:
+                            pass
+                print(f"本地日志已清空（云端存档）: {prefix}")
+
     print("上传完成。" if ok_all else "上传部分失败，见上。")
     return 0 if ok_all else 1
 

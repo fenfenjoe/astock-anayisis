@@ -68,6 +68,11 @@ if ($Action -eq "status") {
 }
 
 # start
+# 云恢复：CLOUD_RESTORE_ON_START=1 时启动前从 TOS 拉取（含 openviking data/、sqlite、持仓）
+if ($env:CLOUD_RESTORE_ON_START -eq "1") {
+  Write-Host "Restoring from cloud (TOS)..."
+  python (Join-Path $scriptRoot "cloud_sync.py") --download 2>&1 | Select-Object -Last 3
+}
 foreach ($s in $services) {
   $pf = Get-PidFile $s.PidFile
   if (Is-Running $pf) { Write-Host "already running, skip: $($s.Name)"; continue }
