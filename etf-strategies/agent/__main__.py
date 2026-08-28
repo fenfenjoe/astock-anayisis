@@ -8,6 +8,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# 加载 etf-strategies/.env（DB_MODE 等在 agent.db 模块 import 前生效）
+try:
+    from load_env import load_env_file
+    load_env_file()
+except ImportError:
+    pass
+
 from agent.core import lifecycle
 
 

@@ -16,6 +16,13 @@ _PARENT = Path(__file__).resolve().parent.parent
 if str(_PARENT) not in sys.path:
     sys.path.insert(0, str(_PARENT))
 
+# 加载 etf-strategies/.env（DB_MODE 等在 db 模块 import 前生效）
+try:
+    from load_env import load_env_file
+    load_env_file()
+except ImportError:
+    pass
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, Depends, APIRouter, Request
