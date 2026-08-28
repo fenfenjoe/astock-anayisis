@@ -13,13 +13,69 @@ agent_metadata   key-value（heartbeat / 每日发文状态）
 多进程（dashboard + agent 常驻）共用同一 db 文件安全（WAL 短事务）。
 """
 import json
+import os
 import sqlite3
+import threading
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 
 from agent import config
 
 _DB_PATH = config.DB_PATH
+
+# ── 严格零本地：DB_MODE=memory 时用内存库（:memory:），
+#    启动从 TOS 载入最新快照（cloud_restore），定时/退出快照回传（cloud_backup）。
+#    默认 file 模式（测试/降级）。
+USE_MEMORY = os.environ.get("DB_MODE", "").lower() == "memory"
+_mem_lock = threading.RLock()
+_mem_conn: sqlite3.Connection | None = None
+_SNAPSHOT_KEY = "agent.db"  # TOS 内 sqlite/<ts>/agent.db
+
+try:
+    from cloud_store import (get_object as _cs_get, put_object as _cs_put,
+                             list_objects as _cs_list)
+except ImportError:
+    _cs_get = _cs_put = _cs_list = None
+
+
+def _memory_conn() -> sqlite3.Connection:
+    global _mem_conn
+    if _mem_conn is None:
+        _mem_conn = sqlite3.connect(":memory:", check_same_thread=False)
+        _mem_conn.row_factory = sqlite3.Row
+        _mem_conn.execute("PRAGMA foreign_keys=ON")
+    return _mem_conn
+
+
+def cloud_restore() -> bool:
+    """memory 模式：从 TOS 最新 agent.db 快照载入。"""
+    if not USE_MEMORY or _cs_get is None or _cs_list is None:
+        return False
+    try:
+        keys = [k for k in _cs_list("sqlite/") if k.endswith("/agent.db")]
+        if not keys:
+            return False
+        data = _cs_get(max(keys))
+        if not data:
+            return False
+        _memory_conn().deserialize(data)
+        return True
+    except Exception:
+        return False
+
+
+def cloud_backup() -> bool:
+    """memory 模式：导出快照并上传 TOS（sqlite/<ts>/agent.db）。"""
+    if not USE_MEMORY or _cs_put is None:
+        return False
+    try:
+        data = _memory_conn().serialize()
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        _cs_put(f"sqlite/{ts}/{_SNAPSHOT_KEY}", data)
+        return True
+    except Exception:
+        return False
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS agent_sessions (
@@ -91,9 +147,17 @@ _JSON_FIELDS = ("sources", "topics")
 
 
 def init_db(db_path=None):
-    """设置数据库路径并建表（幂等）。db_path=None 复位为默认路径。"""
+    """设置数据库路径并建表（幂等）。db_path=None 复位为默认路径。
+
+    memory 模式：忽略 db_path，从 TOS 载入最新快照；无快照建空 schema。
+    """
     global _DB_PATH
     _DB_PATH = Path(db_path) if db_path else config.DB_PATH
+    if USE_MEMORY:
+        if not cloud_restore():
+            _memory_conn().executescript(SCHEMA)
+            _migrate(_memory_conn())
+        return
     with get_conn():
         pass  # 建表 + 迁移在 get_conn 首次打开时执行
 
@@ -110,6 +174,12 @@ def _migrate(conn):
 
 @contextmanager
 def get_conn():
+    if USE_MEMORY:
+        conn = _memory_conn()
+        with _mem_lock:
+            yield conn
+            conn.commit()
+        return
     _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(_DB_PATH))
     conn.row_factory = sqlite3.Row

@@ -11,15 +11,90 @@ metadata            key-value 元数据（种子标记等）
 """
 import sqlite3
 import json
+import os
+import threading
 from pathlib import Path
 from datetime import date, datetime, timedelta
 from contextlib import contextmanager
 
 DB_PATH = Path(__file__).resolve().parent / "data" / "cache.db"
 
+# ── 严格零本地：DB_MODE=memory 时用内存库（:memory:），
+#    启动从 TOS 载入最新快照（cloud_restore），定时/退出快照回传（cloud_backup）。
+#    默认 file 模式（向后兼容 + 测试/降级）。
+USE_MEMORY = os.environ.get("DB_MODE", "").lower() == "memory"
+_mem_lock = threading.RLock()
+_mem_conn: sqlite3.Connection | None = None
+
+# TOS 读写（严格零本地内存库的快照源；未配置云时置 None → 恢复/备份 no-op）
+try:
+    from cloud_store import (get_object as _cs_get, put_object as _cs_put,
+                             list_objects as _cs_list)
+except ImportError:
+    _cs_get = _cs_put = _cs_list = None
+
+
+def _memory_conn() -> sqlite3.Connection:
+    global _mem_conn
+    if _mem_conn is None:
+        _mem_conn = sqlite3.connect(":memory:", check_same_thread=False)
+        _mem_conn.row_factory = sqlite3.Row
+        _mem_conn.execute("PRAGMA foreign_keys=ON")
+    return _mem_conn
+
+
+def cloud_restore() -> bool:
+    """memory 模式：从 TOS 最新 cache.db 快照载入（serialize/deserialize，纯内存）。
+
+    返回 True=已载入；False=无快照/TOS 不可用（调用方建空 schema）。
+    """
+    if not USE_MEMORY or _cs_get is None or _cs_list is None:
+        return False
+    try:
+        keys = [k for k in _cs_list("sqlite/") if k.endswith("/cache.db")]
+        if not keys:
+            return False
+        data = _cs_get(max(keys))  # 字典序=时间序，取最新
+        if not data:
+            return False
+        _memory_conn().deserialize(data)
+        return True
+    except Exception:
+        return False
+
+
+def cloud_backup() -> bool:
+    """memory 模式：导出快照并上传 TOS（sqlite/<ts>/cache.db）。"""
+    if not USE_MEMORY or _cs_put is None:
+        return False
+    try:
+        data = _memory_conn().serialize()
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        _cs_put(f"sqlite/{ts}/cache.db", data)
+        return True
+    except Exception:
+        return False
+
+
+def cloud_backup_loop(interval_seconds: int = 900) -> None:
+    """后台定时快照回传（daemon 线程，仅 memory 模式生效）。"""
+    while True:
+        try:
+            cloud_backup()
+        except Exception:
+            pass
+        threading.Event().wait(interval_seconds)
+
+
 # ── Connection management ──
 @contextmanager
 def get_conn():
+    if USE_MEMORY:
+        conn = _memory_conn()
+        with _mem_lock:
+            yield conn
+            conn.commit()
+        return
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
@@ -325,7 +400,7 @@ CREATE TABLE IF NOT EXISTS portfolio_trades (
 --
 -- 字段说明:
 --   report_date  YYYYMMDD（目录名；周报解析自文件名）
---   report_type  早盘报告 | 复盘报告 | 每日信号 | 早盘机会 | 周度组合回顾
+--   report_type  早盘报告 | 复盘报告 | 每日信号 | 早盘机会 | 周报 | 周度组合回顾
 --   markdown     报告全文（markdown）
 --   status       ready | stale | generating
 --   source_file  reports/20260720/每日信号.md（相对仓库根）
@@ -378,19 +453,31 @@ CREATE INDEX IF NOT EXISTS idx_sched_time  ON scheduler_runs(run_time);
 
 
 def init_db():
-    """Create all tables and indexes if they don't exist."""
+    """Create all tables and indexes if they don't exist.
+
+    memory 模式：先从 TOS 载入最新快照（空连接 deserialize），无快照才建空 schema。
+    """
+    if USE_MEMORY:
+        if not cloud_restore():
+            _memory_conn().executescript(SCHEMA)
+        with get_conn() as conn:
+            _migrate(conn)
+        return
     with get_conn() as conn:
         conn.executescript(SCHEMA)
-        # Migration: add source_url column if missing (for existing DBs)
-        try:
-            conn.execute("ALTER TABLE strategy_kb ADD COLUMN source_url TEXT")
-        except Exception:
-            pass
-        # Migration: add process_desc column
-        try:
-            conn.execute("ALTER TABLE strategy_kb ADD COLUMN process_desc TEXT")
-        except Exception:
-            pass
+        _migrate(conn)
+
+
+def _migrate(conn):
+    """轻量迁移（幂等）：新增列兼容老库。"""
+    try:
+        conn.execute("ALTER TABLE strategy_kb ADD COLUMN source_url TEXT")
+    except Exception:
+        pass
+    try:
+        conn.execute("ALTER TABLE strategy_kb ADD COLUMN process_desc TEXT")
+    except Exception:
+        pass
 
 
 def is_seeded():

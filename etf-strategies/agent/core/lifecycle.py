@@ -95,6 +95,12 @@ def tick(now=None, db=None, llm_fn=None):
     except Exception as e:
         result["publish"] = {"published": False, "reason": f"error: {e}",
                              "article_id": None}
+
+    # 严格零本地：memory 模式快照回传 TOS（file 模式 no-op）
+    try:
+        result["backup"] = agent_db.cloud_backup()
+    except Exception as e:
+        result["backup"] = {"error": str(e)}
     return result
 
 

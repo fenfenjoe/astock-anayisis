@@ -19,9 +19,10 @@ if str(_PARENT) not in sys.path:
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query, Depends, APIRouter, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from dashboard import db as db_mod
 from dashboard.db import (
     init_db, is_seeded, metrics_get_all, metrics_get_one,
     signals_get_latest, kb_get, nav_get_all, nav_has_data,
@@ -60,6 +61,16 @@ async def lifespan(app: FastAPI):
             print(f"[app]   WARNING: cloud restore failed: {e}")
 
     init_db()
+
+    # ── 严格零本地：memory 模式起后台快照回传线程 ──
+    try:
+        if db_mod.USE_MEMORY:
+            threading.Thread(target=db_mod.cloud_backup_loop,
+                             kwargs={"interval_seconds": 900},
+                             daemon=True).start()
+            print("[app] DB in memory mode — cloud backup loop started (15min)")
+    except Exception as e:
+        print(f"[app]   WARNING: backup loop start failed: {e}")
 
     # ── Seed default admin user if no users exist ──
     if user_count() == 0:
@@ -817,7 +828,11 @@ async def trigger_backtest():
 
 @protected.post("/report/{sid}")
 async def generate_report(sid: str):
-    """Generate one-year backtest HTML report for a strategy."""
+    """Generate one-year backtest HTML report for a strategy.
+
+    严格零本地：生成后上传 TOS（report/），本地文件删除（云模式）；
+    云未配置时保留本地（降级）。
+    """
     sid = sid.upper()
     try:
         from daily_signal import STRAT_MAP
@@ -826,9 +841,20 @@ async def generate_report(sid: str):
         from html_report import generate_report as gen_report
         sname, strat = STRAT_MAP[sid]
         filepath = gen_report(sid, strat)
+        stored = "local"
+        try:
+            from cloud_store import put_object
+            name = os.path.basename(str(filepath))
+            with open(filepath, "rb") as f:
+                put_object(f"report/{name}", f.read())
+            Path(filepath).unlink(missing_ok=True)   # 云模式：本地不落盘
+            stored = "tos"
+        except Exception:
+            pass  # 云未配置/失败 → 保留本地文件
         return JSONResponse({
             "status": "done", "strategy_id": sid,
             "strategy_name": sname, "report_path": str(filepath),
+            "stored": stored,
         })
     except ImportError as e:
         raise HTTPException(500, f"Import failed: {e}")
@@ -836,6 +862,25 @@ async def generate_report(sid: str):
         raise
     except Exception as e:
         raise HTTPException(500, f"Report generation failed: {e}")
+
+
+@protected.get("/report/file/{name}")
+async def get_report_file(name: str):
+    """读取回测报告 HTML（云模式从 TOS 读；降级读本地 report/）。"""
+    if "/" in name or ".." in name or not name.endswith(".html"):
+        raise HTTPException(400, "非法文件名")
+    try:
+        from cloud_store import get_object
+        data = get_object(f"report/{name}")
+        if data is not None:
+            return Response(content=data, media_type="text/html; charset=utf-8")
+    except Exception:
+        pass
+    local = Path(__file__).resolve().parent.parent / "report" / name
+    if local.exists():
+        return Response(content=local.read_bytes(),
+                        media_type="text/html; charset=utf-8")
+    raise HTTPException(404, "报告不存在")
 
 
 @protected.get("/strategies/{sid}/source")
