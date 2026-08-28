@@ -3,6 +3,7 @@
 启动: python dashboard/app.py  →  http://localhost:8000
 """
 import sys
+import os
 import json
 import threading
 import traceback
@@ -43,7 +44,21 @@ from dashboard import scheduler as daily_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: init DB, seed, pre-load modules. Heavy work runs in background."""
+    """Startup: restore-from-cloud (optional) → init DB, seed, pre-load modules."""
+    # ── 云恢复：CLOUD_RESTORE_ON_START=1 时先拉取 TOS 最新数据到本地工作副本 ──
+    if os.environ.get("CLOUD_RESTORE_ON_START", "").lower() in ("1", "true"):
+        print("[app] Restoring data from cloud (TOS)...")
+        try:
+            import subprocess as _sp
+            _repo = Path(__file__).resolve().parent.parent.parent
+            _r = _sp.run(
+                [sys.executable, "scripts/cloud_sync.py", "--download"],
+                cwd=str(_repo), capture_output=True, text=True,
+                encoding="utf-8", errors="replace", timeout=600)
+            print(f"[app]   restore exit={_r.returncode}: {(_r.stdout or '')[-200:]}")
+        except Exception as e:
+            print(f"[app]   WARNING: cloud restore failed: {e}")
+
     init_db()
 
     # ── Seed default admin user if no users exist ──

@@ -113,11 +113,27 @@ bucket astock-data/
 └── openviking/                           # OpenViking 向量数据
 ```
 
-### 恢复（新机器）
+### 恢复（新机器 / 本地数据已删除）
 
 ```powershell
-# 参考 scripts/cloud_sync.py 的 SYNC_MAP，用 boto3 反向下载；
-# 或直接改脚本加 --download 模式（本期未实现）。
+# 方式1：启动时自动恢复（dashboard 与 agent 进程，环境变量开启）
+$env:CLOUD_RESTORE_ON_START = "1"
+python etf-strategies/dashboard/app.py   # 启动即从 TOS 拉取最新数据
+
+# 方式2：手动恢复
+python scripts/cloud_sync.py --download
+```
+
+### 清理本地（数据由 TOS 兜底）
+
+```powershell
+# 先确保 TOS 是最新
+python scripts/cloud_sync.py
+python scripts/cloud_sync.py --download --dry-run   # 确认恢复清单
+
+# 删除本地可恢复数据（报告/日志/SQLite/OpenViking；保留配置与持仓 md）
+powershell -ExecutionPolicy Bypass -File scripts/cloud_clean_local.ps1
+# 加 -IncludeHoldings 连持仓 md 一起删（由 TOS 恢复）
 ```
 
 > 凭据：`scripts/config/cloud.json` 已入 .gitignore（见 docs/SECURITY.md）。

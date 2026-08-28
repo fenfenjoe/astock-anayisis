@@ -1,14 +1,16 @@
-"""cloud_sync.py — 数据上云（火山引擎 TOS，S3 兼容，boto3）.
+"""cloud_sync.py — 数据云同步（火山引擎 TOS，S3 兼容，boto3）.
 
-同步内容：SQLite 一致性快照 / 回测报告 / 每日复盘报告 / 日志 / OpenViking 数据。
+模型：TOS 权威持久层 ⇄ 本地工作副本。
+- 上传（默认）：SQLite 一致性快照 / 报告 / 持仓 / 日志 / OpenViking 数据
+- 下载（--download）：从 TOS 恢复本地工作副本（报告/日志纯下载；SQLite/持仓/OpenViking 拉最新）
 
 配置（机器特定，勿提交）——优先环境变量，其次 scripts/config/cloud.json：
-  CLOUD_AK       火山引擎 AccessKey
-  CLOUD_SK       火山引擎 SecretKey
-  CLOUD_ENDPOINT 默认 https://tos-cn-beijing.volces.com
-  CLOUD_BUCKET   默认 astock-data
+  CLOUD_AK / CLOUD_SK / CLOUD_ENDPOINT / CLOUD_BUCKET / CLOUD_REGION
 
-用法：python scripts/cloud_sync.py [--dry-run]
+用法：
+  python scripts/cloud_sync.py                  # 上传
+  python scripts/cloud_sync.py --download       # 恢复（拉取到本地工作路径）
+  python scripts/cloud_sync.py --dry-run        # 试跑（上传/下载均打印不执行）
 """
 import argparse
 import json
@@ -21,25 +23,30 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 ETF_DIR = REPO_ROOT / "etf-strategies"
+DAILY_REVIEW = REPO_ROOT / "my_doc" / "每日复盘"
 
 CONFIG_FILE = SCRIPT_DIR / "config" / "cloud.json"
-DEFAULT_ENDPOINT = "https://tos-cn-beijing.volces.com"
+DEFAULT_ENDPOINT = "https://tos-s3-cn-beijing.volces.com"  # S3 兼容端点
 DEFAULT_BUCKET = "astock-data"
 
-# 同步映射：本地路径 -> 云桶内前缀
+# 上传映射：本地路径 -> 云前缀；下载时按前缀回填同一本地路径
 SYNC_MAP = [
     (ETF_DIR / "report", "report"),
-    (REPO_ROOT / "my_doc" / "每日复盘" / "reports", "daily-reports"),
+    (DAILY_REVIEW / "reports", "daily-reports"),
     (ETF_DIR / "automation" / "logs", "logs/etf"),
-    (REPO_ROOT / "my_doc" / "每日复盘" / "harness" / "automation" / "logs", "logs/harness"),
+    (DAILY_REVIEW / "harness" / "automation" / "logs", "logs/harness"),
     (REPO_ROOT / "data", "openviking"),
+    # 持仓权威文件（单文件，walk 即处理）
+    (DAILY_REVIEW / "每日调仓.md", "holdings/每日调仓.md"),
+    (DAILY_REVIEW / "harness" / "config" / "持仓.md", "holdings/持仓.md"),
 ]
 
-# 需要一致性快照的 SQLite
+# 需要一致性快照的 SQLite（下载时回填到工作路径）
 SQLITE_DBS = [
     (ETF_DIR / "dashboard" / "data" / "cache.db", "cache.db"),
     (ETF_DIR / "agent" / "data" / "agent.db", "agent.db"),
 ]
+SQLITE_PREFIX = "sqlite/"
 
 
 def load_config():
@@ -48,6 +55,7 @@ def load_config():
         "sk": os.environ.get("CLOUD_SK", ""),
         "endpoint": os.environ.get("CLOUD_ENDPOINT", DEFAULT_ENDPOINT),
         "bucket": os.environ.get("CLOUD_BUCKET", DEFAULT_BUCKET),
+        "region": os.environ.get("CLOUD_REGION", "cn-beijing"),
     }
     if CONFIG_FILE.exists():
         try:
@@ -58,8 +66,25 @@ def load_config():
     return cfg
 
 
+def _client(cfg):
+    try:
+        import boto3
+        from botocore.client import Config
+    except ImportError:
+        print("错误：需要 boto3。安装：python -m pip install --user boto3", file=sys.stderr)
+        sys.exit(2)
+    return boto3.client(
+        "s3",
+        endpoint_url=cfg["endpoint"],
+        region_name=cfg["region"],
+        aws_access_key_id=cfg["ak"],
+        aws_secret_access_key=cfg["sk"],
+        config=Config(s3={"addressing_style": "virtual"}, retries={"max_attempts": 3}),
+    )
+
+
 def sqlite_snapshot(src: Path) -> Path | None:
-    """VACUUM INTO 一致性快照（WAL 下直接 copy 主文件会不一致）。"""
+    """一致性快照（WAL 下直接 copy 主文件会不一致）。"""
     if not src.exists():
         return None
     snap_dir = SCRIPT_DIR / ".snapshots" / datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -75,71 +100,143 @@ def sqlite_snapshot(src: Path) -> Path | None:
     return dst
 
 
-def walk_files(root: Path):
-    for p in sorted(root.rglob("*")):
-        if p.is_file():
-            yield p
+def list_prefix(s3, bucket, prefix):
+    """列出前缀下全部 key（翻页）。"""
+    keys = []
+    token = None
+    while True:
+        kw = dict(Bucket=bucket, Prefix=prefix)
+        if token:
+            kw["ContinuationToken"] = token
+        r = s3.list_objects_v2(**kw)
+        keys += [o["Key"] for o in r.get("Contents", [])]
+        if r.get("IsTruncated"):
+            token = r.get("NextContinuationToken")
+        else:
+            break
+    return keys
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--dry-run", action="store_true", help="只打印将上传的文件，不真正上传")
-    args = ap.parse_args()
-    cfg = load_config()
-    if not cfg["ak"] or not cfg["sk"]:
-        print("错误：未配置 CLOUD_AK/CLOUD_SK。请设置环境变量或 scripts/config/cloud.json"
-              "（从火山引擎控制台 → 访问控制 → AccessKey 获取）", file=sys.stderr)
-        sys.exit(2)
+def latest_sqlite_snapshot(s3, bucket):
+    """返回 {本地文件名: 云key} —— sqlite/<最新时间戳>/{cache.db, agent.db}。"""
+    keys = list_prefix(s3, bucket, SQLITE_PREFIX)
+    if not keys:
+        return {}
+    by_ts = {}
+    for k in keys:
+        rel = k[len(SQLITE_PREFIX):]
+        if "/" not in rel:
+            continue
+        ts, name = rel.split("/", 1)
+        by_ts.setdefault(ts, {})[name] = k
+    if not by_ts:
+        return {}
+    latest_ts = max(by_ts)
+    return by_ts[latest_ts]
 
-    try:
-        import boto3
-        from botocore.client import Config
-    except ImportError:
-        print("错误：需要 boto3。安装：python -m pip install --user boto3", file=sys.stderr)
-        sys.exit(2)
 
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=cfg["endpoint"],
-        aws_access_key_id=cfg["ak"],
-        aws_secret_access_key=cfg["sk"],
-        config=Config(s3={"addressing_style": "virtual"}, retries={"max_attempts": 3}),
-    )
-    bucket = cfg["bucket"]
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+def upload_mode(cfg, s3, bucket, dry_run):
+    ok_all = True
 
     def upload(local: Path, key: str):
-        if args.dry_run:
+        nonlocal ok_all
+        if dry_run:
             print(f"[dry-run] {key}")
-            return True
+            return
         try:
             s3.upload_file(str(local), bucket, key)
             print(f"ok: {key}")
-            return True
         except Exception as e:
             print(f"FAIL: {key}: {e}", file=sys.stderr)
-            return False
-
-    ok_all = True
+            ok_all = False
 
     # 1. SQLite 一致性快照 → sqlite/<stamp>/
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     for src, name in SQLITE_DBS:
         snap = sqlite_snapshot(src)
         if snap:
-            ok_all &= upload(snap, f"sqlite/{stamp}/{name}")
-            snap.unlink(missing_ok=True)  # 上传后删除本地临时快照（云端即存档）
+            upload(snap, f"{SQLITE_PREFIX}{stamp}/{name}")
+            if not dry_run:
+                snap.unlink(missing_ok=True)
 
-    # 2. 目录增量同步（按 大小+时间 跳过未变更）
+    # 2. 目录/文件增量（walk）
     for local, prefix in SYNC_MAP:
         if not local.exists():
             print(f"skip: {local} (not exist)")
             continue
-        for f in walk_files(local):
-            rel = f.relative_to(local).as_posix()
-            ok_all &= upload(f, f"{prefix}/{rel}")
+        for f in sorted(local.rglob("*")) if local.is_dir() else [local]:
+            if not f.is_file():
+                continue
+            rel = f.relative_to(local).as_posix() if local.is_dir() else f.name
+            upload(f, f"{prefix}/{rel}")
 
-    print("完成。" if ok_all else "部分失败，见上。")
+    print("上传完成。" if ok_all else "上传部分失败，见上。")
+    return 0 if ok_all else 1
+
+
+def download_mode(cfg, s3, bucket, dry_run):
+    ok_all = True
+
+    def download(key: str, dest: Path):
+        nonlocal ok_all
+        if dry_run:
+            print(f"[dry-run] {key} -> {dest}")
+            return
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            s3.download_file(bucket, key, str(dest))
+            print(f"ok: {key} -> {dest}")
+        except Exception as e:
+            print(f"FAIL: {key}: {e}", file=sys.stderr)
+            ok_all = False
+
+    # 1. SQLite 最新快照 → 工作 DB
+    latest = latest_sqlite_snapshot(s3, bucket)
+    for src, name in SQLITE_DBS:
+        key = latest.get(name)
+        if key:
+            download(key, src)
+        else:
+            print(f"skip: 云端无 sqlite 快照 {name}")
+
+    # 2. 各前缀回填
+    for local, prefix in SYNC_MAP:
+        keys = list_prefix(s3, bucket, prefix + "/")
+        if not keys:
+            print(f"skip: 云端无 {prefix}/")
+            continue
+        for k in keys:
+            rel = k[len(prefix) + 1:]
+            download(k, local / rel)
+
+    print("恢复完成。" if ok_all else "恢复部分失败，见上。")
+    return 0 if ok_all else 1
+
+
+def main():
+    ap = argparse.ArgumentParser(description="数据云同步（TOS）")
+    ap.add_argument("--download", action="store_true", help="从 TOS 恢复本地（默认是上传）")
+    ap.add_argument("--dry-run", action="store_true", help="只打印不执行")
+    args = ap.parse_args()
+
+    cfg = load_config()
+    if not cfg["ak"] or not cfg["sk"]:
+        print("错误：未配置 CLOUD_AK/CLOUD_SK。设置环境变量或 scripts/config/cloud.json"
+              "（火山控制台 → 访问控制 → AccessKey）", file=sys.stderr)
+        sys.exit(2)
+
+    s3 = _client(cfg)
+    bucket = cfg["bucket"]
+    try:
+        s3.head_bucket(Bucket=bucket)
+        print(f"桶可用: {bucket} @ {cfg['endpoint']} (region={cfg['region']})")
+    except Exception as e:
+        print(f"警告：head_bucket 失败：{e}", file=sys.stderr)
+
+    if args.download:
+        return download_mode(cfg, s3, bucket, args.dry_run)
+    return upload_mode(cfg, s3, bucket, args.dry_run)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
