@@ -82,3 +82,4 @@ scripts/logs/cloud_sync.log
 
 # _*.py 误伤合法入口：__main__.py 必须入库
 !**/__main__.py
+!**/__init__.py
