@@ -84,7 +84,11 @@ def _client(cfg):
 
 
 def sqlite_snapshot(src: Path) -> Path | None:
-    """一致性快照（WAL 下直接 copy 主文件会不一致）。"""
+    """一致性快照（WAL 下直接 copy 主文件会不一致）。
+
+    目标库强制 journal_mode=DELETE：WAL 模式的快照无法被 sqlite3
+    deserialize() 载入（严格零本地内存库恢复依赖非 WAL 快照）。
+    """
     if not src.exists():
         return None
     snap_dir = SCRIPT_DIR / ".snapshots" / datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -93,6 +97,7 @@ def sqlite_snapshot(src: Path) -> Path | None:
     s = sqlite3.connect(str(src))
     d = sqlite3.connect(str(dst))
     try:
+        d.execute("PRAGMA journal_mode=DELETE")
         s.backup(d)
     finally:
         d.close()

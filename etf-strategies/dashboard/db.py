@@ -43,8 +43,35 @@ def _memory_conn() -> sqlite3.Connection:
     return _mem_conn
 
 
+def _deserialize_mem(data: bytes) -> bool:
+    """把快照字节载入内存库：临时文件 + sqlite3 backup（即时删除，零持久文件）。
+
+    不用 deserialize()：其对 WAL 库半成功（返回但连接损坏，Python 3.11 已知行为）。
+    """
+    tmp = None
+    try:
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            f.write(data)
+            tmp = f.name
+        src = sqlite3.connect(tmp)
+        try:
+            src.backup(_memory_conn())
+        finally:
+            src.close()
+        return True
+    except Exception:
+        return False
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
 def cloud_restore() -> bool:
-    """memory 模式：从 TOS 最新 cache.db 快照载入（serialize/deserialize，纯内存）。
+    """memory 模式：从 TOS 最新 cache.db 快照载入（纯内存，零持久文件）。
 
     返回 True=已载入；False=无快照/TOS 不可用（调用方建空 schema）。
     """
@@ -57,8 +84,7 @@ def cloud_restore() -> bool:
         data = _cs_get(max(keys))  # 字典序=时间序，取最新
         if not data:
             return False
-        _memory_conn().deserialize(data)
-        return True
+        return _deserialize_mem(data)
     except Exception:
         return False
 

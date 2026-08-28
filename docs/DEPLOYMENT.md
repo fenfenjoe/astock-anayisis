@@ -138,7 +138,30 @@ powershell -ExecutionPolicy Bypass -File scripts/cloud_clean_local.ps1
 
 > 凭据：`scripts/config/cloud.json` 已入 .gitignore（见 docs/SECURITY.md）。
 
-## 6. 注意事项
+## 6. 严格零本地模式（数据全在云端）
+
+设置以下环境变量后，本地不持久化数据（一切以 TOS 为准）：
+
+| 变量 | 作用 |
+|---|---|
+| `DB_MODE=memory` | SQLite 改 `:memory:` 内存库（启动从 TOS 载入快照、定时回传；磁盘零文件） |
+| `CLOUD_RESTORE_ON_START=1` | dashboard/agent/start_all 启动时自动从 TOS 恢复 |
+| `LOGS_PURGE_LOCAL=1`（默认开） | cloud_sync 上传日志后清空本地 |
+
+**数据读写路径（云模式）**：
+- 持仓/调仓：TOS `holdings/` 直读写（portfolio）
+- 回测报告：生成→传 TOS `report/`，展示从云端读（`GET /api/report/file/{name}`）
+- 复盘报告：导入从 TOS `daily-reports/`（指纹守卫）
+- SQLite：`:memory:` + 快照 `sqlite/<ts>/{cache,agent}.db`（serialize 上传 / backup 载入）
+- 日志：上传后清空本地
+- OpenViking：启动拉取 `openviking/` → 本地临时 → 停止清理（Windows 极限）
+
+**切换**：不设置这些变量 = 原文件模式（降级/开发/测试）；设置后 = 严格零本地。
+
+> 已知坑：Python 3.11 `sqlite3.deserialize()` 对 WAL 快照半成功（连接损坏）——
+> 快照恢复统一走「临时文件 + sqlite3.backup 载入内存，即时删除」（`_deserialize_mem`）。
+
+## 7. 注意事项
 
 - `openviking` 的 `ov.conf` 在 `~/.openviking/`（机器特定，含 provider key）——新机器需 `openviking-server init` 或复制配置
 - 火山 embedding 月度配额超限（429）时，OpenViking 不可用（小满其余功能不受影响）；重置后 `start_all.ps1` 或 compose 自动恢复
