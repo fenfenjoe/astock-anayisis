@@ -74,3 +74,8 @@ etf-strategies/dashboard/data/.secret_key
 data/
 etf-strategies/agent/data/
 etf-strategies/dashboard/data/cache.db
+
+# Cloud sync config & runtime (secrets / snapshots / logs)
+scripts/config/cloud.json
+scripts/.snapshots/
+scripts/logs/cloud_sync.log

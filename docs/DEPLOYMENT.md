@@ -75,7 +75,54 @@ docker compose up -d --build   # dashboard + agent + openviking 三服务
 | 本机（`start_all.ps1`） | 开发/单机日常 | 日志在 `scripts/logs/`，PID 在 `scripts/.pids/` |
 | Docker（compose） | 服务器/团队 | 三服务隔离，配置统一走 `.env` |
 
-## 5. 注意事项
+## 5. 数据云备份（火山引擎 TOS，免费级）
+
+将报告 / SQLite / 日志 / OpenViking 数据同步到云端（数据总量约 16MB，月成本 ≈ ¥0.002）。
+
+### 开通（一次）
+
+1. 火山引擎控制台 → **对象存储 TOS** → 创建桶 `astock-data`（地域 cn-beijing）
+2. 控制台 → **访问控制 → AccessKey** → 创建 AK/SK（记下）
+3. 配置：
+   ```powershell
+   Copy-Item scripts\config\cloud.json.example scripts\config\cloud.json
+   # 编辑填入 ak / sk（endpoint/bucket 默认即可）
+   ```
+   > 或设置环境变量 `CLOUD_AK` / `CLOUD_SK`（二选一）
+
+### 执行
+
+```powershell
+python scripts/cloud_sync.py            # 同步全部（sqlite 一致性快照 + 报告 + 日志 + OpenViking）
+python scripts/cloud_sync.py --dry-run  # 试跑，只打印不上传
+```
+
+### 定时（每 30 分钟）
+
+```powershell
+schtasks /Create /TN "astock-cloud-sync" /TR "python E:\ideaworkspace\astock-anayisis\scripts\cloud_sync.py" /SC MINUTE /MO 30 /F
+```
+
+### 云端结构
+
+```
+bucket astock-data/
+├── sqlite/<时间戳>/cache.db, agent.db   # 一致性快照（保留所有历史版本）
+├── report/  daily-reports/              # 回测 + 每日复盘报告
+├── logs/etf/  logs/harness/             # 日志
+└── openviking/                           # OpenViking 向量数据
+```
+
+### 恢复（新机器）
+
+```powershell
+# 参考 scripts/cloud_sync.py 的 SYNC_MAP，用 boto3 反向下载；
+# 或直接改脚本加 --download 模式（本期未实现）。
+```
+
+> 凭据：`scripts/config/cloud.json` 已入 .gitignore（见 docs/SECURITY.md）。
+
+## 6. 注意事项
 
 - `openviking` 的 `ov.conf` 在 `~/.openviking/`（机器特定，含 provider key）——新机器需 `openviking-server init` 或复制配置
 - 火山 embedding 月度配额超限（429）时，OpenViking 不可用（小满其余功能不受影响）；重置后 `start_all.ps1` 或 compose 自动恢复
