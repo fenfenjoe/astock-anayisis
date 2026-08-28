@@ -33,6 +33,7 @@ from dashboard.auth import (
     get_secret_key_warning,
 )
 from dashboard.api_daily import router as daily_router
+from dashboard.api_agent import router as agent_router
 from dashboard import scheduler as daily_scheduler
 
 
@@ -123,7 +124,18 @@ async def lifespan(app: FastAPI):
     print("[app] Startup complete — server ready at http://localhost:8000")
     yield  # <== Server starts accepting requests HERE
 
-    print("[app] Shutdown.")
+    # ── 关闭：调度引擎/通知 watcher 随 Web 进程停止（daemon 线程也会随进程退出，
+    #    这里显式 stop 让关闭更干净，避免正在 tick 的半截操作）──
+    print("[app] Shutdown...")
+    try:
+        daily_scheduler.engine.stop()
+    except Exception as e:
+        print(f"[app]   WARNING: scheduler stop failed: {e}")
+    try:
+        from dashboard import notify as notify_mod
+        notify_mod.stop()
+    except Exception:
+        pass
 
 
 app = FastAPI(title="AStock ETF Dashboard", version="2.0", lifespan=lifespan)
@@ -1635,6 +1647,8 @@ def _kill_existing_on_port(port: int) -> bool:
 app.include_router(protected)
 # ── 每日复盘集成 API（持仓/资产/信号/报告/调度，同样走 JWT）──
 app.include_router(daily_router)
+# ── 拟人 Agent「小满」API（聊天/文章/状态）──
+app.include_router(agent_router)
 
 if __name__ == "__main__":
     import uvicorn

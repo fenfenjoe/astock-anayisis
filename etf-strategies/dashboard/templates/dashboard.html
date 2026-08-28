@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/css/dashboard.css">
+<link rel="stylesheet" href="/static/css/agent.css">
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <script>
   if (typeof echarts === 'undefined') {
@@ -86,6 +87,7 @@
   <button class="topnav-item" data-view="view-signals" onclick="switchView('view-signals')">📡 每日信号</button>
   <button class="topnav-item" data-view="view-reports" onclick="switchView('view-reports')">📄 报告</button>
   <button class="topnav-item" data-view="view-scheduler" onclick="switchView('view-scheduler')">⏰ 定时任务</button>
+  <button class="topnav-item" data-view="view-agent" onclick="switchView('view-agent')">💬 角色</button>
 </nav>
 
 <!-- ═══ VIEW: 策略全景（原全部内容）═══ -->
@@ -267,6 +269,78 @@
       <span class="legend-inline muted">总资产 = Σ市值 + 可用现金</span>
     </div>
 
+    <!-- 交易录入：写入 每日调仓.md §2 调仓记录 + 自动重算持仓/可用金额 -->
+    <div class="pf-trade">
+      <div class="pf-trade-head">
+        <h3 class="pf-trade-title">📝 录入交易</h3>
+        <span class="legend-inline muted">写入 每日调仓.md 并自动调整当前持仓（含 T+1 校验：当日买入份额当日不可卖出）</span>
+      </div>
+      <div class="pf-trade-form">
+        <div class="pf-trade-field">
+          <label class="pf-label">日期</label>
+          <input class="select-mini" id="pf-trade-date" type="date">
+        </div>
+        <div class="pf-trade-field">
+          <label class="pf-label">名称</label>
+          <input class="select-mini" id="pf-trade-name" placeholder="如 半导体ETF">
+        </div>
+        <div class="pf-trade-field">
+          <label class="pf-label">代码</label>
+          <input class="select-mini" id="pf-trade-code" list="pf-code-list" placeholder="如 512480" oninput="pfEstimateFee()">
+          <datalist id="pf-code-list"></datalist>
+        </div>
+        <div class="pf-trade-field">
+          <label class="pf-label">方向</label>
+          <select class="select-mini" id="pf-trade-side" onchange="pfEstimateFee()">
+            <option value="买入">买入</option>
+            <option value="卖出">卖出</option>
+          </select>
+        </div>
+        <div class="pf-trade-field">
+          <label class="pf-label"><input type="checkbox" id="pf-trade-t" style="vertical-align:middle"> 做T</label>
+          <span class="legend-inline muted" style="font-size:0.7rem">备注自动加【做T】</span>
+        </div>
+        <div class="pf-trade-field">
+          <label class="pf-label">数量（份）</label>
+          <input class="select-mini" id="pf-trade-qty" type="number" step="100" min="1" placeholder="如 6100" oninput="pfEstimateFee()">
+        </div>
+        <div class="pf-trade-field">
+          <label class="pf-label">价格（元）</label>
+          <input class="select-mini" id="pf-trade-price" type="number" step="0.001" min="0" placeholder="如 1.044" oninput="pfEstimateFee()">
+        </div>
+        <div class="pf-trade-field">
+          <label class="pf-label">手续费（元）<span class="legend-inline muted" id="pf-trade-fee-est" style="font-size:0.7rem"></span></label>
+          <input class="select-mini" id="pf-trade-fee" type="number" step="0.01" min="0" placeholder="0" title="买入现金多扣、卖出现金少收；默认按 佣金万2.5/最低5元 + 股票卖出印花税0.05% 预估，可改">
+        </div>
+        <div class="pf-trade-field pf-trade-field-wide">
+          <label class="pf-label">备注</label>
+          <input class="select-mini" id="pf-trade-remark" placeholder="信号ID / 做T / 打新底仓…">
+        </div>
+        <div class="pf-trade-actions">
+          <button class="btn btn-primary btn-sm" onclick="pfTradeSubmit()" id="pf-trade-submit">➕ 录入</button>
+          <button class="btn btn-sm" onclick="pfTradeUndo()" id="pf-trade-undo" title="撤销最近一笔界面录入">↩️ 撤销最近一笔</button>
+        </div>
+      </div>
+      <div class="table-wrap pf-trade-trades">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-num">日期</th>
+              <th class="col-name">名称</th>
+              <th class="col-num">代码</th>
+              <th class="col-num">数量</th>
+              <th class="col-num">价格</th>
+              <th class="col-num">方向</th>
+              <th class="col-name">备注</th>
+            </tr>
+          </thead>
+          <tbody id="pf-trades-tbody">
+            <tr><td colspan="7" class="loading-cell">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- 东财实验区 -->
     <div class="em-card" id="pf-eastmoney">
       <h3 class="em-title">⚠️ 东方财富自动获取 <span class="em-badge">实验功能</span></h3>
@@ -327,6 +401,7 @@
       <h2 class="panel-title">⏰ 定时任务（每日复盘）</h2>
       <div class="panel-controls">
         <span class="legend-inline" id="sched-engine"></span>
+        <button class="btn btn-sm" id="sched-auto-btn" onclick="schedToggleAuto()" title="切换自动调度（引擎每 20s 轮询，空闲零 token）">⏱ 自动调度:…</button>
         <button class="btn btn-sm" onclick="schedLoad()">🔄 刷新</button>
       </div>
     </div>
@@ -352,6 +427,59 @@
   </section>
 </div>
 
+<!-- ═══ VIEW: 角色（小满）═══ -->
+<div class="view" id="view-agent">
+  <div class="agent-tabs">
+    <button class="agent-tab active" data-tab="chat" onclick="Agent.switchTab('chat')">💬 和小满聊天</button>
+    <button class="agent-tab" data-tab="articles" onclick="Agent.switchTab('articles')">📄 我的动态</button>
+  </div>
+
+  <!-- 聊天 -->
+  <div class="agent-pane active" id="agent-pane-chat">
+    <div class="agent-chat-layout">
+      <aside class="agent-sessions">
+        <div class="agent-sessions-head">
+          <h3 class="em-title">会话</h3>
+          <button class="btn btn-sm" onclick="Agent.newSession()">＋ 新会话</button>
+        </div>
+        <div id="agent-session-list" class="agent-session-list"><p class="muted">加载中...</p></div>
+      </aside>
+      <section class="agent-chat-main">
+        <div id="agent-messages" class="agent-messages">
+          <p class="muted">你好呀，我是小满～ 选一个会话开始聊，或者问我怎么看今天的财经大事。</p>
+        </div>
+        <div class="agent-input-row">
+          <textarea id="agent-input" rows="2"
+            placeholder="和小满聊聊… 例如：你怎么看今天的 MLF 操作？"
+            onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();Agent.send();}"></textarea>
+          <button class="btn btn-primary" id="agent-send-btn" onclick="Agent.send()">发送</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- 动态（时间线）+ 素材源 -->
+  <div class="agent-pane" id="agent-pane-articles">
+    <div class="agent-sources-panel">
+      <div class="agent-sources-head">
+        <h3 class="em-title">📡 素材源</h3>
+        <button class="btn btn-sm" onclick="Agent.toggleSourcesForm()">＋ 添加</button>
+      </div>
+      <div id="agent-sources-form" class="agent-sources-form" style="display:none">
+        <input id="src-name" placeholder="名称（如：财新网 / 一篇好文）">
+        <input id="src-url" placeholder="入口 URL（https://...）">
+        <select id="src-kind">
+          <option value="website">常驻站点（小满每日逛站找文章）</option>
+          <option value="manual">手动喂单篇（直接进素材池）</option>
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="Agent.addSource()">添加</button>
+      </div>
+      <div id="agent-sources-list" class="agent-sources-list"></div>
+    </div>
+    <div id="agent-articles" class="agent-articles"><p class="muted">加载中...</p></div>
+  </div>
+</div>
+
 <!-- Toast Container -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -361,5 +489,6 @@
 <script src="/static/js/auth.js"></script>
 <script src="/static/js/dashboard.js"></script>
 <script src="/static/js/daily.js"></script>
+<script src="/static/js/agent.js"></script>
 </body>
 </html>
