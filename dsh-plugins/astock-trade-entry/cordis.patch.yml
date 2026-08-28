@@ -1,0 +1,7 @@
+# dsh bundle patch: 将 astock-trade-entry 插件插入 profile 层栈。
+# 如需指定项目根目录（默认取 dsh web 进程的工作目录），在此行加 config.root:
+#   config:
+#     root: 'E:/ideaworkspace/astock-anayisis'
+- insert:
+    - id: astock-trade-entry
+      name: '@astock/dsh-trade-entry'

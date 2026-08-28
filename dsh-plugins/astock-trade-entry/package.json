@@ -1,0 +1,41 @@
+{
+  "name": "@astock/dsh-trade-entry",
+  "version": "0.1.0",
+  "description": "A股每日复盘：持仓/资产页面与交易录入（买入/卖出/做T）。录入后自动更新 每日调仓.md 与 config/持仓.md（含 T+1 校验、可用金额/成本价重算、可撤销）。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.js",
+    "./ledger": "./ledger.mjs",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.mjs",
+    "client.js",
+    "ledger.mjs",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24"
+  },
+  "license": "MIT"
+}
