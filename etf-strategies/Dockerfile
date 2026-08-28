@@ -33,14 +33,15 @@ RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && npm install -g @anthropic-ai/claude-code@2.1.229 \
+    && npm install -g @deepseek-ai/dsh@0.1.0-rc.6 \
     && rm -rf /var/lib/apt/lists/* \
-    && claude --version
+    && claude --version && dsh --version
 
 # 复制应用代码
 COPY . .
 
 # 确保运行时目录存在
-RUN mkdir -p /app/dashboard/data /app/cache /app/report
+RUN mkdir -p /app/dashboard/data /app/cache /app/report /app/agent/data /root/.dsh/profiles
 
 # 环境变量
 ENV PYTHONUNBUFFERED=1

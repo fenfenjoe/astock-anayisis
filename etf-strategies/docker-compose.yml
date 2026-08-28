@@ -62,6 +62,7 @@ services:
       - dashboard_data:/app/dashboard/data   # SQLite DB + .secret_key
       - dashboard_cache:/app/cache           # K线 parquet 缓存
       - dashboard_report:/app/report         # 回测 HTML 报告
+      - dashboard_agent:/app/agent/data      # 拟人 Agent「小满」数据（与 agent 服务共享）
       - ../:/repo                            # 仓库根（每日复盘 prompt/报告/持仓/交易日历）
 
     logging:
@@ -70,15 +71,63 @@ services:
         max-size: "10m"
         max-file: "3"
 
-    # 资源限制
+    # 资源限制（claude -p 子进程 + python 取数峰值可能 >1G，2G 更稳）
     deploy:
       resources:
         limits:
-          memory: 1G
+          memory: 2G
         reservations:
           memory: 256M
+
+  # ── OpenViking 记忆服务（官方镜像；本机为主时可不启动此服务）──
+  openviking:
+    image: ghcr.io/volcengine/openviking:latest
+    container_name: etf-openviking
+    restart: unless-stopped
+    ports:
+      - "${OPENVIKING_PORT:-1933}:1933"
+    volumes:
+      - ~/.openviking:/app/.openviking   # ov.conf + data（机器特定，不入仓库）
+    environment:
+      - OPENVIKING_SERVER_PORT=1933
+
+  # ── 拟人 Agent「小满」常驻进程（独立于 dashboard，崩溃互不影响）──
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: etf-agent
+    restart: unless-stopped
+    # 启动前把仓库 .dsh/profiles 同步到容器内 dsh（幂等，不覆盖已存在），再起 agent
+    command: ["sh", "-c",
+              "mkdir -p /root/.dsh/profiles && cp -rn /repo/.dsh/profiles/* /root/.dsh/profiles/ 2>/dev/null || true; exec python -m agent"]
+
+    environment:
+      - TZ=Asia/Shanghai
+      # 小满的 LLM 凭据：容器内 dsh 使用（本地跑则用 ~/.dsh/.credentials.yaml，key 单点）
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      # dsh 工作目录（与 dashboard 一致；dsh_runner 的 REPO_ROOT）
+      - DASHBOARD_REPO_ROOT=/repo
+
+    volumes:
+      - dashboard_agent:/app/agent/data      # agent.db（与 dashboard 服务共享）
+      - ../:/repo                            # 仓库根（备用素材源）
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
 
 volumes:
   dashboard_data:
   dashboard_cache:
   dashboard_report:
+  dashboard_agent:

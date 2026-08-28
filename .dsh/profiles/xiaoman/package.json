@@ -1,0 +1,16 @@
+{
+  "name": "dsh-profile-xiaoman",
+  "private": true,
+  "dependencies": {
+    "@openviking/dsh-memory-plugin": "^0.2.1"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-headless",
+        "@openviking/dsh-memory-plugin"
+      ]
+    }
+  }
+}
