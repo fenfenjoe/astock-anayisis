@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS kline_daily (
 --   excess_return    相对S1基准超额年化收益
 --   assets_json      资产池JSON数组 ["510300(沪深300ETF)", …]
 --   description      策略一句话描述
---   backtest_window  回测数据窗口 (如"2012-05-28~2026-07-01 (约14年)")
+--   backtest_window  回测数据窗口 (如"2012-05-28~2026-08-31 (约14年)")
 --   updated_at       数据更新时间
 CREATE TABLE IF NOT EXISTS strategy_metrics (
     strategy_id     TEXT PRIMARY KEY,    -- S1..S16

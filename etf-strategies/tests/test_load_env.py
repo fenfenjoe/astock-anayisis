@@ -16,6 +16,9 @@ def test_loads_keys_and_does_not_override_existing(tmp_path, monkeypatch):
         "DB_MODE=memory\nCLOUD_RESTORE_ON_START=1\nOTHER=value\n",
         encoding="utf-8")
     monkeypatch.setenv("DB_MODE", "file")  # 已存在 → 不覆盖
+    # conftest.py 为测试隔离预置了 CLOUD_RESTORE_ON_START=0（BUG-009/010 防护）；
+    # 先删除该键，验证 load_env_file 对"未设置键"的 .env 加载语义。
+    monkeypatch.delenv("CLOUD_RESTORE_ON_START", raising=False)
     load_env_file(env)
     assert os.environ["DB_MODE"] == "file"          # 环境变量优先
     assert os.environ["CLOUD_RESTORE_ON_START"] == "1"

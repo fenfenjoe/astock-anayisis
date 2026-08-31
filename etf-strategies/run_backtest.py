@@ -1,6 +1,7 @@
 """回测入口：拉数据 → 跑全部策略 → 生成报告。"""
 import sys
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+from datetime import date
 from pathlib import Path
 import pandas as pd
 from backtest.data import get_kline
@@ -26,7 +27,9 @@ from backtest.strategies.rsrs_reversal_momentum import RsrsReversalMomentum
 from backtest.strategies.low_correlation_rotation import LowCorrelationRotation
 from backtest.reporting import plot_equity_curves, plot_drawdowns, render_markdown_report
 
-START, END = "2012-05-28", "2026-07-01"
+# 回测窗口：END 动态取当前日期（BUG-011 修复，原硬编码 2026-07-01 静默缺失 2 个月行情），
+# 与 daily_signal.py 的 date.today() 动态窗口保持一致。
+START, END = "2012-05-28", date.today().strftime("%Y-%m-%d")
 OUT_DIR = Path(__file__).resolve().parent
 
 
@@ -107,7 +110,7 @@ def main():
     plot_equity_curves(results, OUT_DIR / "equity_curves.png")
     plot_drawdowns(results, OUT_DIR / "drawdowns.png")
     render_markdown_report(results, metrics, OUT_DIR / "03_ETF策略回测报告.md",
-                            data_start="2012-05-28", data_end="2026-07-01")
+                            data_start=START, data_end=END)
     print("[done] 报告: 03_ETF策略回测报告.md")
 
 

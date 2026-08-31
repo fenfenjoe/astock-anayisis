@@ -1,6 +1,7 @@
 """数据层：东财前复权日K — 始终走 API 保证数据最新，同时写 parquet 备份。"""
 import sys
 sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+from datetime import date
 import pandas as pd
 from pathlib import Path
 from backtest.em_client import eastmoney_kline
@@ -8,7 +9,7 @@ from backtest.em_client import eastmoney_kline
 CACHE_DIR = Path(__file__).resolve().parent.parent / "cache"
 
 
-def get_kline(code, start="2012-05-28", end="2026-07-01", refresh=False):
+def get_kline(code, start="2012-05-28", end=None, refresh=False):
     """取前复权日K。
 
     refresh=True:  始终走东财 API 保证最新，写 parquet 备份。
@@ -17,9 +18,13 @@ def get_kline(code, start="2012-05-28", end="2026-07-01", refresh=False):
 
     拉取成功后会写 parquet 更新本地备份。
     返回值始终过滤到 [start, end] 范围。
+    end 缺省时动态取当前日期（BUG-011 修复，原硬编码 2026-07-01 会静默缺失后续行情）。
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_file = CACHE_DIR / f"{code}.parquet"
+
+    if end is None:
+        end = date.today().strftime("%Y-%m-%d")
 
     start_ts = pd.Timestamp(start)
     end_ts = pd.Timestamp(end)

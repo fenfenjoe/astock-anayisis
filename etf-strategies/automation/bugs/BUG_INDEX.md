@@ -11,10 +11,10 @@
 |------|------|
 | OPEN | 0 |
 | IN_PROGRESS | 0 |
-| FIXED | 3 |
+| FIXED | 7 |
 | VERIFIED | 1 |
 | WONT_FIX | 1 |
-| MANUAL_REVIEW | 1 |
+| MANUAL_REVIEW | 6 |
 
 ---
 
@@ -26,6 +26,11 @@
 | BUG-ID | 标题 | 原因 |
 |--------|------|------|
 | BUG-005 | 胜率计算分母与正确性定义不符（非零收益天数 vs 总交易日数） | 指标口径决策（MET-005），auto_fix_eligible=false |
+| BUG-007 | ENG-004 换手率定义与实现口径不一致:引擎年化(可>2)vs定义单次调仓(≤2) | 指标口径决策（ENG-004），auto_fix_eligible=false |
+| BUG-012 | S8 三因子未归一化即加权：效率因子支配得分（实测占84.3%） | 策略打分公式（金融算法），auto_fix_eligible=false |
+| BUG-013 | S12 KB"放量下跌自动切货币"未实现：仅0.3分惩罚 | 避险信号策略行为设计决策，auto_fix_eligible=false |
+| BUG-014 | S12/S13 KB因子口径与实现不符（年化收益/成交量因子） | 因子口径决策，auto_fix_eligible=false |
+| BUG-015 | S9/S13 KB资产池数量标注不符（6只 vs 实列5只） | KB 文档口径修订，auto_fix_eligible=false |
 
 ---
 
@@ -40,6 +45,15 @@
 | BUG-004 | cache/512100.parquet缓存过期(2026-07-22,>24h) | data | MEDIUM | FIXED | 2026-08-27 |
 | BUG-005 | 胜率计算分母与正确性定义不符(非零收益天数vs总交易日数) | metrics | MEDIUM | MANUAL_REVIEW | 2026-08-27 |
 | BUG-006 | 正确性定义引用的6个测试节点不存在,reporting.py覆盖率0% | tests | MEDIUM | FIXED | 2026-08-27 |
+| BUG-007 | ENG-004 换手率定义与实现口径不一致:引擎年化(可>2)vs定义单次调仓(≤2) | engine | MEDIUM | MANUAL_REVIEW | 2026-08-28 |
+| BUG-008 | 5个cache parquet缓存过期(002142/159227/159326/512100/601398, mtime>24h) | data | MEDIUM | FIXED | 2026-08-31 |
+| BUG-009 | conftest.py测试隔离缺陷:setdefault无法覆盖继承DB_MODE=memory(全量测试大面积失败+挂起+TOS污染风险) | tests | HIGH | FIXED | 2026-08-31 |
+| BUG-010 | conftest.py预置CLOUD_RESTORE_ON_START=0破坏test_load_env断言(干净环境必失败) | tests | MEDIUM | FIXED | 2026-08-31 |
+| BUG-011 | 硬编码回测窗口end=2026-07-01过时(回测静默缺2026-07~08数据,KB/sync元数据过时) | data | MEDIUM | FIXED | 2026-08-31 |
+| BUG-012 | S8三因子未归一化即加权:效率因子支配得分(实测占84.3%),与KB"归一化后加权0.4/0.3/0.3"不符 | strategies | MEDIUM | MANUAL_REVIEW | 2026-08-31 |
+| BUG-013 | S12 KB"放量下跌自动切货币"未实现:仅0.3分惩罚,放量下跌日仍满仓(实证货币权重0.0) | strategies | MEDIUM | MANUAL_REVIEW | 2026-08-31 |
+| BUG-014 | S12/S13 KB因子口径与实现不符:"年化收益"实为简单收益;"成交量因子"实为价格波幅代理 | strategies | LOW | MANUAL_REVIEW | 2026-08-31 |
+| BUG-015 | S9/S13 KB资产池数量标注不符:写"6只/5行业+1宽基"实列5只(4行业+1宽基),代码为5只 | strategies | LOW | MANUAL_REVIEW | 2026-08-31 |
 <!-- BUG_TABLE_END -->
 
 ---
@@ -60,6 +74,13 @@
 | 2026-08-27 | 数据巡检 | 1 | 0 | 1 |
 | 2026-08-27 | 代码巡检 | 2 | 0 | 3 |
 | 2026-08-27 | 自动修复 | 0 | 2 | 1 |
+| 2026-08-28 | 数据巡检 | 0 | 0 | 1 |
+| 2026-08-28 | 代码巡检 | 1 | 0 | 2 |
+| 2026-08-28 | 自动修复 | 0 | 0 | 1 |
+| 2026-08-31 | 数据巡检 | 1 | 0 | 3 |
+| 2026-08-31 | 代码巡检 | 3 | 0 | 6 |
+| 2026-08-31 | 逻辑巡检 | 4 | 0 | 10 |
+| 2026-08-31 | 自动修复 | 0 | 4 | 0 |
 
 ---
 
