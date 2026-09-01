@@ -5,7 +5,7 @@
 纯计算函数，不读写磁盘，不调用外部 API。
 """
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Union
 
 
@@ -155,3 +155,90 @@ def generate_graded_thresholds(strict: dict) -> dict:
         loose['volume'] = int(strict['volume'] * 0.7)
 
     return {'strict': strict, 'loose': loose}
+
+
+# ============================================================
+# REQ-003: 财报窗口 / 主线联防 / 证伪阈值距离
+# ============================================================
+
+# 财报披露截止日（月, 日）— 中报/年报/三季报
+EARNINGS_DEADLINES = [
+    (4, 30),    # 年报 + 一季报截止
+    (8, 31),    # 中报截止
+    (10, 31),   # 三季报截止
+]
+
+# 财报窗口天数：截止日前 N 天（含截止日）视为披露窗口
+EARNINGS_WINDOW_DAYS = 14
+
+
+def is_earnings_window(date_input, window_days: int = EARNINGS_WINDOW_DAYS) -> bool:
+    """判断日期是否处于财报披露窗口。
+
+    财报披露窗口 = 各截止日（4/30 年报、8/31 中报、10/31 三季报）前
+    `window_days` 天（含截止日当天）。
+
+    Args:
+        date_input: datetime.date 或 ISO 格式字符串（"YYYY-MM-DD"）
+        window_days: 窗口天数（默认 14）
+
+    Returns:
+        True 如果日期落在任一财报披露窗口内
+    """
+    if isinstance(date_input, str):
+        d = date.fromisoformat(date_input)
+    else:
+        d = date_input
+
+    for month, day in EARNINGS_DEADLINES:
+        deadline = date(d.year, month, day)
+        window_start = deadline - timedelta(days=window_days - 1)
+        if window_start <= d <= deadline:
+            return True
+    return False
+
+
+def check_mainline_guard(mainline_change_pct: float, threshold: float = 1.0) -> tuple:
+    """涨停潮建仓信号的"主线不弱化"联防检查（REQ-003 第 2 项）。
+
+    所属大主线指数回落幅度 >= threshold%（默认 1%）时，建仓信号降级为观察。
+
+    Args:
+        mainline_change_pct: 所属大主线指数涨跌幅（%，负值=回落）
+        threshold: 回落降级阈值（%，默认 1.0）
+
+    Returns:
+        (ok: bool, reason: str)
+        ok=True 表示主线未弱化，建仓信号可保持；
+        ok=False 表示主线回落超阈值，应降级为观察。
+    """
+    if mainline_change_pct <= -threshold:
+        return (False, f'所属主线回落 {abs(mainline_change_pct):.2f}% >= {threshold}%，降级为观察')
+    return (True, '')
+
+
+def check_falsify_distance(
+    trigger_price: float,
+    falsify_price: float,
+    min_distance_pct: float = 0.5,
+) -> tuple:
+    """证伪阈值与触发价距离校验（REQ-003 第 3 项）。
+
+    证伪阈值应与触发价拉开 >= min_distance_pct% 距离，防止盘中轻微下探
+    触发假证伪。
+
+    Args:
+        trigger_price: 信号触发价（>0）
+        falsify_price: 证伪阈值价
+        min_distance_pct: 最小距离百分比（默认 0.5）
+
+    Returns:
+        (ok: bool, actual_pct: float | None)
+        ok=True 表示距离达标；actual_pct 为实际距离百分比；
+        trigger_price<=0 时返回 (False, None)（非法输入）。
+    """
+    if trigger_price <= 0:
+        return (False, None)
+
+    actual_pct = abs(falsify_price - trigger_price) / trigger_price * 100.0
+    return (actual_pct >= min_distance_pct, actual_pct)
