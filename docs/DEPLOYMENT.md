@@ -23,7 +23,7 @@
 
 - **dashboard**：web 界面 + API + 报告/信号调度（dsh headless）
 - **agent**：小满常驻进程（Python 壳，LLM 全走 `dsh --profile xiaoman`）
-- **openviking**：小满的语义记忆后端（独立服务；火山 embedding，配额 9/4 重置后可用）
+- **openviking**：小满的语义记忆后端（**火山云版**，见 §4.1；本地 server 不再必须）
 
 ## 2. 多机一致性机制（配置随仓库走）
 
@@ -74,6 +74,40 @@ docker compose up -d --build   # dashboard + agent + openviking 三服务
 |---|---|---|
 | 本机（`start_all.ps1`） | 开发/单机日常 | 日志在 `scripts/logs/`，PID 在 `scripts/.pids/` |
 | Docker（compose） | 服务器/团队 | 三服务隔离，配置统一走 `.env` |
+
+## 4.1 OpenViking 云版接入（推荐，替代本地 server）
+
+OpenViking 可用**火山引擎云服务**（`api.vikingdb.cn-beijing.volces.com`），无需本地跑 `openviking-server`，也绕开了本地 embedding 月度配额问题。
+
+### 接入（一次）
+
+1. **装插件**（xiaoman 即小满 profile 已装 `@openviking/dsh-memory-plugin`）：
+   ```bash
+   dsh plugin --profile xiaoman add @openviking/dsh-memory-plugin
+   ```
+2. **写云端凭据**到 `~/.openviking/ovcli.conf`（敏感，勿入库）：
+   ```json
+   { "url": "https://api.vikingdb.cn-beijing.volces.com/openviking",
+     "api_key": "<火山 OpenViking 云 API Key>" }
+   ```
+3. **隔离**：dsh_runner 已自动注入 `OPENVIKING_PEER_ID=xiaoman` + `OPENVIKING_RECALL_PEER_SCOPE=actor`（小满与其它 agent 记忆互不混淆）。
+
+> 插件按 ${baseUrl}/mcp 连云端 MCP。endpoint/key 也可改用环境变量 `OPENVIKING_URL` / `OPENVIKING_API_KEY`。
+
+### 验证
+
+```bash
+# 最小：dsh --profile xiaoman "用 viking_search 搜一条记忆"
+python scripts/cloud_sync.py --download --dry-run   # 无关，仅示意
+# 或直接在小满会话里 viking_remember / viking_search 往返
+```
+
+已实测：xiaoman peer 的 `viking_remember → viking_search` 闭环通过；`OPENVIKING_PEER_ID` 不同（headless）搜不到 → 隔离有效。
+
+### 与本地版的关系
+
+- 配置 `ovcli.conf` 指向云后，本地 `openviking-server` 可**不启动**（`start_all.ps1` 的 openviking 服务可跳过）；本地版仍可作回退。
+- 本地旧数据（仓库 `data/`、`~/.openviking/data/`）云版不读取；如需清理见 `scripts/cloud_clean_local.ps1`。
 
 ## 5. 数据云备份（火山引擎 TOS，免费级）
 
@@ -163,6 +197,6 @@ powershell -ExecutionPolicy Bypass -File scripts/cloud_clean_local.ps1
 
 ## 7. 注意事项
 
-- `openviking` 的 `ov.conf` 在 `~/.openviking/`（机器特定，含 provider key）——新机器需 `openviking-server init` 或复制配置
-- 火山 embedding 月度配额超限（429）时，OpenViking 不可用（小满其余功能不受影响）；重置后 `start_all.ps1` 或 compose 自动恢复
+- `openviking` 已接**火山云版**（`~/.openviking/ovcli.conf` 指向云，见 §4.1）；本地 `openviking-server` 可选/回退，非必需
+- 若用本地版，其 `ov.conf` 在 `~/.openviking/`（机器特定，含 provider key）——新机器需 `openviking-server init` 或复制配置
 - 凭据治理细则见 `docs/SECURITY.md`

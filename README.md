@@ -32,7 +32,7 @@ python -m pip install --user boto3
 | 3 | **dsh profile 同步** | 把仓库 `.dsh/profiles`（xiaoman）同步到本机：`powershell -ExecutionPolicy Bypass -File scripts/sync_dsh.ps1`（也会校验 dsh/openviking 版本） |
 | 4 | **Python 依赖** | `pip install -r etf-strategies/requirements.txt`；可选 `python -m pip install --user boto3`（云备份） |
 | 5 | **`.env` 配置（可选）** | 复制 `etf-strategies/.env.example` → `.env`。**严格零本地**加 `DB_MODE=memory` + `CLOUD_RESTORE_ON_START=1`；用 claude 兜底才需填 `ANTHROPIC_AUTH_TOKEN`（默认走 dsh 不需要） |
-| 6 | **OpenViking（可选）** | 记忆服务，需 `python -m pip install --user openviking` + 配置 `~/.openviking/ov.conf`（火山 embedding，注意月度配额）；起服务后作用域隔离见 `docs/DEPLOYMENT.md` |
+| 6 | **OpenViking 记忆（可选）** | 已接入**火山云版**（`~/.openviking/ovcli.conf` 指向 `api.vikingdb.cn-beijing.volces.com/openviking`，含云 API Key，敏感不入 git）；无需本地跑 `openviking-server`，见 `docs/DEPLOYMENT.md` §4.1 |
 | 7 | **云备份 TOS（可选）** | `scripts/cloud_sync.py` 配 `scripts/config/cloud.json`（火山引擎 AK/SK），见 `docs/DEPLOYMENT.md` §5 |
 
 ### 启动方式
