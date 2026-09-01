@@ -52,9 +52,17 @@ from dashboard import scheduler as daily_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: restore-from-cloud (optional) → init DB, seed, pre-load modules."""
+    """Startup: restore-from-cloud (optional) → init DB, seed, pre-load modules.
+
+    测试免疫（2026-08-31 事故修复）：pytest 环境（PYTEST_CURRENT_TEST 存在）
+    下跳过全部启动副作用——云恢复下载会覆盖本地真实账本，import_* 会用真实
+    文件覆盖真实 DB，upload 会把本地报告推上云。测试进程必须零副作用。
+    """
+    _in_test = os.environ.get("PYTEST_CURRENT_TEST") is not None \
+        or os.environ.get("DSH_TEST") == "1"
     # ── 云恢复：CLOUD_RESTORE_ON_START=1 时先拉取 TOS 最新数据到本地工作副本 ──
-    if os.environ.get("CLOUD_RESTORE_ON_START", "").lower() in ("1", "true"):
+    if (os.environ.get("CLOUD_RESTORE_ON_START", "").lower() in ("1", "true")
+            and not _in_test):
         print("[app] Restoring data from cloud (TOS)...")
         try:
             import subprocess as _sp
@@ -66,8 +74,19 @@ async def lifespan(app: FastAPI):
             print(f"[app]   restore exit={_r.returncode}: {(_r.stdout or '')[-200:]}")
         except Exception as e:
             print(f"[app]   WARNING: cloud restore failed: {e}")
+    elif _in_test:
+        print("[app]   (test env) skipped cloud restore")
 
     init_db()
+
+    # ── 初始化 agent.db（会话/文章/知识库）：dashboard 也要读它，
+    #    否则 /api/agent/* （如 status 的 heartbeat）会因表不存在而报错。
+    #    file 模式建表；memory 模式从 TOS 载入/建空。 ──
+    try:
+        from agent import db as agent_db
+        agent_db.init_db()
+    except Exception as e:
+        print(f"[app]   WARNING: agent.db init failed: {e}")
 
     # ── 严格零本地：memory 模式起后台快照回传线程 ──
     try:
@@ -80,7 +99,7 @@ async def lifespan(app: FastAPI):
         print(f"[app]   WARNING: backup loop start failed: {e}")
 
     # ── Seed default admin user if no users exist ──
-    if user_count() == 0:
+    if not _in_test and user_count() == 0:
         import secrets
         import os as _os
         default_password = _os.environ.get("DASHBOARD_ADMIN_PASSWORD", "") or secrets.token_hex(8)[:16]
@@ -104,8 +123,11 @@ async def lifespan(app: FastAPI):
     # strategies are picked up automatically without requiring a DB reset.
     # NOTE: seed_all() internally calls _update_source_urls() and
     # _update_process_descs() — no need to call them again here.
-    print("[app] Syncing strategy definitions (idempotent)...")
-    seed_all()
+    if not _in_test:
+        print("[app] Syncing strategy definitions (idempotent)...")
+        seed_all()
+    else:
+        print("[app]   (test env) skipped seed_all")
 
     # Pre-import heavy modules (eliminates cold-start on first API call)
     print("[app] Pre-loading strategy modules...")
@@ -117,6 +139,8 @@ async def lifespan(app: FastAPI):
 
     # ── Background: pre-generate signals (runs after server is already live) ──
     def _warm_cache():
+        if _in_test:
+            return  # 测试环境不预热信号缓存（避免真实取数/写库）
         print("[app] Background: warming signal cache...")
         try:
             results = sync_daily_signals()
@@ -128,31 +152,37 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=_warm_cache, daemon=True).start()
 
     # ── 每日复盘集成：导入历史 + 启动调度器引擎（幂等，可重复跑）──
-    print("[app] Importing 每日复盘 data (reports/holdings/trades)...")
-    try:
-        r = daily_scheduler.import_reports_from_disk()
-        print(f"[app]   reports imported: {r.get('imported', 0)}")
-    except Exception as e:
-        print(f"[app]   WARNING: reports import failed: {e}")
-    try:
-        if daily_scheduler.import_holdings_from_md():
-            print("[app]   holdings imported from 持仓.md")
-        if daily_scheduler.import_trades_from_md():
-            print("[app]   trades imported from 每日调仓.md")
-    except Exception as e:
-        print(f"[app]   WARNING: holdings/trades import failed: {e}")
+    # 测试免疫：以下操作会写真实 DB / 上传云，测试进程一律跳过
+    if not _in_test:
+        print("[app] Importing 每日复盘 data (reports/holdings/trades)...")
+        try:
+            up = daily_scheduler.upload_reports_to_cloud()
+            r = daily_scheduler.import_reports_from_disk()
+            print(f"[app]   reports uploaded: {up.get('uploaded', 0)}, "
+                  f"imported: {r.get('imported', 0)}")
+        except Exception as e:
+            print(f"[app]   WARNING: reports import failed: {e}")
+        try:
+            if daily_scheduler.import_holdings_from_md():
+                print("[app]   holdings imported from 持仓.md")
+            if daily_scheduler.import_trades_from_md():
+                print("[app]   trades imported from 每日调仓.md")
+        except Exception as e:
+            print(f"[app]   WARNING: holdings/trades import failed: {e}")
 
-    try:
-        daily_scheduler.start()
-    except Exception as e:
-        print(f"[app]   WARNING: scheduler start failed: {e}")
+        try:
+            daily_scheduler.start()
+        except Exception as e:
+            print(f"[app]   WARNING: scheduler start failed: {e}")
 
-    # ── 企业微信信号触发通知 watcher（未配置则静默空转）──
-    try:
-        from dashboard import notify as notify_mod
-        notify_mod.start()
-    except Exception as e:
-        print(f"[app]   WARNING: notify watcher start failed: {e}")
+        # ── 企业微信信号触发通知 watcher（未配置则静默空转）──
+        try:
+            from dashboard import notify as notify_mod
+            notify_mod.start()
+        except Exception as e:
+            print(f"[app]   WARNING: notify watcher start failed: {e}")
+    else:
+        print("[app]   (test env) skipped 每日复盘 import / scheduler / notify")
 
     print("[app] Startup complete — server ready at http://localhost:8000")
     yield  # <== Server starts accepting requests HERE
