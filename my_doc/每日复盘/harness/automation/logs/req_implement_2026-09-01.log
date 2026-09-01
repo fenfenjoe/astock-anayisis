@@ -1,0 +1,12 @@
+[2026-09-01T12:59:05+08:00] REQ_IMPLEMENT 开始
+[2026-09-01T12:59:10+08:00] 扫描: 每日复盘=1 OPEN, ETF=0 OPEN
+[2026-09-01T12:59:15+08:00] 选择: REQ-003 (P1) — 早盘板块扫描池增加"业绩驱动"类别 + 涨停潮建仓联防 + 证伪阈值距离
+[2026-09-01T12:59:30+08:00] brainstorming: 方案A(最小改动:仅改模板+grep验证) vs 方案B(模板固化+lib校验函数+pytest)，选择方案B，理由: REQ测试交付物明确要求 tests/test_REQ-003.py + lib/signal_design.py 校验函数，方案A无法满足TDD门禁
+[2026-09-01T13:00:10+08:00] writing-plans: 6个文件 (lib/signal_design.py, tests/test_REQ_003.py, 早盘/盘中/复盘模板, auto_intraday_check.md)
+[2026-09-01T13:01:20+08:00] TDD: 19条测试用例 (is_earnings_window 7条 / check_mainline_guard 6条 / check_falsify_distance 6条)
+[2026-09-01T13:01:50+08:00] TDD红条确认: ImportError (函数未实现) → 实现后 19/19 PASS
+[2026-09-01T13:02:20+08:00] executing-plans: 6个文件已修改 (+task_state.json/REQ_INDEX.md 状态同步)
+[2026-09-01T13:03:10+08:00] code-review: 自查7项通过; 测试 REQ 19/19 PASS + 全量 234/234 PASS
+[2026-09-01T13:03:30+08:00] TDD门禁: test_REQ_003.py EXISTS + 19/19 PASS → 通过
+[2026-09-01T13:04:00+08:00] Git提交: 49256b0 (9 files changed)
+[2026-09-01T13:04:10+08:00] REQ_IMPLEMENT 结束 — REQ REQ-003 → IMPLEMENTED
