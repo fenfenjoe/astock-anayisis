@@ -41,22 +41,34 @@
     loadArticles();
     loadSources();
     loadStatus();
+    // 状态轮询（请假/摸鱼/正在做XXX 随任务变动，30s 刷新）
+    if (!state.statusTimer) {
+      state.statusTimer = setInterval(loadStatus, 30000);
+    }
   }
 
-  // ── 角色状态条 ──
+  // ── 小满状态栏（请假中 / 摸鱼中 / 正在做XXX）──
   async function loadStatus() {
     try {
       const resp = await Auth.fetchGet('/api/agent/status');
       const s = await resp.json();
-      const box = document.querySelector('.agent-tabs');
-      const badge = document.createElement('span');
-      badge.className = 'agent-status';
-      badge.style.cssText = 'margin-left:auto;font-size:0.8rem;color:var(--text-muted);align-self:center;';
-      badge.textContent = (s.alive ? '🟢 常驻运行中' : '⚪ 未运行') +
-        (s.llm_configured ? '' : ' · ⚠️ 未配置 LLM Key') +
-        (s.published_on ? ' · 今日已发文' : '');
-      box.appendChild(badge);
-    } catch (e) { /* 状态条失败不影响主体 */ }
+      const el = document.getElementById('agent-mood');
+      if (!el) return;
+      const mood = s.mood || {};
+      const parts = [];
+      parts.push((s.alive ? '🟢' : '⚪') + (mood.icon || ''));
+      parts.push(mood.label || '未知状态');
+      if (s.attendance === 'on' && s.current_task) {
+        parts.push('· 开始于 ' + (s.current_task.started_at || ''));
+      }
+      if (!s.alive) parts.push('·（小满进程未运行）');
+      if (s.published_on) parts.push('· 今日已发文');
+      el.textContent = parts.join(' ');
+      // 状态随出勤/任务态着色
+      const cls = s.attendance === 'leave' ? 'pill-leave'
+        : s.current_task ? 'pill-working' : 'pill-slack';
+      el.className = 'agent-status-pill ' + cls;
+    } catch (e) { /* 状态栏失败不影响主体 */ }
   }
 
   // ── 会话 ──

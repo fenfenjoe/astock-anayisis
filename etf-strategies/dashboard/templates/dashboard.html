@@ -86,7 +86,7 @@
   <button class="topnav-item" data-view="view-portfolio" onclick="switchView('view-portfolio')">💰 持仓/资产</button>
   <button class="topnav-item" data-view="view-signals" onclick="switchView('view-signals')">📡 每日信号</button>
   <button class="topnav-item" data-view="view-reports" onclick="switchView('view-reports')">📄 报告</button>
-  <button class="topnav-item" data-view="view-scheduler" onclick="switchView('view-scheduler')">⏰ 定时任务</button>
+  <button class="topnav-item" data-view="view-scheduler" onclick="switchView('view-scheduler')">🗓️ 工作日程</button>
   <button class="topnav-item" data-view="view-agent" onclick="switchView('view-agent')">💬 角色</button>
 </nav>
 
@@ -398,10 +398,10 @@
 <div class="view" id="view-scheduler">
   <section class="panel">
     <div class="panel-header">
-      <h2 class="panel-title">⏰ 定时任务（每日复盘）</h2>
+      <h2 class="panel-title">🗓️ 小满的工作日程（每日复盘等定时任务）</h2>
       <div class="panel-controls">
         <span class="legend-inline" id="sched-engine"></span>
-        <button class="btn btn-sm" id="sched-auto-btn" onclick="schedToggleAuto()" title="切换自动调度（引擎每 20s 轮询，空闲零 token）">⏱ 自动调度:…</button>
+        <button class="btn btn-sm" id="sched-auto-btn" onclick="schedToggleAuto()" title="切换上班/请假">👔 上班</button>
         <button class="btn btn-sm" onclick="schedLoad()">🔄 刷新</button>
       </div>
     </div>
@@ -429,6 +429,10 @@
 
 <!-- ═══ VIEW: 角色（小满）═══ -->
 <div class="view" id="view-agent">
+  <!-- 小满状态栏：请假中 / 摸鱼中 / 正在做XXX -->
+  <div id="agent-status-bar" class="agent-status-bar">
+    <span class="agent-status-pill" id="agent-mood"></span>
+  </div>
   <div class="agent-tabs">
     <button class="agent-tab active" data-tab="chat" onclick="Agent.switchTab('chat')">💬 和小满聊天</button>
     <button class="agent-tab" data-tab="articles" onclick="Agent.switchTab('articles')">📄 我的动态</button>

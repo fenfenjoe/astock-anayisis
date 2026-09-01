@@ -19,9 +19,10 @@ import json
 
 # 云端存储（严格零本地报告源；未配置云置 None → 降级本地扫描）
 try:
-    from cloud_store import (get_text as _cs_get, list_objects as _cs_list)
+    from cloud_store import (get_text as _cs_get, put_text as _cs_put,
+                             list_objects as _cs_list)
 except ImportError:
-    _cs_get = _cs_list = None
+    _cs_get = _cs_put = _cs_list = None
 import os
 import shutil
 import subprocess
@@ -55,6 +56,11 @@ OUTPUT_TAIL_CHARS = 8000               # scheduler_runs.output 只存尾部
 # 引擎接管范围：每日复盘 + ETF 自动化（2026-08-27 用户决策：全部随 Web 启停）
 SCOPE_PREFIXES = ("my_doc/每日复盘/", "etf-strategies/automation/")
 REPORT_RESCAN_SECONDS = 60             # 报告增量重扫间隔（mtime 守卫，开销≈0）
+# 同一时间窗内 auto 失败重试上限（2026-08-31 重试风暴修复）：
+# 失败任务不在 scheduler_window_done 的完成状态（success/timeout）里，
+# 引擎每 20s tick 会在窗口内无限重试 → 7 分钟窗口可触发 20+ 次。
+# 达到上限后该窗口视为"已消耗"，不再自动重试（手动触发不受限）。
+MAX_AUTO_FAILURES_PER_WINDOW = 2
 
 # 调度窗口容差（分钟）：None = 用 task_schedule.json 的 window_minutes（默认 7）。
 # 迁移自 Windows 计划任务后，如遇夜间休眠恢复错过窗口，可设
@@ -191,10 +197,15 @@ def import_reports_from_disk(force: bool = False) -> dict:
             if len(parts) != 2 or not parts[1].endswith(".md"):
                 continue
             date_part, fname = parts
-            if not (date_part.isdigit() and len(date_part) == 8):
-                continue
             report_type = _report_type_from_name(fname)
             if not report_type:
+                continue
+            if date_part == "weekly":
+                # 周报在 weekly/ 目录，日期从文件名解析（与本地分支 _weekly_date 一致）
+                date_part = _weekly_date(fname) or ""
+                if not date_part:
+                    continue
+            elif not (date_part.isdigit() and len(date_part) == 8):
                 continue
             try:
                 text = _cs_get(key)
@@ -265,6 +276,74 @@ def _report_type_from_name(filename: str, fallback: str = "") -> str | None:
         if known in stem:
             return known
     return fallback or None
+
+
+def upload_reports_to_cloud(force: bool = False) -> dict:
+    """本地 reports/ 新报告 → TOS daily-reports/（mtime 守卫，幂等）。
+
+    设计（2026-08-31 用户确认）：导入器保持"只扫云"不变（云上有对象就不扫
+    本地）。因此定时任务产出后必须先把本地新报告上传云，云优先导入才能拉到。
+    上传与 cloud_sync.py 的 SYNC_MAP 映射一致（reports/ → daily-reports/）：
+      reports/20260831/早盘报告.md → daily-reports/20260831/早盘报告.md
+      reports/weekly/xxx.md        → daily-reports/weekly/xxx.md
+    影子文件（-填充版/-影子 后缀）不上传（与 _report_type_from_name 一致）。
+    云未配置（_cs_put is None）→ 返回 0 上传不报错（降级，引擎重扫照常）。
+    """
+    from dashboard import db
+
+    if _cs_put is None:
+        return {"uploaded": 0, "scanned": 0, "source": "local_only"}
+
+    raw_state = db.meta_get("reports_upload_state")
+    try:
+        state = json.loads(raw_state) if raw_state else {}
+    except (json.JSONDecodeError, TypeError):
+        state = {}
+
+    if not REPORTS_DIR.exists():
+        return {"uploaded": 0, "scanned": 0, "error": "reports 目录不存在"}
+
+    uploaded = 0
+    scanned = 0
+    changed: dict[str, float] = {}
+
+    def _upload_file(f: Path, key: str) -> None:
+        """单文件：mtime 未变则跳过；变化/新增则上传并记录。失败不阻断整体。"""
+        nonlocal uploaded, scanned
+        scanned += 1
+        try:
+            mtime = f.stat().st_mtime
+        except OSError:
+            return
+        if not force and state.get(key) == mtime:
+            return
+        try:
+            _cs_put(key, f.read_text(encoding="utf-8"))
+        except Exception:
+            return  # 单文件失败跳过（下次重扫再试）
+        uploaded += 1
+        changed[key] = mtime
+
+    for sub in sorted(REPORTS_DIR.iterdir()):
+        if not sub.is_dir():
+            continue
+        if sub.name == "weekly":
+            for f in sorted(sub.glob("*.md")):
+                if _report_type_from_name(f.name) is None:
+                    continue
+                _upload_file(f, f"daily-reports/weekly/{f.name}")
+            continue
+        if not sub.name.isdigit() or len(sub.name) != 8:
+            continue
+        for f in sorted(sub.glob("*.md")):
+            if _report_type_from_name(f.name) is None:
+                continue
+            _upload_file(f, f"daily-reports/{sub.name}/{f.name}")
+
+    if changed:
+        state.update(changed)
+        db.meta_set("reports_upload_state", json.dumps(state, ensure_ascii=False))
+    return {"uploaded": uploaded, "scanned": scanned, "source": "tos"}
 
 
 def _weekly_date(filename: str) -> str | None:
@@ -526,6 +605,16 @@ def _run_prompt(task: dict, run_id: int) -> None:
     from dashboard import db
 
     started = datetime.now()
+    # 2026-08-31 修复：TOS 模式下复盘/早盘/盘中/周报 prompt 读取本地 每日调仓.md/持仓.md，
+    # 运行前先把云端权威副本拉回本地，避免复盘读到过期持仓/调仓（dashboard 录入只写云端）。
+    try:
+        from dashboard import portfolio
+        pulled = portfolio.pull_holdings_to_local()
+        if pulled.get("pulled"):
+            print(f"[scheduler] run#{run_id} cloud→local holdings synced: {pulled['pulled']}")
+    except Exception as e:
+        print(f"[scheduler] run#{run_id} cloud→local holdings sync failed: {e}", file=sys.stderr)
+
     engine = resolve_engine()
     if engine == "dsh":
         status, out = _exec_dsh(task)
@@ -534,6 +623,8 @@ def _run_prompt(task: dict, run_id: int) -> None:
 
     # 无论结果如何，收走 agent 可能已写出的报告/持仓
     try:
+        # 先上传本地新报告到云（保持"导入只扫云"设计），再云优先导入
+        upload_reports_to_cloud()
         import_reports_from_disk()
         import_holdings_from_md()
     except Exception as e:
@@ -557,18 +648,36 @@ def _run_prompt(task: dict, run_id: int) -> None:
 # 运行入口（auto / manual 共用）
 # ───────────────────────────────────────────────────────────────────
 
-_running_tasks: dict[str, bool] = {}
+_running_tasks: dict[str, dict] = {}   # task_id -> {"name", "started_at"}
 _running_lock = threading.Lock()
 
 
 def _is_running(task_id: str) -> bool:
     with _running_lock:
-        return _running_tasks.get(task_id, False)
+        return task_id in _running_tasks
 
 
-def _set_running(task_id: str, running: bool):
+def _mark_running(task_id: str, name: str, started_at: str):
+    """记录运行中状态（供「正在做XXX」展示）。"""
     with _running_lock:
-        _running_tasks[task_id] = running
+        _running_tasks[task_id] = {"name": name, "started_at": started_at}
+
+
+def _clear_running(task_id: str):
+    with _running_lock:
+        _running_tasks.pop(task_id, None)
+
+
+def current_task() -> dict | None:
+    """当前正在执行的任务（人格化状态：小满正在做XXX）。
+
+    多任务并发时取最先开始的；无返回 None（摸鱼中）。
+    """
+    with _running_lock:
+        active = list(_running_tasks.values())
+    if not active:
+        return None
+    return min(active, key=lambda r: r["started_at"])
 
 
 def run_task(task: dict, trigger: str = "manual", now: datetime | None = None) -> dict:
@@ -585,7 +694,8 @@ def run_task(task: dict, trigger: str = "manual", now: datetime | None = None) -
     now = now or datetime.now()
     if trigger == "auto":
         window_key = make_window_key(task, now)
-        if db.scheduler_window_done(task_id, window_key):
+        if db.scheduler_window_done(task_id, window_key,
+                                    max_failures=MAX_AUTO_FAILURES_PER_WINDOW):
             return {"started": False, "run_id": None, "reason": "idempotent",
                     "message": "该时间窗已执行过"}
     else:
@@ -593,13 +703,14 @@ def run_task(task: dict, trigger: str = "manual", now: datetime | None = None) -
 
     run_id = db.scheduler_run_insert(task_id, window_key, trigger,
                                      now.strftime("%Y-%m-%d %H:%M:%S"))
-    _set_running(task_id, True)
+    task_name = (task.get("description") or task.get("name") or task_id)
+    _mark_running(task_id, task_name, now.strftime("%H:%M:%S"))
 
     def _worker(tid: str = task_id):
         try:
             _run_prompt(task, run_id)
         finally:
-            _set_running(tid, False)
+            _clear_running(tid)
 
     threading.Thread(target=_worker, daemon=True).start()
     return {"started": True, "run_id": run_id, "reason": "ok", "message": "任务已启动"}
@@ -682,11 +793,13 @@ class SchedulerEngine:
         return {
             "running": self._thread is not None and self._thread.is_alive(),
             "auto_enabled": self.auto_enabled(),
+            "attendance": "on" if self.auto_enabled() else "leave",
             "engine": resolve_engine(),
             "last_tick": self.last_tick,
             "last_error": self.last_error,
             "last_report_scan": self.last_report_scan,
             "tick_seconds": TICK_SECONDS,
+            "current_task": current_task(),
         }
 
     # ── 主循环 ──
@@ -706,9 +819,11 @@ class SchedulerEngine:
 
         # 报告增量重扫：无论 auto 开关都执行（兼容过渡期外部/Windows 任务
         # 写入 reports/ 的新报告；mtime 守卫，无变化时零 IO 零写库）。
+        # 先上传本地新报告到云（保持"导入只扫云"设计），再云优先导入。
         if (self._last_report_scan_dt is None
                 or (now - self._last_report_scan_dt).total_seconds() >= REPORT_RESCAN_SECONDS):
             try:
+                upload_reports_to_cloud()
                 r = import_reports_from_disk()
                 self.last_report_scan = now.strftime("%Y-%m-%d %H:%M:%S")
                 self._last_report_scan_dt = now
@@ -726,8 +841,9 @@ class SchedulerEngine:
             if not task_due_now(t, now):
                 continue
             wkey = make_window_key(t, now)
-            if db.scheduler_window_done(t["task_id"], wkey):
-                continue  # 该时间窗已成功/超时执行过（幂等）
+            if db.scheduler_window_done(t["task_id"], wkey,
+                                        max_failures=MAX_AUTO_FAILURES_PER_WINDOW):
+                continue  # 该时间窗已成功/超时/失败达上限（幂等 + 防重试风暴）
             result = run_task(t, trigger="auto", now=now)
             if result.get("started"):
                 print(f"[scheduler] auto dispatch {t['task_id']} → run#{result['run_id']}")

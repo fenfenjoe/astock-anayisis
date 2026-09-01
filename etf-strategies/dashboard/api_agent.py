@@ -36,15 +36,38 @@ async def _run_thread(fn):
 
 @router.get("/status")
 def agent_status():
-    """角色状态：进程存活（heartbeat 距今 <15min）、dsh 就绪、今日发文。"""
+    """角色状态：进程存活（heartbeat 距今 <15min）、出勤（上班/请假）、当前任务。"""
     hb_age = lifecycle.heartbeat_age_seconds()
+    # 聚合调度器：上班=auto 开 / 请假=auto 关；正在做XXX = 当前执行任务
+    sched_status = None
+    try:
+        from dashboard import scheduler as sched
+        sched_status = sched.engine.status()
+    except Exception:
+        pass
+    attendance = (sched_status or {}).get("attendance") or "leave"
+    current = (sched_status or {}).get("current_task")
     return {
         "alive": hb_age is not None and hb_age < 60 * 15,
         "heartbeat_age_seconds": hb_age,
         "dsh_ready": dsh_runner.find_dsh_bin() is not None,
+        # 人格化状态
+        "attendance": attendance,
+        "current_task": current,
+        "mood": _mood(attendance, current),
         "published_on": agent_db.meta_get("published_on"),
         "last_rss_fetch_at": agent_db.meta_get("last_rss_fetch_at"),
     }
+
+
+def _mood(attendance, current_task):
+    """小满状态成语文案：请假中 / 摸鱼中 / 正在做XXX。"""
+    if attendance != "on":
+        return {"label": "请假中", "icon": "🏖️"}
+    if current_task:
+        return {"label": f"正在做：{current_task.get('name', '任务')}",
+                "icon": "💼", "task": current_task}
+    return {"label": "摸鱼中", "icon": "🐟"}
 
 
 # ═══════════════════════════════════════════

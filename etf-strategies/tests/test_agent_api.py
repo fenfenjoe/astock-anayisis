@@ -43,6 +43,17 @@ def test_status_endpoint(client):
     data = r.json()
     assert "alive" in data
     assert "dsh_ready" in data
+    # 人格化状态字段
+    assert "attendance" in data
+    assert "mood" in data
+
+
+def test_mood_demo():
+    from dashboard import api_agent as api_mod
+    assert api_mod._mood("leave", None)["label"] == "请假中"
+    assert api_mod._mood("on", None)["label"] == "摸鱼中"
+    mobj = api_mod._mood("on", {"name": "早盘分析", "started_at": "09:07"})
+    assert "正在做" in mobj["label"]
 
 
 def test_create_and_list_session(client):

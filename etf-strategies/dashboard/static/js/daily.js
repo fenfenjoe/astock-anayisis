@@ -550,15 +550,15 @@ async function schedLoad(force) {
     schedAuto = !!tasks.auto_enabled;
     const eng = $el('sched-engine');
     if (eng) {
-      eng.textContent = `引擎${status.running ? '运行中' : '已停止'} · 自动调度:${schedAuto ? '开' : '关(仅手动)'}`
+      eng.textContent = (schedAuto ? '👔 上班中 · 按日程表执行' : '🏖️ 请假中 · 定时任务暂停')
         + ` · 今日交易日:${tasks.is_trading_day ? '是' : '否'}`
         + (status.last_tick ? ' · 心跳:' + status.last_tick.slice(11, 19) : '');
     }
     const autoBtn = $el('sched-auto-btn');
     if (autoBtn) {
-      autoBtn.textContent = '⏱ 自动调度:' + (schedAuto ? '开' : '关');
+      autoBtn.textContent = schedAuto ? '🏖️ 请假' : '👔 上班';
       autoBtn.classList.toggle('btn-accent', schedAuto);
-      autoBtn.title = schedAuto ? '点击关闭自动调度' : '点击开启自动调度（空闲零 token）';
+      autoBtn.title = schedAuto ? '点击请假：暂停定时任务' : '点击上班：按日程表执行定时任务';
     }
     const tbody = $el('sched-tbody');
     if (tbody) {
@@ -571,7 +571,7 @@ async function schedLoad(force) {
           <td class="col-num">${escapeHtml(t.target_time)}${t.hourly ? ' (每小时)' : ''}</td>
           <td class="col-num">${t.trading_day_required ? '是' : '否'}</td>
           <td class="col-num ${last.status === 'failed' ? 'num-danger' : ''}">${stText[last.status] || '—'}</td>
-          <td class="col-num">${last.run_time ? escapeHtml(last.run_time.slice(11, 19)) : '—'}</td>
+          <td class="col-num">${last.run_time ? escapeHtml(last.run_time.slice(0, 19)) : '—'}</td>
           <td class="col-act"><button class="btn btn-sm" onclick="schedRun('${t.task_id}')" ${running ? 'disabled' : ''}>▶ 立即运行</button></td>
         </tr>`;
       }).join('') || '<tr><td colspan="6" class="loading-cell">无可调度任务</td></tr>';
@@ -598,7 +598,7 @@ async function schedToggleAuto() {
   try {
     const r = await apiPost('/api/scheduler/auto', { enabled: !schedAuto });
     schedAuto = !!r.auto_enabled;
-    toast(r.message || (schedAuto ? '自动调度已开启' : '自动调度已关闭'), 'success');
+    toast(r.message || (schedAuto ? '👔 小满上班了，开始按日程表工作' : '🏖️ 小满请假了，定时任务暂停'), 'success');
     schedLoad(true);
   } catch (e) {
     toast('切换失败: ' + e.message, 'error');
