@@ -110,13 +110,16 @@ import pandas as pd, glob, os, sys
 from datetime import datetime, timedelta
 
 # 收集所有策略使用的 ETF
+# BUG-017 修复: 对策略"类"用 hasattr(s,'assets') 取到的是 base.py 类属性空列表 []
+# (assets 是实例属性, 实例化后才填充) → all_etfs 恒为空集, 完整性门永久假通过。
+# 改为复用 list_strategies._default_assets(cls) 实例化后取 assets。
 all_etfs = set()
-from list_strategies import STRATEGIES
-for s in STRATEGIES:
+from list_strategies import STRATEGIES, _default_assets
+for cls in STRATEGIES:
     try:
-        if hasattr(s, 'assets'):
-            all_etfs.update(s.assets)
-    except:
+        assets, _ = _default_assets(cls)
+        all_etfs.update(assets)
+    except Exception:
         pass
 
 # 检查每个 ETF 的缓存
