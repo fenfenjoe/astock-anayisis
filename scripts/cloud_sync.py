@@ -35,7 +35,6 @@ SYNC_MAP = [
     (DAILY_REVIEW / "reports", "daily-reports"),
     (ETF_DIR / "automation" / "logs", "logs/etf"),
     (DAILY_REVIEW / "harness" / "automation" / "logs", "logs/harness"),
-    (REPO_ROOT / "data", "openviking"),
     # 持仓权威文件（单文件，walk 即处理）
     (DAILY_REVIEW / "每日调仓.md", "holdings/每日调仓.md"),
     (DAILY_REVIEW / "harness" / "config" / "持仓.md", "holdings/持仓.md"),

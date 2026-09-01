@@ -85,6 +85,31 @@ openviking-server   # 或 start_all.ps1 管理的 openviking
 
 > 详细：数据上云与严格零本地、多机一致性见 `docs/DEPLOYMENT.md`；凭据安全见 `docs/SECURITY.md`。
 
+### OpenViking 云记忆配置（火山云版）
+
+小满的语义记忆走**火山引擎 OpenViking 云服务**，无需本地跑 `openviking-server`。
+
+**配置位置**：`~/.openviking/ovcli.conf`（机器本地秘密文件，**勿提交/勿公开**）：
+
+```json
+{
+  "url": "https://api.vikingdb.cn-beijing.volces.com/openviking",
+  "api_key": "<你的火山 OpenViking 云 API Key>",
+  "account": "default",
+  "user": "default"
+}
+```
+
+> ⚠️ 上面 `api_key` 是**占位符**——真实 Key 只保存在本机 `ovcli.conf`（插件按 `{url}/mcp` 连云端）。请勿把真实 Key 写进 README / 提交到仓库（本项目仓库为 public）。
+
+**接入步骤**（新机器）：
+1. `dsh plugin --profile xiaoman add @openviking/dsh-memory-plugin`
+2. 按上文写 `~/.openviking/ovcli.conf`（填你的云 Key）
+3. 记忆隔离由 `dsh_runner` 自动注入 `OPENVIKING_PEER_ID=xiaoman` + `OPENVIKING_RECALL_PEER_SCOPE=actor`
+4. 验证：小满会话里 `viking_remember` / `viking_search` 往返
+
+> 备选：也可用环境变量 `OPENVIKING_URL` / `OPENVIKING_API_KEY` 替代配置文件。详见 `docs/DEPLOYMENT.md` §4.1。
+
 ### 功能概览
 
 | 模块 | 功能 | 说明 |
