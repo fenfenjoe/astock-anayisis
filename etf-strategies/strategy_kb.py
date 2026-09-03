@@ -432,7 +432,7 @@ KB = {
 
 
 def get_kb(strategy_id):
-    """获取策略知识。strategy_id: S1~S11。"""
+    """获取策略知识。strategy_id: S1~S19。"""
     sid = strategy_id.upper()
     if sid not in KB:
         return None

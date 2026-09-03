@@ -300,9 +300,15 @@ def _parse_target_stop(raw: str) -> dict:
     return result
 
 
+def _strip_md(cell: str) -> str:
+    """剥离单元格中的 markdown 加粗标记（**已触发** → 已触发）。"""
+    return cell.replace('**', '').strip()
+
+
 def _parse_table_rows(md_text: str, section: str) -> tuple[list[str], list[list[str]]]:
     """从 markdown 中解析某节标题下的表格。
-    返回 (header, rows)：header 为表头列名列表，rows 为数据行（已去分隔线）。"""
+    返回 (header, rows)：header 为表头列名列表，rows 为数据行（已去分隔线）。
+    单元格自动剥离 markdown 加粗标记（BUG-012）。"""
     lines = md_text.splitlines()
     collecting = False
     raw_rows = []
@@ -314,7 +320,7 @@ def _parse_table_rows(md_text: str, section: str) -> tuple[list[str], list[list[
             collecting = True
             continue
         if collecting and line.strip().startswith('|'):
-            raw_rows.append([c.strip() for c in line.strip().strip('|').split('|')])
+            raw_rows.append([_strip_md(c) for c in line.strip().strip('|').split('|')])
 
     header = []
     rows = []

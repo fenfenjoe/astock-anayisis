@@ -1,0 +1,15 @@
+[2026-09-03T09:17:38+08:00] BUG_FIX 开始
+[2026-09-03T09:17:38+08:00] 扫描: 3 OPEN（BUG-017/018/019）, 0 IN_PROGRESS, 3 MANUAL_REVIEW（BUG-017/018/019 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=3 与 open/ 目录一致）
+[2026-09-03T09:17:38+08:00] MANUAL_REVIEW BUG 需人工处理: BUG-017 (P2) — push2/push2his 连续 ≥2 交易日不可达 + 北向资金断供，行业/题材板块扫描与资金面数据持续降级（auto_fix_eligible=false：涉及网络/数据源连通性判断，需人工判断代码或网络，非确定性自动修复；9/1+9/2 多次复现已追加处理记录）; BUG-018 (P2) — 复盘报告 C3 章节关键词再次漂移（做T建议复盘/次日核心关注 vs 做T预判复盘，auto_fix_eligible=false：需人工决定修订检查关键词 or 补全报告/模板章节；9/2 报告已对齐 C3、逻辑巡检验证 PASS，待用户确认关闭）; BUG-019 (P2) — 09/02 早盘自动任务（07:55）未运行 → 11:20 手动补执行；盘中检查点仅 11:00/13:30 执行，14:45 P0 强制窗口无提醒（auto_fix_eligible=false：涉及调度器运行环境/Claude Code /loop 是否启动，需人工确认）
+[2026-09-03T09:17:38+08:00] 选择: 无待修复 BUG，跳过（符合 0.2 规则：全部 OPEN BUG-017/018/019 为 MANUAL_REVIEW/auto_fix_eligible=false → 仅报告不处理；无可自动修复 BUG）
+[2026-09-03T09:17:38+08:00] BUG_FIX 结束
+[2026-09-03T10:18:00+08:00] BUG_FIX 开始
+[2026-09-03T10:18:00+08:00] 扫描: 4 OPEN（BUG-017/018/019/020）, 0 IN_PROGRESS, 4 MANUAL_REVIEW（BUG-017/018/019/020 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=4 与 open/ 目录一致；BUG-020 于 09:30 新增）
+[2026-09-03T10:18:00+08:00] MANUAL_REVIEW BUG 需人工处理: BUG-017 (P2) — push2/push2his 连续 ≥2 交易日不可达 + 北向资金断供，行业/题材板块扫描与资金面数据持续降级（auto_fix_eligible=false：涉及网络/数据源连通性判断，需人工判断代码或网络，非确定性自动修复；9/1+9/2+9/3 多次复现已追加处理记录）; BUG-018 (P2) — 复盘报告 C3 章节关键词再次漂移（做T建议复盘/次日核心关注 vs 做T预判复盘，auto_fix_eligible=false：需人工决定修订检查关键词 or 补全报告/模板章节；9/2 报告已对齐 C3、逻辑巡检验证 PASS，待用户确认关闭）; BUG-019 (P2) — 09/02 早盘自动任务（07:55）未运行 → 11:20 手动补执行；盘中检查点仅 11:00/13:30 执行，14:45 P0 强制窗口无提醒（auto_fix_eligible=false：涉及调度器运行环境/Claude Code /loop 是否启动，需人工确认）; BUG-020 (P2) — 1.3c Staging 持仓校验误报：解析器将板块扫描/做T表等非持仓行误判为持仓 → 每次早盘 [FAIL] 12 errors（auto_fix_eligible=false：涉及 prompt 内嵌解析脚本逻辑修改（过滤表格标题/限定表头列），需人工确认改动范围；参照 BUG-004 修复模式）
+[2026-09-03T10:18:00+08:00] 选择: 无待修复 BUG，跳过（符合 0.2 规则：全部 OPEN BUG-017/018/019/020 为 MANUAL_REVIEW/auto_fix_eligible=false → 仅报告不处理；无可自动修复 BUG）
+[2026-09-03T10:18:00+08:00] BUG_FIX 结束
+[2026-09-03T11:17:38+08:00] BUG_FIX 开始
+[2026-09-03T11:17:38+08:00] 扫描: 4 OPEN（BUG-017/018/019/020）, 0 IN_PROGRESS, 4 MANUAL_REVIEW（BUG-017/018/019/020 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=4 与 open/ 目录一致）
+[2026-09-03T11:17:38+08:00] MANUAL_REVIEW BUG 需人工处理: BUG-017 (P2) — push2/push2his 连续 ≥2 交易日不可达 + 北向资金断供，行业/题材板块扫描与资金面数据持续降级（auto_fix_eligible=false：涉及网络/数据源连通性判断，需人工判断代码或网络，非确定性自动修复；9/1+9/2+9/3 多次复现已追加处理记录）; BUG-018 (P2) — 复盘报告 C3 章节关键词再次漂移（做T建议复盘/次日核心关注 vs 做T预判复盘，auto_fix_eligible=false：需人工决定修订检查关键词 or 补全报告/模板章节；9/2 报告已对齐 C3、逻辑巡检验证 PASS，待用户确认关闭）; BUG-019 (P2) — 09/02 早盘自动任务（07:55）未运行 → 11:20 手动补执行；盘中检查点仅 11:00/13:30 执行，14:45 P0 强制窗口无提醒（auto_fix_eligible=false：涉及调度器运行环境/Claude Code /loop 是否启动，需人工确认）; BUG-020 (P2) — 1.3c Staging 持仓校验误报：解析器将板块扫描/做T表等非持仓行误判为持仓 → 每次早盘 [FAIL] 12 errors（auto_fix_eligible=false：涉及 prompt 内嵌解析脚本逻辑修改（过滤表格标题/限定表头列），需人工确认改动范围；参照 BUG-004 修复模式）
+[2026-09-03T11:17:38+08:00] 选择: 无待修复 BUG，跳过（符合 0.2 规则：全部 OPEN BUG-017/018/019/020 为 MANUAL_REVIEW/auto_fix_eligible=false → 仅报告不处理；无可自动修复 BUG）
+[2026-09-03T11:17:38+08:00] BUG_FIX 结束

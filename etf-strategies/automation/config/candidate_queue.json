@@ -1,5 +1,122 @@
 {
   "_description": "策略发现候选队列 —— 绿灯直接转化，黄灯排队等待下次扫描时重新评估",
-  "candidates": [],
-  "last_updated": null
+  "candidates": [
+    {
+      "id": "2026-09-01-01",
+      "source": {
+        "platform": "joinquant",
+        "url": "https://joinquant.com/community/post/detailMobile?postId=5d2a8544ca2ecaa412964bab37458c5b",
+        "author": "PT",
+        "title": "PT 59% ETF动量轮动策略"
+      },
+      "strategy": {
+        "name": "ETF动量轮动(58%)",
+        "type": "etf_rotation"
+      },
+      "metrics": {
+        "annual_return": 0.58,
+        "sharpe": null,
+        "max_drawdown": null,
+        "backtest_years": null
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化58%落在50%-100%黄灯区间；夏普/回撤/回测周期未披露",
+      "added": "2026-09-01",
+      "last_eval": "2026-09-01"
+    },
+    {
+      "id": "2026-09-01-02",
+      "source": {
+        "platform": "zhihu",
+        "url": "https://zhuanlan.zhihu.com/p/668359228",
+        "author": "未披露（知乎专栏）",
+        "title": "年化54.2%，夏普1.97的策略诞生记"
+      },
+      "strategy": {
+        "name": "动量轮动(54.2%)",
+        "type": "momentum"
+      },
+      "metrics": {
+        "annual_return": 0.542,
+        "sharpe": 1.97,
+        "max_drawdown": null,
+        "backtest_years": null
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化54.2%落在50%-100%黄灯区间；策略细节/代码未披露",
+      "added": "2026-09-01",
+      "last_eval": "2026-09-01"
+    },
+    {
+      "id": "2026-09-01-03",
+      "source": {
+        "platform": "csdn",
+        "url": "https://quant.csdn.net/6874aa31bb9d8e0ecec22b4c.html",
+        "author": "未披露（CSDN复现）",
+        "title": "复现一个聚宽策略，年化31%，夏普比1.22，附代码"
+      },
+      "strategy": {
+        "name": "聚宽动量策略复现(31%)",
+        "type": "momentum"
+      },
+      "metrics": {
+        "annual_return": 0.31,
+        "sharpe": 1.22,
+        "max_drawdown": null,
+        "backtest_years": null
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化/夏普达标且附完整代码，但回测周期未披露（需≥5年方可绿灯）",
+      "added": "2026-09-01",
+      "last_eval": "2026-09-01"
+    },
+    {
+      "id": "2026-09-01-04",
+      "source": {
+        "platform": "github",
+        "url": "https://github.com/huyukun662-crypto/RiskParity-Momentum-ETF",
+        "author": "huyukun662-crypto",
+        "title": "RiskParity-Momentum-ETF（v5e_capped，WF锁定版）"
+      },
+      "strategy": {
+        "name": "风险平价+动量(RPM)",
+        "type": "risk_parity"
+      },
+      "metrics": {
+        "annual_return": null,
+        "sharpe": null,
+        "max_drawdown": null,
+        "backtest_years": null
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "风险平价为KB缺失类型，逻辑经典源码完整，但A股回测指标未披露需补跑验证",
+      "added": "2026-09-01",
+      "last_eval": "2026-09-01"
+    },
+    {
+      "id": "2026-09-01-05",
+      "source": {
+        "platform": "github",
+        "url": "https://github.com/NextRemeber/etf-dca-strategy",
+        "author": "NextRemeber",
+        "title": "A股ETF定投量化策略（S3分数分档+溢价闸门，Calmar 1.78→2.55）"
+      },
+      "strategy": {
+        "name": "定投+轮动+溢价闸门",
+        "type": "etf_rotation"
+      },
+      "metrics": {
+        "annual_return": null,
+        "sharpe": null,
+        "max_drawdown": null,
+        "calmar": 2.55,
+        "backtest_years": null
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "Calmar 2.55优秀且25轮双周期验证，溢价闸门呼应趋势；但年化/回撤未披露，定投形态需评估转化路径",
+      "added": "2026-09-01",
+      "last_eval": "2026-09-01"
+    }
+  ],
+  "last_updated": "2026-09-01"
 }

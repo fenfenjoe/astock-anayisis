@@ -295,8 +295,9 @@ if not os.path.exists(f):
     print('C1:FAIL: 文件不存在 ' + f)
     sys.exit(0)
 content = open(f, 'r', encoding='utf-8').read()
-required = [('隔夜外盘','外盘总结'),('事件验证','日历核实'),('宏观研判','方向+矛盾'),
-            ('板块机会扫描','评分表'),('持仓映射','逐只评分'),('操作清单','优先级'),('上期预判回顾','vs实际')]
+# REQ-004 去冗余后结构（9 节）：操作清单/跨品种约束/信号概览 已不在报告中
+required = [('前次预测回顾','预测对比'),('海外市场传导','外盘传导'),('宏观研判','方向+矛盾'),
+            ('资金面与情绪','资金面'),('板块机会扫描','评分表'),('持仓映射','逐只评分'),('风险提示','风险')]
 failures = check_sections(content, required, path_label=f)
 if failures:
     for f_item in failures:
@@ -346,9 +347,10 @@ if not os.path.exists(f):
     print('C3:FAIL: 文件不存在 ' + f)
     sys.exit(0)
 content = open(f, 'r', encoding='utf-8').read()
-required = [('我的持仓','持仓表'),('大市表现复盘','指数+成交量'),('早盘预判复盘','方向对比'),
-            ('持仓复盘','逐只'),('做T预判复盘','做T对比'),('信号执行复盘','决策/执行'),
-            ('经验沉淀','经验教训'),('次日核心变量','次日预案')]
+# 与复盘报告实际章节名对齐（修复 BUG-009 关键词漂移）
+required = [('我的持仓','持仓表'),('大市表现复盘','指数+成交量'),('早盘预测回顾','方向对比'),
+            ('持仓复盘','逐只'),('做T建议复盘','做T对比'),('信号执行复盘','决策/执行'),
+            ('经验沉淀','经验教训'),('次日核心关注','次日预案')]
 failures = check_sections(content, required, path_label=f)
 if failures:
     for f_item in failures:

@@ -57,25 +57,13 @@ async def lifespan(app: FastAPI):
     测试免疫（2026-08-31 事故修复）：pytest 环境（PYTEST_CURRENT_TEST 存在）
     下跳过全部启动副作用——云恢复下载会覆盖本地真实账本，import_* 会用真实
     文件覆盖真实 DB，upload 会把本地报告推上云。测试进程必须零副作用。
+
+    启动提速（2026-09-02）：重负载的「cloud_sync --download 全量恢复 + 每日复盘
+    导入 + 调度器/通知启动」移入后台 daemon 线程，uvicorn 立即绑定端口即可访问；
+    内存库（cache.db 快照）恢复仍在 init_db() 同步完成，保证 API 读到数据。
     """
     _in_test = os.environ.get("PYTEST_CURRENT_TEST") is not None \
         or os.environ.get("DSH_TEST") == "1"
-    # ── 云恢复：CLOUD_RESTORE_ON_START=1 时先拉取 TOS 最新数据到本地工作副本 ──
-    if (os.environ.get("CLOUD_RESTORE_ON_START", "").lower() in ("1", "true")
-            and not _in_test):
-        print("[app] Restoring data from cloud (TOS)...")
-        try:
-            import subprocess as _sp
-            _repo = Path(__file__).resolve().parent.parent.parent
-            _r = _sp.run(
-                [sys.executable, "scripts/cloud_sync.py", "--download"],
-                cwd=str(_repo), capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=600)
-            print(f"[app]   restore exit={_r.returncode}: {(_r.stdout or '')[-200:]}")
-        except Exception as e:
-            print(f"[app]   WARNING: cloud restore failed: {e}")
-    elif _in_test:
-        print("[app]   (test env) skipped cloud restore")
 
     init_db()
 
@@ -151,9 +139,24 @@ async def lifespan(app: FastAPI):
 
     threading.Thread(target=_warm_cache, daemon=True).start()
 
-    # ── 每日复盘集成：导入历史 + 启动调度器引擎（幂等，可重复跑）──
-    # 测试免疫：以下操作会写真实 DB / 上传云，测试进程一律跳过
-    if not _in_test:
+    # ── 后台：云恢复(CLOUD_RESTORE_ON_START) + 每日复盘导入 + 调度器/通知 ──
+    #    全部移入 daemon 线程，不阻塞端口绑定。测试环境整体跳过。
+    def _bg_restore_and_import():
+        # 云恢复：CLOUD_RESTORE_ON_START=1 时先拉取 TOS 最新数据到本地工作副本
+        if os.environ.get("CLOUD_RESTORE_ON_START", "").lower() in ("1", "true"):
+            import subprocess as _sp
+            _repo = Path(__file__).resolve().parent.parent.parent
+            print("[app] Background: restoring data from cloud (TOS)...")
+            try:
+                _r = _sp.run(
+                    [sys.executable, "scripts/cloud_sync.py", "--download"],
+                    cwd=str(_repo), capture_output=True, text=True,
+                    encoding="utf-8", errors="replace", timeout=900)
+                print(f"[app]   restore exit={_r.returncode}: {(_r.stdout or '')[-200:]}")
+            except Exception as e:
+                print(f"[app]   WARNING: cloud restore failed: {e}")
+
+        # ── 每日复盘集成：导入历史 + 启动调度器引擎（幂等，可重复跑）──
         print("[app] Importing 每日复盘 data (reports/holdings/trades)...")
         try:
             up = daily_scheduler.upload_reports_to_cloud()
@@ -181,8 +184,11 @@ async def lifespan(app: FastAPI):
             notify_mod.start()
         except Exception as e:
             print(f"[app]   WARNING: notify watcher start failed: {e}")
+
+    if not _in_test:
+        threading.Thread(target=_bg_restore_and_import, daemon=True).start()
     else:
-        print("[app]   (test env) skipped 每日复盘 import / scheduler / notify")
+        print("[app]   (test env) skipped cloud restore / import / scheduler / notify")
 
     print("[app] Startup complete — server ready at http://localhost:8000")
     yield  # <== Server starts accepting requests HERE

@@ -1,0 +1,45 @@
+[2026-09-01T09:17:50+0800] BUG_FIX 开始
+[2026-09-01T09:17:52+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 5 MANUAL_REVIEW（BUG-007/008/009/011 auto_fix_eligible=false；BUG-016 状态 MANUAL_REVIEW 修复已实施待用户确认；BUG_INDEX 统计表 MANUAL_REVIEW=4 未含 8/31 新录入的 BUG-016，统计口径待 E2 巡检校正）
+[2026-09-01T09:17:54+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（8/28 复核判定检查误报：基准应改 executed_at，修复项②staging_generated 字段连续三日 WARN 未落地，8/31 B4 PASS 未复现，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（连续三日复现，修复优先级上调，待用户确认）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（连续三日复现且扩大到 3 处 MISSING，与 BUG-008 同源，待用户确认）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中（修复方向已查明为确定性代码修复：标题行定位 + 正则支持 🔑 前缀，连续两日复现，待用户确认）; BUG-016 (P1) — 复盘读取过期持仓/调仓：dashboard TOS 云端模式只写云端，本地文件不更新（修复已实施+测试通过 407/215 passed，历史错误产出待人工复核，待用户确认后关闭）
+[2026-09-01T09:17:56+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；5 个 MANUAL_REVIEW BUG 仅报告不处理，均不可自动修复）
+[2026-09-01T09:17:58+0800] BUG_FIX 结束
+[2026-09-01T10:17:54+0800] BUG_FIX 开始
+[2026-09-01T10:17:55+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 5 MANUAL_REVIEW（BUG-007/008/009/011 auto_fix_eligible=false；BUG-016 状态 MANUAL_REVIEW 修复已实施待用户确认；BUG_INDEX 统计表 MANUAL_REVIEW=4 未含 8/31 新录入的 BUG-016，统计口径待 E2 巡检校正）
+[2026-09-01T10:17:56+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（8/28 复核判定检查误报：基准应改 executed_at，修复项②staging_generated 字段连续三日 WARN 未落地，8/31 B4 PASS 未复现，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（连续三日复现，修复优先级上调，待用户确认）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（连续三日复现且扩大到 3 处 MISSING，与 BUG-008 同源，待用户确认）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中（修复方向已查明为确定性代码修复：标题行定位 + 正则支持 🔑 前缀，连续两日复现，待用户确认）; BUG-016 (P1) — 复盘读取过期持仓/调仓：dashboard TOS 云端模式只写云端，本地文件不更新（修复已实施+测试通过 407/215 passed，历史错误产出待人工复核，待用户确认后关闭）
+[2026-09-01T10:17:57+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；5 个 MANUAL_REVIEW BUG 仅报告不处理，均不可自动修复）
+[2026-09-01T10:17:58+0800] BUG_FIX 结束
+[2026-09-01T11:18:12+08:00] BUG_FIX 开始
+[2026-09-01T11:18:13+08:00] 扫描: 0 OPEN, 0 IN_PROGRESS, 5 MANUAL_REVIEW（BUG-007/008/009/011 auto_fix_eligible=false；BUG-016 状态 MANUAL_REVIEW 修复已实施待用户确认；BUG_INDEX 统计表 MANUAL_REVIEW=4 未含 8/31 新录入的 BUG-016，统计口径待 E2 巡检校正）
+[2026-09-01T11:18:14+08:00] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（8/28 复核判定检查误报：基准应改 executed_at，修复项②staging_generated 字段连续三日 WARN 未落地，8/31 B4 PASS 未复现，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（连续三日复现，修复优先级上调，待用户确认）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（连续三日复现且扩大到 3 处 MISSING，与 BUG-008 同源，待用户确认）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中（修复方向已查明为确定性代码修复：标题行定位 + 正则支持 🔑 前缀，连续两日复现，待用户确认）; BUG-016 (P1) — 复盘读取过期持仓/调仓：dashboard TOS 云端模式只写云端，本地文件不更新（修复已实施+测试通过 407/215 passed，历史错误产出待人工复核，待用户确认后关闭）
+[2026-09-01T11:18:14+08:00] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；5 个 MANUAL_REVIEW BUG 仅报告不处理，均不可自动修复）
+[2026-09-01T11:18:15+08:00] BUG_FIX 结束
+[2026-09-01T12:18:03+08:00] BUG_FIX 开始
+[2026-09-01T12:18:04+08:00] 扫描: 0 OPEN, 0 IN_PROGRESS, 5 MANUAL_REVIEW（BUG-007/008/009/011 auto_fix_eligible=false；BUG-016 状态 MANUAL_REVIEW 修复已实施待用户确认；BUG_INDEX 统计表 MANUAL_REVIEW=4 未含 8/31 新录入的 BUG-016，统计口径待 E2 巡检校正）
+[2026-09-01T12:18:05+08:00] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（8/28 复核判定检查误报：基准应改 executed_at，修复项②staging_generated 字段连续三日 WARN 未落地，8/31 B4 PASS 未复现，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（连续三日复现，修复优先级上调，待用户确认）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（连续三日复现且扩大到 3 处 MISSING，与 BUG-008 同源，待用户确认）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中（修复方向已查明为确定性代码修复：标题行定位 + 正则支持 🔑 前缀，连续两日复现，待用户确认）; BUG-016 (P1) — 复盘读取过期持仓/调仓：dashboard TOS 云端模式只写云端，本地文件不更新（修复已实施+测试通过 407/215 passed，历史错误产出待人工复核，待用户确认后关闭）
+[2026-09-01T12:18:06+08:00] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；5 个 MANUAL_REVIEW BUG 仅报告不处理，均不可自动修复）
+[2026-09-01T12:18:07+08:00] BUG_FIX 结束
+[2026-09-01T13:19:35+08:00] BUG_FIX 开始
+[2026-09-01T13:19:37+08:00] 扫描: 0 OPEN, 0 IN_PROGRESS, 5 MANUAL_REVIEW（BUG-007/008/009/011 auto_fix_eligible=false；BUG-016 状态 MANUAL_REVIEW 修复已实施待用户确认；BUG_INDEX 统计表 MANUAL_REVIEW=4 未含 8/31 新录入的 BUG-016，统计口径待 E2 巡检校正）
+[2026-09-01T13:19:39+08:00] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（8/28 复核判定检查误报：基准应改 executed_at，修复项②staging_generated 字段连续三日 WARN 未落地，8/31 B4 PASS 未复现，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（连续三日复现，修复优先级上调，待用户确认）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（连续三日复现且扩大到 3 处 MISSING，与 BUG-008 同源，待用户确认）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中（修复方向已查明为确定性代码修复：标题行定位 + 正则支持 🔑 前缀，连续两日复现，待用户确认）; BUG-016 (P1) — 复盘读取过期持仓/调仓：dashboard TOS 云端模式只写云端，本地文件不更新（修复已实施+测试通过 407/215 passed，历史错误产出待人工复核，待用户确认后关闭）
+[2026-09-01T13:19:41+08:00] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；5 个 MANUAL_REVIEW BUG 仅报告不处理，均不可自动修复）
+[2026-09-01T13:19:43+08:00] BUG_FIX 结束
+[2026-09-01T14:17:55+08:00] BUG_FIX 开始
+[2026-09-01T14:17:57+08:00] 扫描: 0 OPEN, 0 IN_PROGRESS, 5 MANUAL_REVIEW（BUG-007/008/009/011 auto_fix_eligible=false；BUG-016 状态 MANUAL_REVIEW 修复已实施待用户确认；BUG_INDEX 统计表 MANUAL_REVIEW=4 未含 8/31 新录入的 BUG-016，统计口径待 E2 巡检校正）
+[2026-09-01T14:17:59+08:00] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（8/28 复核判定检查误报：基准应改 executed_at，修复项②staging_generated 字段连续三日 WARN 未落地，8/31 B4 PASS 未复现，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（连续三日复现，修复优先级上调，待用户确认）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（连续三日复现且扩大到 3 处 MISSING，与 BUG-008 同源，待用户确认）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中（修复方向已查明为确定性代码修复：标题行定位 + 正则支持 🔑 前缀，连续两日复现，待用户确认）; BUG-016 (P1) — 复盘读取过期持仓/调仓：dashboard TOS 云端模式只写云端，本地文件不更新（修复已实施+测试通过 407/215 passed，历史错误产出待人工复核，待用户确认后关闭）
+[2026-09-01T14:18:01+08:00] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；5 个 MANUAL_REVIEW BUG 仅报告不处理，均不可自动修复）
+[2026-09-01T14:18:03+08:00] BUG_FIX 结束
+[2026-09-01T15:18:02+08:00] BUG_FIX 开始
+[2026-09-01T15:18:03+08:00] 扫描: 0 OPEN, 0 IN_PROGRESS, 3 MANUAL_REVIEW（BUG-007/011 auto_fix_eligible=false；BUG-016 状态 MANUAL_REVIEW 修复已实施待用户确认；BUG_INDEX 统计表 MANUAL_REVIEW=3 与 open/ 目录一致）
+[2026-09-01T15:18:05+08:00] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（8/28 复核判定检查误报：基准应改 executed_at，修复项②staging_generated 字段连续三日 WARN 未落地，8/31 B4 PASS 未复现，待用户确认）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中（修复方向已查明为确定性代码修复：标题行定位 + 正则支持 🔑 前缀，连续两日复现，待用户确认）; BUG-016 (P1) — 复盘读取过期持仓/调仓：dashboard TOS 云端模式只写云端，本地文件不更新（修复已实施+测试通过 407/215 passed，历史错误产出待人工复核，待用户确认后关闭）
+[2026-09-01T15:18:07+08:00] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；3 个 MANUAL_REVIEW BUG 仅报告不处理，均不可自动修复）
+[2026-09-01T15:18:09+08:00] BUG_FIX 结束
+[2026-09-01T16:17:30+08:00] BUG_FIX 开始
+[2026-09-01T16:17:31+08:00] 扫描: 1 OPEN（BUG-017 复盘验证录入）, 0 IN_PROGRESS, 1 MANUAL_REVIEW（BUG-017 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=1 与 open/ 目录一致）
+[2026-09-01T16:17:33+08:00] MANUAL_REVIEW BUG 需人工处理: BUG-017 (P2) — push2/push2his 连续 ≥2 交易日不可达 + 北向资金断供，行业/题材板块扫描与资金面数据持续降级（auto_fix_eligible=false：涉及网络/数据源连通性判断，需人工判断代码或网络，非确定性自动修复）
+[2026-09-01T16:17:35+08:00] 选择: 无待修复 BUG，跳过（符合 0.2 规则：唯一 OPEN BUG-017 为 MANUAL_REVIEW/auto_fix_eligible=false → 仅报告不处理；无可自动修复 BUG）
+[2026-09-01T16:17:37+08:00] BUG_FIX 结束
+[2026-09-01T17:17:25+08:00] BUG_FIX 开始
+[2026-09-01T17:17:27+08:00] 扫描: 2 OPEN（BUG-017/018）, 0 IN_PROGRESS, 2 MANUAL_REVIEW（BUG-017/018 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=2 与 open/ 目录一致）
+[2026-09-01T17:17:29+08:00] MANUAL_REVIEW BUG 需人工处理: BUG-017 (P2) — push2/push2his 连续 ≥2 交易日不可达 + 北向资金断供，行业/题材板块扫描与资金面数据持续降级（auto_fix_eligible=false：涉及网络/数据源连通性，需人工判断）；BUG-018 (P2) — 复盘报告 C3 章节关键词再次漂移（做T建议复盘/次日核心关注 vs 做T预判复盘，auto_fix_eligible=false：需人工决定修订检查关键词 or 补全报告/模板章节）
+[2026-09-01T17:17:31+08:00] 选择: 无待修复 BUG，跳过（符合 0.2 规则：全部 OPEN BUG-017/018 为 MANUAL_REVIEW/auto_fix_eligible=false → 仅报告不处理；无可自动修复 BUG）
+[2026-09-01T17:17:33+08:00] BUG_FIX 结束

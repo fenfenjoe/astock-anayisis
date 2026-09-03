@@ -1,0 +1,10 @@
+[2026-09-01T12:17:00+08:00] CODE_INSPECT 开始 — 代码质量巡检 (bug_inspect_code)
+[2026-09-01T12:17:00+08:00] 第一步 正确性定义: 读取 correctness_definitions.yaml (v1.0, 5组件22条定义)
+[2026-09-01T12:17:00+08:00] 第二步 静态分析: 语法检查 OK — backtest/tests 全部 54 个 .py 编译通过; 注册一致性 OK — 19 个策略类(含 CanaryDefenseDaily)在 run_backtest/daily_signal STRAT_MAP(S1-S19)/list_strategies STRATEGIES 全部注册, strategy_kb KB S1-S19 全覆盖且 class_name 与 STRATEGIES 一致; 硬编码路径 OK — 无 C:/ D:/ C:\ E:/ 绝对路径
+[2026-09-01T12:17:00+08:00] 第三步 覆盖率: 总体 84% — 最低模块 canary_defense.py 47%, momentum_rotation.py 66%, base.py 62%, adaptive_momentum.py 86%, data.py 86%; 低覆盖模块的 correctness 定义(STR-001/002/004)均有专项测试; 覆盖率与 08-31 持平无回归
+[2026-09-01T12:17:00+08:00] 第四步 全量测试: 407 passed, 2 skipped (test_data.py:65 东财网络不可用环境性跳过 / test_em_client.py:18 网络不可用), 0 failed, 0 error, 耗时 59s; skip 原因均非过时
+[2026-09-01T12:17:00+08:00] 第五步 定义逐条验证: 22/22 条有实现与测试对应; ENG-004(BUG-007 年化换手率口径)与 MET-005(BUG-005 胜率分母非零收益天数)仍与定义矛盾, 均 MANUAL_REVIEW 待人工; DASH-001~003 源码路由/JWT/7张表均在, 由 test_dashboard_* 覆盖
+[2026-09-01T12:17:00+08:00] 第六步 新发现 BUG: 0 — 静态分析/测试/定义验证均未发现新问题
+[2026-09-01T12:17:00+08:00] 第七步 BUG_INDEX 更新: 巡检历史追加 2026-09-01 代码巡检 0新增; 统计保持 (OPEN 2 + MANUAL_REVIEW 6)
+[2026-09-01T12:17:00+08:00] 第八步 已有OPEN复查: BUG-016 缓存08-31盘中快照仍复现(512480 close=1.020/high=1.034 未修正, auto_fix_eligible=true 待 bug_auto_fix) — 保持 OPEN; BUG-017 巡检脚本缺陷仍复现(复现路径更新: base.py 类属性 assets:list=[] 使 hasattr 恒 True 但取到空列表, all_etfs 仍恒空, 完整性门仍失效) — 保持 OPEN; MANUAL_REVIEW 6 项(BUG-005/007/012/013/014/015)全部仍复现 — 保持
+[2026-09-01T12:17:00+08:00] CODE_INSPECT 结束 — 发现 0 新 BUG, 仍开放 8 (OPEN 2: BUG-016/017 + MANUAL_REVIEW 6: BUG-005/007/012/013/014/015), 无 CRITICAL; 需人工确认: BUG-005/007/012/013/014/015 指标口径与 KB 文档; 需 bug_auto_fix 自动修复: BUG-016 缓存重拉 + BUG-017 bug_inspect_data 脚本实例化取 assets

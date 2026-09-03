@@ -1070,14 +1070,32 @@ def scheduler_run_get(run_id: int) -> dict | None:
         return dict(r) if r else None
 
 
-def scheduler_window_done(task_id: str, window_key: str) -> bool:
-    """Return True if a non-failed run already exists for (task_id, window_key)."""
+def scheduler_window_done(task_id: str, window_key: str,
+                          max_failures: int | None = None) -> bool:
+    """Return True if the window is considered consumed for (task_id, window_key).
+
+    语义：
+    - success/timeout 存在 → 已完成（True）
+    - failed 累计达 max_failures（默认 None=不启用失败限次）→ 已消耗（True），
+      阻止同一窗口内无限制重试（2026-08-31 重试风暴修复）
+    - 否则 False（可重试）
+    """
     with get_conn() as conn:
         r = conn.execute(
             "SELECT 1 FROM scheduler_runs WHERE task_id=? AND window_key=? AND status IN ('success','timeout') LIMIT 1",
             (task_id, window_key),
         ).fetchone()
-        return r is not None
+        if r is not None:
+            return True
+        if max_failures is not None:
+            c = conn.execute(
+                "SELECT COUNT(*) AS c FROM scheduler_runs "
+                "WHERE task_id=? AND window_key=? AND status='failed'",
+                (task_id, window_key),
+            ).fetchone()
+            if c and c["c"] >= max_failures:
+                return True
+        return False
 
 
 def scheduler_latest(task_id: str) -> dict | None:
@@ -1095,3 +1113,30 @@ def scheduler_running_tasks() -> list[str]:
             "SELECT DISTINCT task_id FROM scheduler_runs WHERE status='running'"
         ).fetchall()
         return [r["task_id"] for r in rows]
+
+
+def scheduler_mark_zombies_running() -> int:
+    """把遗留的 running 记录标记为 failed（进程重启中断）。
+
+    引擎/进程重启后，_run_prompt 的后台线程随旧进程被杀，DB 里的 running
+    记录永远收不到终态（success/failed/timeout）——成为僵尸记录，UI 会一直
+    显示"运行中"。start() 时调用本函数统一回收。
+
+    返回被清理的记录数。
+    """
+    note = "\n\n[interrupted] 进程重启，任务被中断（未收到终态，标记为 failed）。"
+    with get_conn() as conn:
+        cur = conn.execute(
+            "SELECT id FROM scheduler_runs WHERE status='running'"
+        ).fetchall()
+        ids = [r["id"] for r in cur]
+        if not ids:
+            return 0
+        placeholders = ",".join("?" for _ in ids)
+        now = datetime.now().isoformat()
+        conn.execute(
+            f"UPDATE scheduler_runs SET status='failed', completed_at=?, "
+            f"output=COALESCE(output,'') || ? WHERE id IN ({placeholders})",
+            [now, note, *ids],
+        )
+        return len(ids)

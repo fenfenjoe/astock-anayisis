@@ -6,3 +6,45 @@
 [2026-08-27T09:20:50+0800] 回归测试: PASS — 全量 pytest 208 passed；E2 实测输出 E2:PASS（修复前旧口径 E2:FAIL 复现，修复后 BUG_INDEX OPEN=1/FIXED=4/WONT_FIX=1 与实际状态一致）
 [2026-08-27T09:21:00+0800] 归档: BUG-006 → FIXED → closed/BUG-006.md；顺带将状态 FIXED 但滞留 open/ 的 BUG-002/003 移至 closed/（目录与状态一致）；BUG_INDEX.md 统计 OPEN 1→0、FIXED 4→5，BUG_TABLE 状态更新，巡检历史追加记录
 [2026-08-27T09:21:10+0800] BUG_FIX 结束
+[2026-08-27T10:17:25+0800] BUG_FIX 开始
+[2026-08-27T10:17:26+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 0 MANUAL_REVIEW（bugs/open/ 仅 .gitkeep，BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0）
+[2026-08-27T10:17:26+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出）
+[2026-08-27T10:17:26+0800] BUG_FIX 结束
+[2026-08-27T11:17:40+0800] BUG_FIX 开始
+[2026-08-27T11:17:41+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 0 MANUAL_REVIEW（bugs/open/ 仅 .gitkeep，BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=0）
+[2026-08-27T11:17:41+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出）
+[2026-08-27T11:17:41+0800] BUG_FIX 结束
+[2026-08-27T12:17:30+0800] BUG_FIX 开始
+[2026-08-27T12:17:32+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 0 MANUAL_REVIEW（bugs/open/ 仅 .gitkeep，BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=0）
+[2026-08-27T12:17:32+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出）
+[2026-08-27T12:17:32+0800] BUG_FIX 结束
+[2026-08-27T13:18:29+0800] BUG_FIX 开始
+[2026-08-27T13:18:30+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 0 MANUAL_REVIEW（bugs/open/ 仅 .gitkeep，BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=0）
+[2026-08-27T13:18:30+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出“无待修复 BUG，跳过”并退出）
+[2026-08-27T13:18:30+0800] BUG_FIX 结束
+[2026-08-27T14:17:28+0800] BUG_FIX 开始
+[2026-08-27T14:17:28+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 0 MANUAL_REVIEW（bugs/open/ 仅 .gitkeep，BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=0）
+[2026-08-27T14:17:28+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出“无待修复 BUG，跳过”并退出）
+[2026-08-27T14:17:28+0800] BUG_FIX 结束
+[2026-08-27T15:17:26+0800] BUG_FIX 开始
+[2026-08-27T15:17:27+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 0 MANUAL_REVIEW（bugs/open/ 仅 .gitkeep，BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=0）
+[2026-08-27T15:17:27+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出）
+[2026-08-27T15:17:27+0800] BUG_FIX 结束
+[2026-08-27T16:17:16+0800] BUG_FIX 开始
+[2026-08-27T16:17:20+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 0 MANUAL_REVIEW（bugs/open/ 仅 .gitkeep，BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=0）
+[2026-08-27T16:17:20+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出）
+[2026-08-27T16:17:20+0800] BUG_FIX 结束
+[2026-08-27T17:18:05+0800] BUG_FIX 开始
+[2026-08-27T17:18:06+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 3 MANUAL_REVIEW（BUG-007/008/009，均 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=3）
+[2026-08-27T17:18:07+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（需判定流程违规或检查误报）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」
+[2026-08-27T17:18:08+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；3 个 MANUAL_REVIEW BUG 仅报告不处理）
+[2026-08-27T17:18:09+0800] BUG_FIX 结束
+[2026-08-27T18:18:00+0800] BUG_FIX 开始
+[2026-08-27T18:18:02+0800] 扫描: 1 OPEN (BUG-010 P2), 0 IN_PROGRESS, 3 MANUAL_REVIEW（BUG-007/008/009，均 auto_fix_eligible=false 仅报告不处理）
+[2026-08-27T18:18:03+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（需判定流程违规或检查误报）; BUG-008 (P2) — C1 早盘报告检查关键词漂移; BUG-009 (P2) — C3 复盘报告检查关键词漂移
+[2026-08-27T18:18:04+0800] 选择: BUG-010 (P2) — auto_logic_inspect 检查脚本缺陷：C1/C2/C3 引号语法错误 + C4/D2 缺 UTF-8（唯一 OPEN 且 auto_fix_eligible=true，确定性修复）
+[2026-08-27T18:18:10+0800] 诊断: 确定性修复 — ①C1/C2/C3 报告路径 `f = 'f'my_doc/...''` 为 SyntaxError（编译即失败，巡检时手工改引号才可运行）；②C4/D2 `python -c` 无 `-X utf8`，Windows GBK 读 UTF-8 task_state.json 报 UnicodeDecodeError（C4 误报"文件不存在"）；参照 B1/B2/B3/D3 的 `python -X utf8` 写法统一
+[2026-08-27T18:19:00+0800] 修复: auto_logic_inspect.md — C1/C2/C3 改 f-string `f = f'my_doc/每日复盘/reports/{today}/早盘报告.md'`（消除 SyntaxError）；C4/D2 命令加 `-X utf8`；新增回归测试 tests/test_logic_inspect_scripts.py（4 条：C1/C2/C3 可 compile + f-string 断言 + C4/D2 含 -X utf8 + 按原样执行 exit 0）
+[2026-08-27T18:20:00+0800] 回归测试: 211 passed / 1 failed — 唯一失败 test_state_machine.py::TestTddGateCheck::test_test_exists_and_passes 为沙箱环境性失败（lib/state_machine.py run_tests 嵌套 subprocess capture_output 管道被拒 WinError 5），已通过还原实验铁证与本次修复无关（修复前同样失败）；BUG-010 自身回归测试 4/4 PASS
+[2026-08-27T18:21:00+0800] 归档: BUG-010 → FIXED → closed/BUG-010.md；BUG_INDEX.md 统计 OPEN 1→0、FIXED 5→6、BUG_TABLE 状态更新、巡检历史追加；E2 口径实测 OPEN=0/FIXED=6/WONT_FIX=1 与统计表一致；Git 提交 71b25dd（4 files: auto_logic_inspect.md + test_logic_inspect_scripts.py + BUG-010.md + BUG_INDEX.md）
+[2026-08-27T18:21:30+0800] BUG_FIX 结束

@@ -1,7 +1,8 @@
 {
-  "_comment": "复制为 cloud.json 并填入火山引擎 AccessKey/SecretKey（勿提交）。从火山引擎控制台 → 访问控制 → AccessKey 创建。",
+  "_comment": "复制为 cloud.json 并填入火山引擎 AccessKey/SecretKey（勿提交）。从火山引擎控制台 → 访问控制 → AccessKey 创建。桶建在哪个地域，endpoint/region 就要匹配哪个。",
   "ak": "your-access-key",
   "sk": "your-secret-key",
-  "endpoint": "https://tos-cn-beijing.volces.com",
-  "bucket": "astock-data"
+  "endpoint": "https://tos-s3-cn-beijing.volces.com",
+  "bucket": "astock-data",
+  "region": "cn-beijing"
 }

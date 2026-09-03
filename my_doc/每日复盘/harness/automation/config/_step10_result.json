@@ -1,0 +1,44 @@
+{
+  "holdings": [
+    {
+      "name": "宁波银行",
+      "code": "002142",
+      "shares": "400",
+      "cost": "33.563",
+      "today_ops": "无操作"
+    },
+    {
+      "name": "航空航天ETF",
+      "code": "159227",
+      "shares": "1,400",
+      "cost": "2.731",
+      "today_ops": "无操作"
+    },
+    {
+      "name": "电网设备ETF",
+      "code": "159326",
+      "shares": "7,900",
+      "cost": "1.973",
+      "today_ops": "无操作"
+    },
+    {
+      "name": "黄金ETF",
+      "code": "518880",
+      "shares": "2,600",
+      "cost": "9.056",
+      "today_ops": "无操作"
+    },
+    {
+      "name": "工商银行",
+      "code": "601398",
+      "shares": "1,500",
+      "cost": "7.783",
+      "today_ops": "无操作"
+    }
+  ],
+  "sold_out": [],
+  "today_trades": [],
+  "added": [],
+  "removed": [],
+  "changed": []
+}

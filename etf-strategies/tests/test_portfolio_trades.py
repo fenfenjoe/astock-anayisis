@@ -340,3 +340,48 @@ def test_api_toggle_scheduler_auto(api_client):
     r2 = api_client.post("/api/scheduler/auto", json={"enabled": False})
     assert r2.status_code == 200, r2.text
     assert r2.json()["auto_enabled"] is False
+
+
+# ═══════════════════════════════════════════════════════════════
+# Unit: TOS→本地 持仓/调仓 拉取（2026-08-31 复盘读取过期数据 BUG 修复）
+# ═══════════════════════════════════════════════════════════════
+
+def test_pull_holdings_to_local_cloud_active(ledger_paths, monkeypatch):
+    """云端有对象 → 本地 每日调仓.md/持仓.md 被覆写为云端内容（复盘读到最新调仓）。"""
+    cloud = {
+        "holdings/每日调仓.md": (
+            "# 仓位\n\n## 0. 可用金额\n\n9999\n\n## 1. 当前持仓\n\n\n"
+            "| 股票名称 | 代码 | 持仓量（份） | 成本价（元） | \n"
+            "| -------- | ------ | ------------ | ------------ | \n"
+            "| 软件ETF招商 | 159899 | 0 | 0.723 | \n\n"
+            "## 2. 调仓记录\n\n\n"
+            "| 日期 | 股票名称 | 股票代码 | 交易数量 | 交易价格 | 买入/卖出 | 备注 |\n"
+            "|---|---|---|---|---|---|---|\n"
+            "| 2026-08-31 | 软件ETF招商 | 159899 | 2,000 | 0.707 | 卖出 | 信号，手续费5.00元 |\n"
+        ),
+        "holdings/持仓.md": "# 当前持仓\n可用金额: 9999 元\n",
+    }
+    monkeypatch.setattr(portfolio, "_cs_get", lambda k: cloud.get(k))
+    res = portfolio.pull_holdings_to_local()
+    assert res["pulled"] == ["holdings/每日调仓.md", "holdings/持仓.md"]
+    assert "2026-08-31 | 软件ETF招商" in ledger_paths["daily"].read_text(encoding="utf-8")
+    assert "可用金额: 9999 元" in ledger_paths["holdings"].read_text(encoding="utf-8")
+
+
+def test_pull_holdings_to_local_cloud_missing(ledger_paths, monkeypatch):
+    """云端无对象 → 跳过，本地文件保持原样。"""
+    monkeypatch.setattr(portfolio, "_cs_get", lambda k: None)
+    before_daily = ledger_paths["daily"].read_text(encoding="utf-8")
+    before_hold = ledger_paths["holdings"].read_text(encoding="utf-8")
+    res = portfolio.pull_holdings_to_local()
+    assert res["pulled"] == []
+    assert res["skipped"] == ["holdings/每日调仓.md", "holdings/持仓.md"]
+    assert ledger_paths["daily"].read_text(encoding="utf-8") == before_daily
+    assert ledger_paths["holdings"].read_text(encoding="utf-8") == before_hold
+
+
+def test_pull_holdings_to_local_cloud_disabled(ledger_paths):
+    """未配置云端（_cs_get=None，fixture 默认）→ 直接跳过，零副作用。"""
+    res = portfolio.pull_holdings_to_local()
+    assert res["pulled"] == []
+    assert res["skipped"] == []

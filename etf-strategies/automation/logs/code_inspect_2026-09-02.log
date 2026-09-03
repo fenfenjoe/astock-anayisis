@@ -1,0 +1,10 @@
+[2026-09-02T12:17:00+08:00] CODE_INSPECT 开始 — 代码质量巡检 (bug_inspect_code)
+[2026-09-02T12:17:00+08:00] 第一步 正确性定义: 读取 correctness_definitions.yaml (v1.0, 5组件22条定义)
+[2026-09-02T12:17:00+08:00] 第二步 静态分析: 语法检查 OK — backtest/tests 全部 .py 编译通过; 注册一致性 OK — 19 个策略类(含 CanaryDefenseDaily)在 run_backtest/daily_signal STRAT_MAP(S1-S19)/list_strategies STRATEGIES 全部注册, strategy_kb KB S1-S19 全覆盖且 class_name 与 STRATEGIES 一致; 硬编码路径 OK — 无 C:/ D:/ 绝对路径
+[2026-09-02T12:17:00+08:00] 第三步 覆盖率: 总体 84% — 最低模块 canary_defense.py 47%, base.py 62%, momentum_rotation.py 66%, rsrs_momentum.py 83%, rsrs_reversal_momentum.py 85%; 低覆盖模块的 correctness 定义(STR-001/002/004)均有专项测试; 覆盖率与 09-01 持平无回归
+[2026-09-02T12:17:00+08:00] 第四步 全量测试: 414 passed, 2 skipped (test_data.py:65 东财网络不可用环境性跳过 / test_em_client.py:18 网络不可用), 0 failed, 0 error, 耗时 96s; skip 原因均非过时
+[2026-09-02T12:17:00+08:00] 第五步 定义逐条验证: 22/22 条有实现与测试对应; 全策略运行时验证 STR-001/002/004(权重和/索引对齐/warmup) 与 STR-005(get_diagnostics 返回 parameters/scores/holdings) 全部通过; ENG-004(BUG-007 年化换手率口径)与 MET-005(BUG-005 胜率分母非零收益天数)仍与定义矛盾, 均 MANUAL_REVIEW 待人工; DASH-001~003 由 test_dashboard_* 覆盖
+[2026-09-02T12:17:00+08:00] 第六步 新发现 BUG: 1 — BUG-018 CLI 帮助文本/文档字符串仍写「S1-S11」, 实际已支持 S1-S19 (daily_signal.py:248 / cli.py:282,286 / strategy_kb.py:435), auto_fix_eligible=true
+[2026-09-02T12:17:00+08:00] 第七步 BUG_INDEX 更新: 巡检历史追加 2026-09-02 代码巡检 1新增; 统计更新 (OPEN 1 + MANUAL_REVIEW 6)
+[2026-09-02T12:17:00+08:00] 第八步 已有OPEN复查: MANUAL_REVIEW 6 项(BUG-005/007/012/013/014/015)全部仍复现 — 保持开放; BUG-016/017 已于 09-01/09-02 自动修复并移至 closed, 本次确认 closed 目录中存在且非 OPEN
+[2026-09-02T12:17:00+08:00] CODE_INSPECT 结束 — 发现 1 新 BUG, 仍开放 7 (OPEN 1: BUG-018 + MANUAL_REVIEW 6: BUG-005/007/012/013/014/015), 无 CRITICAL; 需人工确认: BUG-005/007/012/013/014/015 指标口径与 KB 文档; 需 bug_auto_fix 自动修复: BUG-018 S1-S11→S1-S19 文档修正

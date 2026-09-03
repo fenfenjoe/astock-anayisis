@@ -1,0 +1,27 @@
+[2026-08-28T17:07:15] LOGIC_INSPECT 开始 | 交易日=是
+[2026-08-28T17:08:44] LOGIC_INSPECT ��ʼ | ������=��
+[2026-08-28T17:11:30] LOGIC_INSPECT 检查结果汇总 | 交易日=是
+[2026-08-28T17:11:30] A1: PASS — archive/20260828/早盘分析-staging.md 存在 (17370 bytes)
+[2026-08-28T17:11:30] A2: PASS — archive/20260828/复盘分析-staging.md 存在 (6274 bytes)
+[2026-08-28T17:11:30] B1: PASS — staging/今日-早盘分析.md 8 章节完整
+[2026-08-28T17:11:30] B2: FAIL — 核心变量误报(仅0个,实际6个) → BUG-011 新建(MANUAL_REVIEW, 检查器 split 切分缺陷)
+[2026-08-28T17:11:30] B3: PASS — staging 代码-名称与 config/持仓.md 一致
+[2026-08-28T17:11:30] B4: FAIL — STALE(mtime 16:08 < completed_at 16:12:33) → BUG-007 更新(8/28 复现+复核确认误报)
+[2026-08-28T17:11:30] C1: FAIL — 2 MISSING(事件验证/上期预判回顾) → BUG-008 更新(8/28 复现, 报告用前次预测回顾/海外市场传导/核心关注时间表)
+[2026-08-28T17:11:30] C2: PASS — reports/20260828/每日信号.md 7 章节完整
+[2026-08-28T17:11:30] C3: FAIL — 1 MISSING(次日核心变量) → BUG-009 更新(8/28 复现, 报告用 8/31 核心变量)
+[2026-08-28T17:11:30] C4: WARN — evening_review=completed 但 staging_generated 字段为空 (与 BUG-007 关联, 不创建 BUG)
+[2026-08-28T17:11:30] D1: PASS — config/持仓.md 与 每日调仓.md 一致 (6 持仓, 可用金额一致)
+[2026-08-28T17:11:30] D2: PASS — task_state date=20260828, trading_day=True
+[2026-08-28T17:11:30] D3: PASS — 无孤立信号 (4 条追踪中)
+[2026-08-28T17:11:30] D4: PASS — 信号模型一致性 (7 处标记齐全)
+[2026-08-28T17:11:30] E1: PASS — 经验文件无内容矛盾 (投资/短线/审阅 三文件交叉引用+场景限定完整)
+[2026-08-28T17:11:30] E2: PASS — BUG_INDEX 统计与实际一致 (OPEN=0 FIXED=6 WONT_FIX=1)
+[2026-08-28T17:11:30] BUG 处理: 新建 BUG-011 (B2, MANUAL_REVIEW) | 更新 BUG-007/008/009 (复现记录+复核结论) | BUG_INDEX 统计表 MANUAL_REVIEW 3→4
+[2026-08-28T17:11:30] PENDING_CONFIRMATION: 追加 #7 (BUG-011), 现有 4 项待确认
+[2026-08-28T17:11:30] LOGIC_INSPECT 结束 | 总计: 13 PASS, 4 FAIL(B2/B4/C1/C3 均检查器缺陷或漂移, 内容实际合格), 1 WARN(C4)
+[2026-08-28T17:12:51] LOGIC_INSPECT 复核(二次运行) 完成 | 13 PASS / 4 FAIL / 1 WARN
+[2026-08-28T17:12:51] 复核确认: B2->BUG-011(检查器split缺陷) B4->BUG-007(mtime基准误报) C1->BUG-008(关键词漂移) C3->BUG-009(命名漂移) 均为已跟踪 MANUAL_REVIEW, 无新建
+[2026-08-28T17:12:51] BUG_INDEX 已登记 BUG-011 (MANUAL_REVIEW 3->4), 巡检历史 2026-08-28 行已补, E2 复跑 PASS
+[2026-08-28T17:12:51] PENDING_CONFIRMATION 现有 4 项待确认 (BUG-007/008/009/011)
+[2026-08-28T17:12:51] LOGIC_INSPECT 结束 | 全部检查完成, 待用户确认 BUG-007/008/009/011 修复方向

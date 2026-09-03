@@ -279,11 +279,11 @@ def _cmd_dispatch():
 
     p_learn = sub.add_parser("learn", help="查看策略详细介绍")
     p_learn.add_argument("strategy", nargs="?", default=None,
-                         help="策略编号 (S1~S11)，不填则列出可用策略")
+                         help="策略编号 (S1~S19)，不填则列出可用策略")
 
     p_rpt = sub.add_parser("report", help="生成策略一年回测HTML报告")
     p_rpt.add_argument("strategy", nargs="?", default=None,
-                       help="策略编号 (S1~S11)，不填则列出可用策略")
+                       help="策略编号 (S1~S19)，不填则列出可用策略")
 
     args = parser.parse_args()
 

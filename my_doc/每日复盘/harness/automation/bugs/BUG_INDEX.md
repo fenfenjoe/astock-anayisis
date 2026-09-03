@@ -9,24 +9,18 @@
 
 | 状态 | 数量 |
 |------|------|
-| OPEN | 0 |
+| OPEN | 4 |
 | IN_PROGRESS | 0 |
-| FIXED | 6 |
+| FIXED | 12 |
 | VERIFIED | 0 |
 | WONT_FIX | 1 |
-| MANUAL_REVIEW | 3 |
+| MANUAL_REVIEW | 0 |
 
 ---
 
-## ⚠️ 待人工审核 (MANUAL_REVIEW)
+## ✅ 待人工审核 (MANUAL_REVIEW)
 
-> 以下 BUG 因涉及计算逻辑/算法正确性/金融公式，需人工审阅决定修复方案。
-
-| BUG-ID | 严重级别 | 标题 | 发现日期 | 涉及文件 | 原因 |
-|--------|---------|------|---------|---------|------|
-| BUG-007 | P1 | B4 报 STALE — staging mtime 早于 evening_review 完成时间（疑似检查逻辑误报） | 2026-08-27 | staging_verify.py / task_state.json | staging 内容已刷新（含 8/28）但 mtime<completed_at；需判定流程违规 or 检查误报 |
-| BUG-008 | P2 | C1 早盘报告检查关键词漂移：「前次预测回顾/海外市场传导」vs 检查「上期预判回顾/事件验证」 | 2026-08-27 | auto_logic_inspect.md C1 / auto_morning_analysis.md | 报告结构与自动化 prompt 一致，检查脚本关键词未同步 |
-| BUG-009 | P2 | C3 复盘报告检查关键词漂移：「次日核心关注」vs 检查「次日核心变量」 | 2026-08-27 | auto_logic_inspect.md C3 / 复盘报告 / 复盘模板 | 8/26 BUG-003 修复后再次漂移，命名三处不一致 |
+> 待人工审核 BUG：BUG-017（push2/push2his 连续 ≥2 交易日不可达 + 北向断供，数据源降级）、BUG-018（复盘报告 C3 章节关键词漂移复发：做T建议复盘/次日核心关注）。全部历史 MANUAL_REVIEW（BUG-007/008/009/011/016）已于 2026-09-01 核查并关闭（FIXED）。
 
 ---
 
@@ -39,10 +33,17 @@
 | BUG-004 | P2 | D1 持仓解析失败：每日调仓.md 表格前"持仓："说明行致正则失配 | 2026-08-26 | 逻辑巡检 | FIXED | 每日调仓.md + D1 脚本 | 格式漂移，解析失败（内容实际一致）；解析正则已容忍标题与表格间非表格行（D1+复盘模板 4.5） |
 | BUG-005 | P1 | D4 信号模型一致性检查脚本失效：CHECK_TARGETS 解包错误 | 2026-08-26 | 逻辑巡检 | FIXED | auto_logic_inspect.md D4 | lib 升三元组、prompt 未同步 |
 | BUG-006 | P3 | E2 BUG_INDEX 统计口径误报：closed 目录 WONT_FIX 被误计 FIXED | 2026-08-26 | 逻辑巡检 | FIXED | auto_logic_inspect.md E2 | 按目录文件数而非状态字段统计；E2 已改为按文件内 **状态**: 字段计数（OPEN/IN_PROGRESS/FIXED/WONT_FIX 分别统计），实测 E2:PASS，回归 208 passed |
-| BUG-007 | P1 | B4 报 STALE — staging mtime 早于 evening_review 完成时间（疑似检查逻辑误报） | 2026-08-27 | 逻辑巡检 | MANUAL_REVIEW | staging_verify.py / task_state.json | staging 内容已刷新（含 8/28）但 mtime<completed_at；需判定流程违规 or 检查误报；C4 同步 WARN staging_generated 字段为空 |
-| BUG-008 | P2 | C1 早盘报告检查关键词漂移：「前次预测回顾/海外市场传导」vs 检查「上期预判回顾/事件验证」 | 2026-08-27 | 逻辑巡检 | MANUAL_REVIEW | auto_logic_inspect.md C1 | 报告结构与 auto_morning_analysis.md 12 模块一致，检查脚本关键词未同步 |
-| BUG-009 | P2 | C3 复盘报告检查关键词漂移：「次日核心关注」vs 检查「次日核心变量」 | 2026-08-27 | 逻辑巡检 | MANUAL_REVIEW | auto_logic_inspect.md C3 | 8/26 BUG-003 修复后再次漂移，报告/模板/检查三处命名不一致 |
+| BUG-007 | P1 | B4 报 STALE — staging mtime 早于 evening_review 完成时间（疑似检查逻辑误报） | 2026-08-27 | 逻辑巡检 | FIXED | staging_verify.py / task_state.json | 判定为检查逻辑误报（staging 由复盘第 11 步写入必然早于 completed_at）；**2026-09-01 修复：check_review_staging 时间基准 completed_at→executed_at + 第十五步显式写 staging_generated=true；新增 2 回归测试；用户确认关闭** |
+| BUG-008 | P2 | C1 早盘报告检查关键词漂移：「前次预测回顾/海外市场传导」vs 检查「上期预判回顾/事件验证」 | 2026-08-27 | 逻辑巡检 | FIXED | auto_logic_inspect.md C1 | 报告结构与 auto_morning_analysis.md 12 模块一致，检查脚本关键词未同步；8/28 连续复现；8/31 第三次复现（同 2 处 MISSING），修复优先级上调；**2026-09-01 REQ-004 已同步 C1 关键词为新 9 节结构（前次预测回顾/海外市场传导/宏观研判/资金面与情绪/板块机会扫描/持仓映射/风险提示），漂移修复；用户确认关闭（test_report_structure.py 回归通过）** |
+| BUG-009 | P2 | C3 复盘报告检查关键词漂移：「次日核心关注」vs 检查「次日核心变量」 | 2026-08-27 | 逻辑巡检 | FIXED | auto_logic_inspect.md C3 | 8/26 BUG-003 修复后再次漂移，报告/模板/检查三处命名不一致；8/28 复现（「8/31 核心变量」）；8/31 第三次复现扩大到 3 处 MISSING（早盘预判复盘/做T预判复盘/次日核心变量），修复优先级上调；**2026-09-01 REQ-004 已同步 C3 关键词（早盘预测回顾/做T建议复盘/次日核心关注），漂移修复；用户确认关闭（test_report_structure.py 回归通过）** |
 | BUG-010 | P2 | auto_logic_inspect 检查脚本缺陷：C1/C2/C3 引号语法错误 + C4/D2 缺 UTF-8 致 Windows 无法运行 | 2026-08-27 | 逻辑巡检 | FIXED | auto_logic_inspect.md C1-C4/D2 | 已修复（auto_fix）：C1/C2/C3 `f = 'f'my_doc/...''` → f-string；C4/D2 `python -c` → `python -X utf8 -c`；新增回归测试 test_logic_inspect_scripts.py；回归 211 passed（1 环境性失败与修复无关，修复前已复现） |
+| BUG-011 | P2 | B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文命中 | 2026-08-28 | 逻辑巡检 | FIXED | lib/staging_verify.py check_lessons_and_vars | 检查器缺陷（裸关键词切分 + 正则不识别 🔑 前缀）；**2026-09-01 修复：_section_after 标题行定位 + 变量计数正则支持 `- 🔑 **`；新增 3 回归测试，真实 staging 复测 PASS；用户确认关闭** |
+| BUG-012 | P1 | parse_signal_markdown 无法解析带 markdown 加粗的状态列（**已触发**），8.6.1 入库解析 0 条 | 2026-08-31 | 复盘验证 | FIXED | lib/signal_tracking.py | 盘中信号状态列加粗与 _TRACKABLE_STATUSES 不匹配；已剥离 ** 标记 + 3 单测，回归 214 passed（1 环境性失败无关） |
+| BUG-016 | P1 | 复盘读取过期持仓/调仓：dashboard TOS 云端模式只写云端，本地文件不更新 | 2026-08-31 | 复盘验证 | FIXED | dashboard/portfolio.py + 复盘/早盘/盘中/周报 prompts | 修复已实施（pull_holdings_to_local + sync_holdings_cloud.py + prompts 第零步）；**2026-09-01 复核：sync 实跑 PULLED、4 prompt 均含第零步、8/31 错误产出已修正（复盘/每日信号/9-1 staging/signal_tracking 状态 executed/经验教训移除）、现金口径用户确认 37,629；etf 407 + harness 274 测试通过；用户确认关闭** |
+| BUG-017 | P2 | push2/push2his 连续 ≥2 交易日不可达 + 北向断供，行业/题材板块扫描与资金面数据降级 | 2026-09-01 | 复盘验证 | OPEN | config/probe_status.json + auto_evening_review 第五步 | 探测 partial(6/7)：push2/push2his fail（8/31+9/1 连续）、北向 hsgt 陈旧快照；行业/题材板块 OHLC/资金流降级；auto_fix_eligible=false（MANUAL_REVIEW 由人工判断网络/代码）；**2026-09-02 第3交易日复现（探测 all_ok 但实际调用被拒，已追加处理记录）** |
+| BUG-018 | P2 | 复盘报告 C3 章节关键词漂移复发：「做T建议复盘」实际为「做T预判复盘」且「次日核心关注」章节缺失 | 2026-09-01 | 逻辑巡检 | OPEN | auto_logic_inspect.md C3 + 复盘报告/复盘分析-模板 | 9/1 复盘报告用「5.5 做T预判复盘」且无「次日核心关注」章节，C3 报 2 处 MISSING；与 BUG-003/009 同类漂移复发；auto_fix_eligible=false（MANUAL_REVIEW 需人工定：改检查关键词 or 补模板/报告章节）；**2026-09-02 复盘报告已对齐 C3（新增「4.2 做T建议复盘」+「九、次日核心关注」）；2026-09-02 逻辑巡检验证 C3 PASS（8 章节全命中），待用户确认关闭** |
+| BUG-019 | P2 | 09/02 早盘自动任务（07:55）未运行 → 11:20 手动补执行；盘中检查点仅 11:00/13:30 执行，14:45 P0 强制窗口无提醒 | 2026-09-02 | 收盘复盘验证 | OPEN | task_scheduler.py + automation/logs/2026-09-02/ | scheduler 无 09/02 morning_analysis 自动记录（11:17 手动补执行）；当日盘中检查仅 11:00/13:30（logs 缺 0940/1000/1030/1400/1430）→ SIG-01 P0 减仓 14:45 窗口无提醒、用户未执行；auto_fix_eligible=false（需人工确认调度器运行环境） |
+| BUG-020 | P2 | 1.3c Staging 持仓校验误报：解析器将板块扫描/做T表等非持仓行误判为持仓 → 每次早盘 [FAIL] 12 errors | 2026-09-03 | 早盘校验执行 | OPEN | auto_morning_analysis.md 1.3c | 宽松条件 len(parts)>=4 抓取 staging 所有含代码行（第五节板块扫描/6.2 做T表），真实持仓表（第一节）与 config 一致却误报 STALE/MISMATCH；auto_fix_eligible=false（需人工改 1.3c 解析：表头/区域限定，参照 BUG-004 模式） |
 <!-- BUG_TABLE_END -->
 
 ---
@@ -61,6 +62,16 @@
 | 2026-08-27 | 逻辑巡检 | 3 | 0 | 3(BUG-007/008/009, 均 MANUAL_REVIEW) |
 | 2026-08-27 | 逻辑巡检(补记脚本缺陷) | 1 | 0 | 4(BUG-007/008/009 MANUAL_REVIEW + BUG-010 OPEN) |
 | 2026-08-27 | auto_fix(BUG-010) | 0 | 1 | 3(BUG-007/008/009, 均 MANUAL_REVIEW) |
+| 2026-08-28 | 逻辑巡检 | 1 | 0 | 4(BUG-007/008/009 复现确认误报/漂移 + BUG-011 MANUAL_REVIEW) |
+| 2026-08-31 | 复盘验证 | 1 | 1 | 4(BUG-007/008/009/011 MANUAL_REVIEW) |
+| 2026-08-31 | 逻辑巡检 | 0 | 0 | 4(BUG-007/008/009/011 第三次复现确认漂移/缺陷, 无新建) |
+| 2026-09-01 | 用户确认(REQ-004) | 0 | 2(BUG-008/009 关键词已同步, FIXED) | 3(BUG-007/011/016 MANUAL_REVIEW) |
+| 2026-09-01 | 用户要求核查并修复 | 0 | 3(BUG-007 时间基准/011 变量计数/016 复核确认, 均 FIXED) | 0（全部 BUG 关闭） |
+| 2026-09-01 | 收盘复盘验证 | 1 | 0 | 1(BUG-017 数据源降级, MANUAL_REVIEW) |
+| 2026-09-01 | 逻辑巡检 | 1 | 0 | 2(BUG-017/018) |
+| 2026-09-02 | 早盘验证 | 0 | 0 | 2(BUG-017 第3交易日复现已追加处理记录/018) |
+| 2026-09-02 | 收盘复盘验证 | 1 | 0 | 3(BUG-017 晚间复现再追加/018 报告已对齐待验证/019 早盘任务未运行) |
+| 2026-09-02 | 逻辑巡检 | 0 | 0 | 3(BUG-017/018 C3 验证 PASS 待用户确认/019) |
 
 ---
 

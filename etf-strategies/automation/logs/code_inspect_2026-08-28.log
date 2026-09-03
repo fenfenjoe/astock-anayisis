@@ -1,0 +1,10 @@
+[2026-08-28T12:22:00+08:00] CODE_INSPECT 开始 — 代码质量巡检 (bug_inspect_code)
+[2026-08-28T12:22:00+08:00] 第一步 正确性定义: 读取 correctness_definitions.yaml (v1.0, 4组件22条定义)
+[2026-08-28T12:22:00+08:00] 第二步 静态分析: 语法检查 OK — 82 个 .py 全部编译通过; 注册一致性 OK — 18 个 Strategy 子类在 run_backtest/daily_signal(STRAT_MAP S1-S19)/list_strategies/strategy_kb 全部注册; 硬编码路径 OK — 无 C:/ D:/ 绝对路径
+[2026-08-28T12:22:00+08:00] 第三步 覆盖率: 总体 84% (↑ 78%) — 最低模块 canary_defense.py 47%, base.py 62%, momentum_rotation.py 66%, rsrs_momentum.py 83%, rsrs_reversal_momentum.py 85%; reporting.py 100% (BUG-006 已修复验证); 低覆盖模块的 correctness 定义(STR-001/002/004)均有专项测试
+[2026-08-28T12:22:00+08:00] 第四步 全量测试: 361 passed, 2 skipped (东财网络不可用环境性跳过), 0 failed, 耗时 65-85s
+[2026-08-28T12:22:00+08:00] 第五步 定义逐条验证: 21/22 条符合 — 新发现 ENG-004 换手率口径矛盾(引擎返回年化换手率 23.50, 定义 verification 为单次调仓 ≤2, 且 test_engine.py 无换手率断言); MET-005 胜率分母矛盾(BUG-005)仍复现; DASH-001/002/003 通过 auth/db 测试与 sqlite 实查验证
+[2026-08-28T12:22:00+08:00] 第六步 新发现 BUG: 1 — BUG-007 (MEDIUM, engine, auto_fix_eligible=false, ENG-004 换手率口径不一致)
+[2026-08-28T12:22:00+08:00] 第七步 BUG_INDEX 更新: OPEN 0→1, 巡检历史追加 2026-08-28 代码巡检 1新增
+[2026-08-28T12:22:00+08:00] 第八步 已有OPEN复查: BUG-005 仍复现(win_rate 0.75 vs 定义 0.6, MANUAL_REVIEW 待人工) — 保持; BUG-006 已修复(6个测试节点存在, reporting.py 100%); BUG-004 缓存新鲜度正常
+[2026-08-28T12:22:00+08:00] CODE_INSPECT 结束 — 发现 1 新 BUG, 仍开放 2 (BUG-005 MANUAL_REVIEW + BUG-007 OPEN), 无 CRITICAL; BUG-007 需人工确认换手率口径

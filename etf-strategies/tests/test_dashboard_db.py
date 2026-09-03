@@ -635,3 +635,40 @@ class TestUsersCrud:
         assert users[0]["username"] == "admin"
         # Password hash should NOT be in the output
         assert "password_hash" not in users[0]
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 僵尸 running 记录清理（进程重启中断遗留）
+# ══════════════════════════════════════════════════════════════════════
+
+class TestZombieRunningCleanup:
+    def test_mark_zombie_running_cleans_running_rows(self, use_memory_db):
+        """重启后遗留的 running 记录应被标记为 failed 并附中断说明。"""
+        db_mod.init_db()
+        rid1 = db_mod.scheduler_run_insert("task_a", "task_a:2026-09-02", "auto",
+                                           "2026-09-02 14:30:00", status="running")
+        rid2 = db_mod.scheduler_run_insert("task_b", "task_b:2026-09-02", "auto",
+                                           "2026-09-02 14:30:01", status="running")
+        # 一条已完成的正常记录不应被动
+        rid3 = db_mod.scheduler_run_insert("task_c", "task_c:2026-09-02", "auto",
+                                           "2026-09-02 14:30:02", status="success")
+
+        n = db_mod.scheduler_mark_zombies_running()
+
+        assert n == 2
+        r1 = db_mod.scheduler_run_get(rid1)
+        assert r1["status"] == "failed"
+        assert "中断" in (r1["output"] or "")
+        r2 = db_mod.scheduler_run_get(rid2)
+        assert r2["status"] == "failed"
+        # success 记录不受影响
+        r3 = db_mod.scheduler_run_get(rid3)
+        assert r3["status"] == "success"
+        # 没有遗留 running
+        assert db_mod.scheduler_running_tasks() == []
+
+    def test_mark_zombie_no_running_rows(self, use_memory_db):
+        db_mod.init_db()
+        db_mod.scheduler_run_insert("task_a", "task_a:2026-09-02", "auto",
+                                   "2026-09-02 14:30:00", status="success")
+        assert db_mod.scheduler_mark_zombies_running() == 0

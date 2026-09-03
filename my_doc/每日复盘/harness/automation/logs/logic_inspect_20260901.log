@@ -1,0 +1,40 @@
+[2026-09-01T17:07:31] LOGIC_INSPECT 开始 | 交易日=是
+
+=== 逻辑巡检报告 20260901 ===
+交易日: 是
+执行时间: 2026-09-01T17:09:57
+
+A 组 (归档完整性):
+  A1: PASS — archive/20260901/早盘分析-staging.md 存在 (14283 bytes)
+  A2: PASS — archive/20260901/复盘分析-staging.md 存在 (8045 bytes)
+
+B 组 (Staging 章节对齐):
+  B1: PASS — 今日-早盘分析.md 8个章节完整
+  B2: PASS — 今日-复盘分析.md 5个章节完整, 核心教训>=2, 核心变量>=3
+  B3: PASS — staging ETF code-name 与 config/持仓.md 一致
+  B4: PASS — staging 新鲜，指向明日且内容充实
+
+C 组 (报告章节对齐):
+  C1: PASS — 早盘报告.md 7个核心章节完整
+  C2: PASS — 每日信号.md 7个核心章节完整
+  C3: FAIL — 复盘报告.md 缺「做T建议复盘」(实际为5.5 做T预判复盘)、「次日核心关注」章节 → 建 BUG-018
+  C4: PASS — task_state 与报告产出一致
+
+D 组 (数据一致性):
+  D1: PASS — config/持仓.md 与 每日调仓.md 一致 (5 个持仓)
+  D2: PASS — task_state date=20260901, trading_day=True
+  D3: PASS — 无孤立信号 (7 条追踪中)
+  D4: PASS — 信号模型一致性 (模板/自动化/编排层无漂移)
+
+E 组 (经验与元数据):
+  E1: PASS — 经验文件无内容矛盾 (普跌不做T vs 银行风险日正T 均已双向交叉限定)
+  E2: PASS — BUG_INDEX 统计 (OPEN=2,FIXED=12,WONT_FIX=1) 与实际一致
+
+总计: 15 PASS, 1 FAIL, 0 WARN
+新增 BUG: 1 (BUG-018 C3关键词漂移) | PENDING_CONFIRMATION: 1 项 (新增#8)
+处理:
+  - C3 FAIL → 建 BUG-018 (auto_fix_eligible=false, MANUAL_REVIEW)
+  - BUG_INDEX.md 统计+BUG列表+巡检历史已更新
+  - PENDING_CONFIRMATION.md 待确认表新增 #8 (BUG-018)
+
+[2026-09-01T17:09:57] LOGIC_INSPECT 结束 | 交易日=是 | 15 PASS, 1 FAIL (BUG-018), 0 WARN

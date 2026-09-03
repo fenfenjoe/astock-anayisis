@@ -1,0 +1,50 @@
+[2026-08-31T09:18:10+0800] BUG_FIX 开始
+[2026-08-31T09:18:12+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 4 MANUAL_REVIEW（BUG-007/008/009/011，均 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=4）
+[2026-08-31T09:18:14+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（需人工判定流程违规 or 检查误报，8/28 复核判定检查误报：基准应改 executed_at，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（需人工判断报告结构演进 or 检查未同步，8/28 连续复现）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（需人工确认统一命名，8/28 命名再变「8/31 核心变量」，连续复现）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中，6 个变量计 0（修复方向已查明为确定性代码修复，待用户确认）
+[2026-08-31T09:18:16+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；4 个 MANUAL_REVIEW BUG 仅报告不处理，均 auto_fix_eligible=false）
+[2026-08-31T09:18:18+0800] BUG_FIX 结束
+[2026-08-31T10:17:46+0800] BUG_FIX 开始
+[2026-08-31T10:17:47+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 4 MANUAL_REVIEW（BUG-007/008/009/011，均 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=4）
+[2026-08-31T10:17:48+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（需人工判定流程违规 or 检查误报，8/28 复核判定检查误报：基准应改 executed_at，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（需人工判断报告结构演进 or 检查未同步，8/28 连续复现）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（需人工确认统一命名，8/28 命名再变「8/31 核心变量」，连续复现）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中，6 个变量计 0（修复方向已查明为确定性代码修复，待用户确认）
+[2026-08-31T10:17:49+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；4 个 MANUAL_REVIEW BUG 仅报告不处理，均 auto_fix_eligible=false）
+[2026-08-31T10:17:50+0800] BUG_FIX 结束
+[2026-08-31T12:17:41+0800] BUG_FIX 开始
+[2026-08-31T12:17:43+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 4 MANUAL_REVIEW（BUG-007/008/009/011，均 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=4）
+[2026-08-31T12:17:45+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（需人工判定流程违规 or 检查误报，8/28 复核判定检查误报：基准应改 executed_at，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（需人工判断报告结构演进 or 检查未同步，8/28 连续复现）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（需人工确认统一命名，8/28 命名再变「8/31 核心变量」，连续复现）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中，6 个变量计 0（修复方向已查明为确定性代码修复，待用户确认）
+[2026-08-31T12:17:47+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；4 个 MANUAL_REVIEW BUG 仅报告不处理，均 auto_fix_eligible=false）
+[2026-08-31T12:17:49+0800] BUG_FIX 结束
+[2026-08-31T13:18:10+0800] BUG_FIX 开始
+[2026-08-31T13:18:11+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 4 MANUAL_REVIEW（BUG-007/008/009/011，均 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=4）
+[2026-08-31T13:18:12+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（需人工判定流程违规 or 检查误报，8/28 复核判定检查误报：基准应改 executed_at，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（需人工判断报告结构演进 or 检查未同步，8/28 连续复现）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（需人工确认统一命名，8/28 命名再变「8/31 核心变量」，连续复现）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中，6 个变量计 0（修复方向已查明为确定性代码修复，待用户确认）
+[2026-08-31T13:18:13+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；4 个 MANUAL_REVIEW BUG 仅报告不处理，均 auto_fix_eligible=false）
+[2026-08-31T13:18:14+0800] BUG_FIX 结束
+[2026-08-31T13:21:12+0800] BUG_FIX 开始
+[2026-08-31T13:21:14+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 4 MANUAL_REVIEW（BUG-007/008/009/011，均 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=4）
+[2026-08-31T13:21:16+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（需人工判定流程违规 or 检查误报，8/28 复核判定检查误报：基准应改 executed_at，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（需人工判断报告结构演进 or 检查未同步，8/28 连续复现）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（需人工确认统一命名，8/28 命名再变「8/31 核心变量」，连续复现）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中，6 个变量计 0（修复方向已查明为确定性代码修复，待用户确认）
+[2026-08-31T13:21:18+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；4 个 MANUAL_REVIEW BUG 仅报告不处理，均 auto_fix_eligible=false）
+[2026-08-31T13:21:20+0800] BUG_FIX 结束
+[2026-08-31T14:17:58+0800] BUG_FIX 开始
+[2026-08-31T14:18:00+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 4 MANUAL_REVIEW（BUG-007/008/009/011，均 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=4）
+[2026-08-31T14:18:01+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（需人工判定流程违规 or 检查误报，8/28 复核判定检查误报：基准应改 executed_at，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（需人工判断报告结构演进 or 检查未同步，8/28 连续复现）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（需人工确认统一命名，8/28 命名再变「8/31 核心变量」，连续复现）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中，6 个变量计 0（修复方向已查明为确定性代码修复，待用户确认）
+[2026-08-31T14:18:02+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；4 个 MANUAL_REVIEW BUG 仅报告不处理，均 auto_fix_eligible=false）
+[2026-08-31T14:18:03+0800] BUG_FIX 结束
+[2026-08-31T15:20:27+0800] BUG_FIX 开始
+[2026-08-31T15:20:28+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 4 MANUAL_REVIEW（BUG-007/008/009/011，均 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=4）
+[2026-08-31T15:20:28+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（需人工判定流程违规 or 检查误报，8/28 复核判定检查误报：基准应改 executed_at，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（需人工判断报告结构演进 or 检查未同步，8/28 连续复现）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（需人工确认统一命名，8/28 命名再变「8/31 核心变量」，连续复现）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中，6 个变量计 0（修复方向已查明为确定性代码修复，待用户确认）
+[2026-08-31T15:20:29+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；4 个 MANUAL_REVIEW BUG 仅报告不处理，均 auto_fix_eligible=false）
+[2026-08-31T15:20:29+0800] BUG_FIX 结束
+[2026-08-31T16:17:30+0800] BUG_FIX 开始
+[2026-08-31T16:17:31+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 4 MANUAL_REVIEW（BUG-007/008/009/011，均 auto_fix_eligible=false；BUG_INDEX 统计表 OPEN=0/IN_PROGRESS=0/MANUAL_REVIEW=4）
+[2026-08-31T16:17:32+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（需人工判定流程违规 or 检查误报，8/28 复核判定检查误报：基准应改 executed_at，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（需人工判断报告结构演进 or 检查未同步，8/28 连续复现）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（需人工确认统一命名，8/28 命名再变「8/31 核心变量」，连续复现）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中，6 个变量计 0（修复方向已查明为确定性代码修复，待用户确认）
+[2026-08-31T16:17:33+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；4 个 MANUAL_REVIEW BUG 仅报告不处理，均 auto_fix_eligible=false）
+[2026-08-31T16:17:34+0800] BUG_FIX 结束
+[2026-08-31T17:17:42+0800] BUG_FIX 开始
+[2026-08-31T17:17:44+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 5 MANUAL_REVIEW（BUG-007/008/009/011 auto_fix_eligible=false；BUG-016 状态 MANUAL_REVIEW 修复已实施待用户确认；BUG_INDEX 统计表 MANUAL_REVIEW=4 未含 8/31 新录入的 BUG-016，统计口径待 E2 巡检校正）
+[2026-08-31T17:17:46+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（8/28 复核判定检查误报：基准应改 executed_at，修复项②staging_generated 字段连续三日 WARN 未落地，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（连续三日复现，修复优先级上调，待用户确认）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（连续三日复现且扩大到 3 处 MISSING，与 BUG-008 同源，待用户确认）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中（修复方向已查明为确定性代码修复：标题行定位 + 正则支持 🔑 前缀，连续两日复现，待用户确认）; BUG-016 (P1) — 复盘读取过期持仓/调仓：dashboard TOS 云端模式只写云端，本地文件不更新（修复已实施+测试通过 407/215 passed，历史错误产出待人工复核，待用户确认后关闭）
+[2026-08-31T17:17:48+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；5 个 MANUAL_REVIEW BUG 仅报告不处理，均不可自动修复）
+[2026-08-31T17:17:50+0800] BUG_FIX 结束
+[2026-08-31T18:17:38+0800] BUG_FIX 开始
+[2026-08-31T18:17:40+0800] 扫描: 0 OPEN, 0 IN_PROGRESS, 5 MANUAL_REVIEW（BUG-007/008/009/011 auto_fix_eligible=false；BUG-016 状态 MANUAL_REVIEW 修复已实施待用户确认；BUG_INDEX 统计表 MANUAL_REVIEW=4 未含 8/31 新录入的 BUG-016，统计口径待 E2 巡检校正）
+[2026-08-31T18:17:42+0800] MANUAL_REVIEW BUG 需人工处理: BUG-007 (P1) — B4 报 STALE — staging mtime 早于 evening_review 完成时间（8/28 复核判定检查误报：基准应改 executed_at，修复项②staging_generated 字段连续三日 WARN 未落地，待用户确认）; BUG-008 (P2) — C1 早盘报告检查关键词漂移「前次预测回顾/海外市场传导」vs「上期预判回顾/事件验证」（连续三日复现，修复优先级上调，待用户确认）; BUG-009 (P2) — C3 复盘报告检查关键词漂移「次日核心关注」vs「次日核心变量」（连续三日复现且扩大到 3 处 MISSING，与 BUG-008 同源，待用户确认）; BUG-011 (P2) — B2 核心变量误报：check_lessons_and_vars 裸关键词 split 被正文"核心变量"命中（修复方向已查明为确定性代码修复：标题行定位 + 正则支持 🔑 前缀，连续两日复现，待用户确认）; BUG-016 (P1) — 复盘读取过期持仓/调仓：dashboard TOS 云端模式只写云端，本地文件不更新（修复已实施+测试通过 407/215 passed，历史错误产出待人工复核，待用户确认后关闭）
+[2026-08-31T18:17:45+0800] 选择: 无待修复 BUG，跳过（符合 0.2 规则：无 OPEN BUG → 输出"无待修复 BUG，跳过"并退出；5 个 MANUAL_REVIEW BUG 仅报告不处理，均不可自动修复）
+[2026-08-31T18:17:47+0800] BUG_FIX 结束

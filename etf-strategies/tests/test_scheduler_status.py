@@ -24,7 +24,10 @@ def test_current_task_returns_running():
     from datetime import datetime
     sched._mark_running("morning_analysis", "早盘分析", "09:07:00")
     task = sched.current_task()
-    assert task == {"name": "早盘分析", "started_at": "09:07:00"}
+    # 含 task_id（桌宠按任务类型细分工作姿态）
+    assert task == {"task_id": "morning_analysis",
+                    "name": "早盘分析", "started_at": "09:07:00"}
+    assert task["task_id"] == "morning_analysis"
 
 
 def test_current_task_prefers_earliest_on_concurrency():
@@ -48,6 +51,7 @@ def test_engine_status_has_attendance_and_current_task(monkeypatch):
     st = sched.engine.status()
     assert st["attendance"] == "on"
     assert st["current_task"]["name"] == "收盘复盘"
+    assert st["current_task"]["task_id"] == "evening_review"
 
 
 def test_engine_status_attendance_leave(monkeypatch):

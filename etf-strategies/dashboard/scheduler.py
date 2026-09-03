@@ -62,6 +62,27 @@ REPORT_RESCAN_SECONDS = 60             # 报告增量重扫间隔（mtime 守卫
 # 达到上限后该窗口视为"已消耗"，不再自动重试（手动触发不受限）。
 MAX_AUTO_FAILURES_PER_WINDOW = 2
 
+# ── DeepSeek API 429 限流退避（2026-09-02 事故修复）──
+# 事故：morning_analysis 手动补跑时，dsh agent 在取数阶段撞上 429
+# （AccountRateLimitExceeded）直接失败（run#195），或陷入无限重试循环
+# （run#198 重复同一动作 996s）。修复两层：
+#   1) _exec_dsh 检测 429 特征 → 指数退避重试（有上限），降低瞬时限流直接失败；
+#   2) 全局信号量限制同时运行的 dsh 进程数 → 避免多任务并发打爆 API。
+RATE_LIMIT_MARKERS = (
+    "rate_limit",                # dsh: RATE_LIMIT: 429 {...}
+    "rate limit",                # 空格变体
+    "accountratelimitexceeded",  # code 字段
+    "requests are too frequent", # message
+    "reduce your request frequency",
+)
+RATE_LIMIT_RETRY_BACKOFF_BASE_SECONDS = 30   # 30s → 60s → 120s（指数）
+MAX_RATE_LIMIT_RETRIES = 3                   # 最多重试 3 次（共 4 次尝试）
+DSH_MAX_CONCURRENT = 2                       # 同时最多运行 2 个 dsh 进程
+DSH_SEM_ACQUIRE_TIMEOUT = 30                 # 信号量获取超时（s），超时放弃本次运行
+
+# dsh 执行并发信号量（全局，跨任务共享）
+_dsh_sem = threading.BoundedSemaphore(DSH_MAX_CONCURRENT)
+
 # 调度窗口容差（分钟）：None = 用 task_schedule.json 的 window_minutes（默认 7）。
 # 迁移自 Windows 计划任务后，如遇夜间休眠恢复错过窗口，可设
 # DASHBOARD_SCHEDULER_WINDOW_MINUTES=30 放宽（与 dsh_trigger ±3h 语义对齐）。
@@ -523,22 +544,22 @@ def _exec_claude(task: dict, started: datetime) -> tuple[str, str]:
                     pass
 
 
-def _exec_dsh(task: dict) -> tuple[str, str]:
-    """dsh headless 执行 prompt → (status, output)。
+def _is_rate_limited(text: str | None) -> bool:
+    """判断输出是否命中 DeepSeek API 429 限流特征。
 
-    与 dsh_loop_scheduler.dispatch 同构：node dsh bin.js --profile headless
-    {directive}，cwd=REPO_ROOT，独立进程。dashboard 侧**等待完成**（非派发即返），
-    便于记录 running→success/failed 并导入产物。Windows 隐藏控制台防弹窗 +
-    文件重定向防管道 EOF 挂死。
+    用特征子串（小写）而非裸状态码，避免正常输出里的数字"429"误判。
     """
-    found = _find_dsh()
-    if found is None:
-        return "failed", ("未找到 dsh CLI（node + @deepseek-ai/dsh/lib/bin.js）。"
-                          "请安装 DSH，或设置 DASHBOARD_SCHEDULER_ENGINE=claude 用兜底引擎。")
-    node_exe, dsh_bin = found
-    directive = _dsh_directive(task)
-    cmd = [str(node_exe), str(dsh_bin), "--profile", "headless", directive]
+    if not text:
+        return False
+    low = text.lower()
+    return any(m in low for m in RATE_LIMIT_MARKERS)
 
+
+def _run_dsh_once(cmd: list[str]) -> tuple[str, str]:
+    """执行一次 dsh headless（不重试）→ (status, output)。
+
+    Windows 隐藏控制台防弹窗 + 文件重定向防管道 EOF 挂死（与 claude 侧同理）。
+    """
     out_path = err_path = None
     try:
         fd_out, out_path = tempfile.mkstemp(prefix="dsh_run_out_", suffix=".txt")
@@ -562,11 +583,9 @@ def _exec_dsh(task: dict) -> tuple[str, str]:
                 )
             status = "success" if proc.returncode == 0 else "failed"
         except subprocess.TimeoutExpired:
-            status = "timeout"
-            return status, f"dsh headless 超时（>{CLAUDE_TIMEOUT_SECONDS}s），已终止。"
+            return "timeout", f"dsh headless 超时（>{CLAUDE_TIMEOUT_SECONDS}s），已终止。"
         except Exception as e:
-            status = "failed"
-            return status, f"运行异常: {e}"
+            return "failed", f"运行异常: {e}"
         return status, _read_run_output(out_path, err_path)
     finally:
         for p in (out_path, err_path):
@@ -575,6 +594,50 @@ def _exec_dsh(task: dict) -> tuple[str, str]:
                     os.unlink(p)
                 except OSError:
                     pass
+
+
+def _exec_dsh(task: dict) -> tuple[str, str]:
+    """dsh headless 执行 prompt → (status, output)。
+
+    与 dsh_loop_scheduler.dispatch 同构：node dsh bin.js --profile headless
+    {directive}，cwd=REPO_ROOT，独立进程。dashboard 侧**等待完成**（非派发即返），
+    便于记录 running→success/failed 并导入产物。
+
+    2026-09-02 修复（429 限流）：
+    - 全局信号量限制同时运行的 dsh 进程数（错峰，防多任务并发打爆 API）；
+    - 命中 429 特征时指数退避重试（有上限），瞬时限流不再直接判死。
+    """
+    found = _find_dsh()
+    if found is None:
+        return "failed", ("未找到 dsh CLI（node + @deepseek-ai/dsh/lib/bin.js）。"
+                          "请安装 DSH，或设置 DASHBOARD_SCHEDULER_ENGINE=claude 用兜底引擎。")
+    node_exe, dsh_bin = found
+    directive = _dsh_directive(task)
+    cmd = [str(node_exe), str(dsh_bin), "--profile", "headless", directive]
+
+    # 错峰：并发满时等待，超时放弃（快速失败，不无限排队）
+    if not _dsh_sem.acquire(timeout=DSH_SEM_ACQUIRE_TIMEOUT):
+        return "failed", (
+            f"dsh 并发已满（>{DSH_MAX_CONCURRENT} 个运行中），"
+            f"等待 {DSH_SEM_ACQUIRE_TIMEOUT}s 后仍无空闲，已放弃本次运行。"
+        )
+    try:
+        attempts = MAX_RATE_LIMIT_RETRIES + 1  # 首次 + 最多 N 次重试
+        last_status = "failed"
+        last_out = ""
+        for attempt in range(1, attempts + 1):
+            last_status, last_out = _run_dsh_once(cmd)
+            if last_status == "success" or not _is_rate_limited(last_out):
+                return last_status, last_out
+            if attempt >= attempts:
+                break  # 重试耗尽
+            backoff = RATE_LIMIT_RETRY_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1))
+            print(f"[scheduler] dsh 429 限流，{backoff}s 后退避重试 "
+                  f"（{attempt}/{MAX_RATE_LIMIT_RETRIES}）", file=sys.stderr)
+            threading.Event().wait(backoff)
+        return last_status, last_out
+    finally:
+        _dsh_sem.release()
 
 
 def _read_run_output(out_path: str | None, err_path: str | None) -> str:
@@ -658,9 +721,10 @@ def _is_running(task_id: str) -> bool:
 
 
 def _mark_running(task_id: str, name: str, started_at: str):
-    """记录运行中状态（供「正在做XXX」展示）。"""
+    """记录运行中状态（供「正在做XXX」展示）。含 task_id（桌宠按任务类型细分工作姿态）。"""
     with _running_lock:
-        _running_tasks[task_id] = {"name": name, "started_at": started_at}
+        _running_tasks[task_id] = {
+            "task_id": task_id, "name": name, "started_at": started_at}
 
 
 def _clear_running(task_id: str):
@@ -853,5 +917,18 @@ engine = SchedulerEngine()
 
 
 def start() -> None:
-    """lifespan 调用：启动引擎（幂等）。"""
+    """lifespan 调用：启动引擎（幂等）。
+
+    启动前先回收僵尸 running 记录：上次进程被中断时，_run_prompt 的后台线程
+    没机会把 running 更新为终态，DB 会遗留永久"运行中"的记录（UI 误导 +
+    窗口幂等判断受影响）。重启后进程内任务表必为空，任何 DB running 都是僵尸。
+    """
+    from dashboard import db
+    try:
+        n = db.scheduler_mark_zombies_running()
+        if n:
+            print(f"[scheduler] start: 回收 {n} 条中断遗留的 running 记录 → failed",
+                  file=sys.stderr)
+    except Exception as e:
+        print(f"[scheduler] start: 僵尸 running 清理失败: {e}", file=sys.stderr)
     engine.start()

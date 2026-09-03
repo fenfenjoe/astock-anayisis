@@ -14,6 +14,7 @@ Usage:
 """
 
 import json
+import os
 import subprocess
 import sys
 from datetime import date, datetime, time, timedelta
@@ -65,9 +66,20 @@ def is_trading_day(check_date: date | None = None) -> bool:
     if check_date is None:
         check_date = date.today()
     try:
+        # 计划任务以 pythonw.exe 运行（无控制台）：子进程 python.exe 若不带隐藏标志，
+        # Windows 会为其分配新的控制台窗口（弹窗）。用 STARTUPINFO+SW_HIDE 隐藏，
+        # 与 dsh_loop_scheduler.dispatch 同一模式（后代继承隐藏控制台 → 全静默）。
+        startupinfo = None
+        flags = 0
+        if os.name == "nt":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
+            flags = subprocess.CREATE_NEW_PROCESS_GROUP
         result = subprocess.run(
             ["python", str(TRADING_CALENDAR), check_date.isoformat()],
             capture_output=True, text=True, timeout=10,
+            creationflags=flags, startupinfo=startupinfo,
         )
         data = json.loads(result.stdout)
         return data.get("is_trading_day", False)

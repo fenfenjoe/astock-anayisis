@@ -8,7 +8,7 @@
 (function () {
   'use strict';
 
-  const state = { sessionId: null, streaming: false, loaded: false };
+  const state = { sessionId: null, streaming: false, loaded: false, statusBound: false };
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -41,34 +41,55 @@
     loadArticles();
     loadSources();
     loadStatus();
-    // 状态轮询（请假/摸鱼/正在做XXX 随任务变动，30s 刷新）
-    if (!state.statusTimer) {
-      state.statusTimer = setInterval(loadStatus, 30000);
+    // 状态轮询收敛到桌宠 pet.js（单一轮询源，30s）；角色页订阅 xm:status 更新 pill
+    if (!state.statusBound) {
+      state.statusBound = true;
+      document.addEventListener('xm:status', function (e) {
+        renderStatus(e.detail);
+      });
     }
   }
 
-  // ── 小满状态栏（请假中 / 摸鱼中 / 正在做XXX）──
+  // ── 小满状态栏（请假中 / 摸鱼中 / 正在做XXX）
+  //    数据源：桌宠 pet.js 是唯一轮询源，广播 CustomEvent('xm:status') 更新 pill；
+  //    首次进入若缓存新鲜（<35s）直接用，否则兜底直拉一次。
   async function loadStatus() {
     try {
+      const cache = window.__xmStatusCache;
+      if (cache && (Date.now() - cache.t < 35000)) {
+        renderStatus(cache.data);
+        return;
+      }
       const resp = await Auth.fetchGet('/api/agent/status');
       const s = await resp.json();
-      const el = document.getElementById('agent-mood');
-      if (!el) return;
-      const mood = s.mood || {};
-      const parts = [];
-      parts.push((s.alive ? '🟢' : '⚪') + (mood.icon || ''));
-      parts.push(mood.label || '未知状态');
-      if (s.attendance === 'on' && s.current_task) {
-        parts.push('· 开始于 ' + (s.current_task.started_at || ''));
-      }
-      if (!s.alive) parts.push('·（小满进程未运行）');
-      if (s.published_on) parts.push('· 今日已发文');
-      el.textContent = parts.join(' ');
-      // 状态随出勤/任务态着色
-      const cls = s.attendance === 'leave' ? 'pill-leave'
-        : s.current_task ? 'pill-working' : 'pill-slack';
-      el.className = 'agent-status-pill ' + cls;
+      renderStatus(s);
     } catch (e) { /* 状态栏失败不影响主体 */ }
+  }
+
+  function renderStatus(s) {
+    const el = document.getElementById('agent-mood');
+    if (!el) return;
+    const mood = s.mood || {};
+    const parts = [];
+    parts.push((s.alive ? '🟢' : '⚪') + (mood.icon || ''));
+    parts.push(mood.label || '未知状态');
+    if (s.attendance === 'on' && s.current_task) {
+      parts.push('· 开始于 ' + (s.current_task.started_at || ''));
+    }
+    if (!s.alive) parts.push('·（小满进程未运行）');
+    if (s.published_on) parts.push('· 今日已发文');
+    el.textContent = parts.join(' ');
+    // 状态随出勤/任务态着色
+    const cls = s.attendance === 'leave' ? 'pill-leave'
+      : s.current_task ? 'pill-working' : 'pill-slack';
+    el.className = 'agent-status-pill ' + cls;
+  }
+
+  // 桌宠思考联动（让 pet.js 显示"思考中"瞬时态）
+  function dispatchThinking(on) {
+    try {
+      document.dispatchEvent(new CustomEvent('xm:thinking', { detail: { on: on } }));
+    } catch (e) { /* ignore */ }
   }
 
   // ── 会话 ──
@@ -191,6 +212,7 @@
 
     const bubble = appendBubble('assistant', '', []);
     bubble.innerHTML = '<span class="muted">小满正在思考…</span>';
+    dispatchThinking(true);   // 桌宠进入"思考中"瞬时态
     let md = '';
 
     try {
@@ -202,6 +224,7 @@
       if (!resp.ok) {
         const err = await resp.json().catch(function () { return { detail: 'HTTP ' + resp.status }; });
         bubble.innerHTML = '<span class="agent-error">' + esc(err.detail || '请求失败') + '</span>';
+        dispatchThinking(false);
         return;
       }
       const reader = resp.body.getReader();
@@ -231,6 +254,7 @@
       }
       // 收集完毕 → 打字机渲染全文
       typewriter(bubble, md, function () {
+        dispatchThinking(false);   // 回复完整展示 → 桌宠退出"思考中"
         if (doneSources && doneSources.length && !bubble.querySelector('.agent-msg-src')) {
           const src = document.createElement('div');
           src.className = 'agent-msg-src';
@@ -244,6 +268,7 @@
       });
     } catch (e) {
       bubble.innerHTML = '<span class="agent-error">请求失败：' + esc(e.message) + '</span>';
+      dispatchThinking(false);
     } finally {
       state.streaming = false;
       btn.disabled = false;

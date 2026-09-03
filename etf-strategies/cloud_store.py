@@ -59,8 +59,11 @@ def _get_client():
             region_name=cfg["region"],
             aws_access_key_id=cfg["ak"],
             aws_secret_access_key=cfg["sk"],
-            config=Config(s3={"addressing_style": "virtual"},
-                          retries={"max_attempts": 3}),
+            config=Config(
+                connect_timeout=5,      # 连不上 5s 快速失败，不再无限阻塞
+                read_timeout=20,        # 读响应超 20s 报错（慢网络/坏请求快速失败）
+                s3={"addressing_style": "virtual"},
+                retries={"max_attempts": 2}),
         )
     return _client
 

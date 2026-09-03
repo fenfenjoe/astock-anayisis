@@ -2,46 +2,333 @@
   "_schema": "1.0",
   "_description": "跨日信号追踪数据库: 记录所有已触发信号的完整生命周期和P&L",
   "_created": "2026-07-24",
-  "_updated": "2026-08-26",
+  "_updated": "2026-09-02",
   "_rules": {
     "high_urgency_tracking_days": 2,
     "low_urgency_default_days": 5,
     "archive_after_days": 90,
     "archive_path": "harness/archive/signal_tracking_{year}.json"
   },
-  "signals": [],
+  "signals": [
+    {
+      "signal_id": "SIG-20260827-04",
+      "ticker": "159326",
+      "name": "电网设备ETF",
+      "trade_type": "buy",
+      "direction": "buy",
+      "priority": "P1",
+      "urgency": "high",
+      "expected_trigger_rate": 35.0,
+      "target_pct": 2.0,
+      "stop_pct": -1.0,
+      "target_price": null,
+      "stop_price": null,
+      "expected_return_date": "",
+      "trigger_date": "2026-08-27",
+      "entry_price": 1.684,
+      "shares": 1900,
+      "status": "settled",
+      "status_history": [
+        {
+          "date": "2026-08-27",
+          "status": "triggered",
+          "note": "午后路径三条件齐备13:32触发（站均价1.672+量比2.37+破上午高点）"
+        },
+        {
+          "date": "2026-08-27",
+          "status": "executed",
+          "note": "用户执行: 买入1,900份@1.684（正T，T+0当日了结）"
+        },
+        {
+          "date": "2026-08-27",
+          "status": "settled",
+          "note": "T+0平仓: 卖出1,900份@1.695，P&L +20.9元（目标1.717未达不恋战）"
+        }
+      ],
+      "outcome": "manual_t0",
+      "settle_price": 1.695,
+      "pnl": 20.9,
+      "avoided_loss": 0.0,
+      "settle_date": "2026-08-27",
+      "exit_date": "2026-08-27",
+      "holding_days": 0
+    },
+    {
+      "signal_id": "SIG-20260827-05",
+      "ticker": "512480",
+      "name": "半导体ETF",
+      "trade_type": "buy",
+      "direction": "buy",
+      "priority": "P1",
+      "urgency": "low",
+      "expected_trigger_rate": 45.0,
+      "target_pct": 4.0,
+      "stop_pct": -2.0,
+      "target_price": null,
+      "stop_price": null,
+      "expected_return_date": "",
+      "trigger_date": "2026-08-27",
+      "entry_price": 1.044,
+      "shares": 6100,
+      "status": "settled",
+      "status_history": [
+        {
+          "date": "2026-08-27",
+          "status": "triggered",
+          "note": "三条件齐备10:31触发（量比1.92+涨幅2.06%+方向确认30min）"
+        },
+        {
+          "date": "2026-08-27",
+          "status": "executed",
+          "note": "用户执行: 买入6,100份@1.044；8/27收盘1.063浮盈+115.9元(+1.82%)，T+3窗口8/31结算"
+        },
+        {
+          "date": "2026-08-28",
+          "status": "settled",
+          "note": "用户8/28按SIG-20260828-04止盈信号卖出全部6,100份@1.062，已实现P&L +109.8元（目标1.058已于8/27达成）；卖出价1.062 vs 触发时1.068执行略滞后但落袋合理"
+        }
+      ],
+      "outcome": "hit",
+      "settle_price": 1.062,
+      "pnl": 109.8,
+      "avoided_loss": 0.0,
+      "settle_date": "2026-08-28",
+      "exit_date": "2026-08-28",
+      "holding_days": 1
+    },
+    {
+      "signal_id": "SIG-20260828-07-盘中",
+      "ticker": "159899",
+      "name": "软件ETF招商",
+      "trade_type": "buy",
+      "direction": "buy",
+      "priority": "P1",
+      "urgency": "high",
+      "expected_trigger_rate": 45.0,
+      "target_pct": 3.0,
+      "stop_pct": -2.0,
+      "target_price": null,
+      "stop_price": null,
+      "expected_return_date": "",
+      "trigger_date": "2026-08-28",
+      "entry_price": 0.723,
+      "shares": 2000,
+      "status": "settled",
+      "status_history": [
+        {
+          "date": "2026-08-28",
+          "status": "triggered",
+          "note": "10:33三条件齐备触发（软件开发涨停6家+软件ETF量比3.82+方向确认>30min），Tier1板块涨停潮盘中追加"
+        },
+        {
+          "date": "2026-08-28",
+          "status": "executed",
+          "note": "用户执行: 买入2,000份@0.723（评估仓，可用×1/4）；13:33信号证伪取消（跌破日内均价0.7263+科技退潮），持仓未平，8/28收盘0.716浮亏-14元，止损-2%（0.708）纪律不变"
+        },
+        {
+          "date": "2026-09-01",
+          "status": "settled",
+          "note": "T+3目标价结算: miss @0.731"
+        }
+      ],
+      "pnl": 16.0,
+      "avoided_loss": 0.0,
+      "outcome": "miss",
+      "settle_price": 0.731,
+      "settle_date": "2026-09-01",
+      "exit_date": "2026-09-01",
+      "holding_days": 3
+    },
+    {
+      "signal_id": "SIG-20260828-04",
+      "ticker": "512480",
+      "name": "半导体ETF",
+      "trade_type": "sell",
+      "direction": "sell",
+      "priority": "P1",
+      "urgency": "high",
+      "expected_trigger_rate": 45.0,
+      "target_pct": null,
+      "stop_pct": null,
+      "target_price": 1.058,
+      "stop_price": 1.02,
+      "expected_return_date": "",
+      "trigger_date": "2026-08-28",
+      "entry_price": 1.065,
+      "shares": 3050,
+      "status": "settled",
+      "status_history": [
+        {
+          "date": "2026-08-28",
+          "status": "triggered",
+          "note": "10:05触发：冲高1.072>1.065+量比2.15>1.2（放量冲高），建议止盈3,050份锁定利润"
+        },
+        {
+          "date": "2026-08-28",
+          "status": "executed",
+          "note": "用户执行：卖出全部6,100份@1.062（超建议3,050份，全额止盈落袋）；实际P&L +109.8元已计入持仓记录SIG-20260827-05结算，此处不重复记账"
+        },
+        {
+          "date": "2026-09-01",
+          "status": "settled",
+          "note": "T+3目标价结算: hit @1.058"
+        }
+      ],
+      "pnl": 0.0,
+      "avoided_loss": 21.35,
+      "outcome": "hit",
+      "settle_price": 1.058,
+      "settle_date": "2026-09-01",
+      "exit_date": "2026-09-01",
+      "holding_days": 1
+    },
+    {
+      "signal_id": "SIG-20260831-01",
+      "ticker": "518880",
+      "name": "黄金ETF",
+      "trade_type": "sell",
+      "direction": "sell",
+      "priority": "P0",
+      "urgency": "high",
+      "expected_trigger_rate": null,
+      "target_pct": null,
+      "stop_pct": null,
+      "target_price": null,
+      "stop_price": null,
+      "expected_return_date": "",
+      "trigger_date": "2026-08-31",
+      "entry_price": 9.122,
+      "shares": 1300,
+      "status": "executed",
+      "status_history": [
+        {
+          "date": "2026-08-31",
+          "status": "triggered",
+          "note": "从每日信号.md解析录入"
+        },
+        {
+          "date": "2026-08-31",
+          "status": "executed",
+          "note": "用户执行: 卖出1,300份@9.106（手续费5元，dashboard 持仓/资产 录入）；8/31收盘9.135，隔夜敞口降至2,600份（BUG-016 修复后从TOS账本核实）"
+        }
+      ]
+    },
+    {
+      "signal_id": "SIG-20260831-02",
+      "ticker": "159899",
+      "name": "软件ETF招商",
+      "trade_type": "sell",
+      "direction": "sell",
+      "priority": "P0",
+      "urgency": "high",
+      "expected_trigger_rate": null,
+      "target_pct": null,
+      "stop_pct": null,
+      "target_price": null,
+      "stop_price": 0.708,
+      "expected_return_date": "",
+      "trigger_date": "2026-08-31",
+      "entry_price": 0.704,
+      "shares": 2000,
+      "status": "executed",
+      "status_history": [
+        {
+          "date": "2026-08-31",
+          "status": "triggered",
+          "note": "从每日信号.md解析录入"
+        },
+        {
+          "date": "2026-08-31",
+          "status": "executed",
+          "note": "用户执行: 卖出2,000份@0.707（手续费5元，dashboard 持仓/资产 录入）清仓；8/31收盘0.725无量反抽不追（BUG-016 修复后从TOS账本核实）"
+        }
+      ]
+    },
+    {
+      "signal_id": "SIG-20260901-06-盘中",
+      "ticker": "159825",
+      "name": "农业ETF",
+      "trade_type": "buy",
+      "direction": "buy",
+      "priority": "P1",
+      "urgency": "high",
+      "expected_trigger_rate": 40.0,
+      "target_pct": 5.0,
+      "stop_pct": -3.0,
+      "target_price": null,
+      "stop_price": null,
+      "expected_return_date": "",
+      "trigger_date": "2026-09-01",
+      "entry_price": 0.767,
+      "shares": 12200,
+      "status": "triggered",
+      "status_history": [
+        {
+          "date": "2026-09-01",
+          "status": "triggered",
+          "note": "从每日信号.md解析录入"
+        }
+      ]
+    },
+    {
+      "signal_id": "SIG-20260902-01",
+      "ticker": "518880",
+      "name": "黄金ETF",
+      "trade_type": "sell",
+      "direction": "sell",
+      "priority": "P0",
+      "urgency": "high",
+      "expected_trigger_rate": null,
+      "target_pct": null,
+      "stop_pct": null,
+      "target_price": null,
+      "stop_price": 9.0,
+      "expected_return_date": "",
+      "trigger_date": "2026-09-02",
+      "entry_price": 8.859,
+      "shares": 1300,
+      "status": "triggered",
+      "status_history": [
+        {
+          "date": "2026-09-02",
+          "status": "triggered",
+          "note": "从每日信号.md解析录入"
+        }
+      ]
+    }
+  ],
   "aggregates": {
-    "total_signals_tracked": 0,
-    "total_resolved": 0,
-    "total_open": 0,
-    "total_pnl_amount": 0.0,
-    "total_avoided_loss": 0,
-    "win_count": 0,
-    "lose_count": 0,
+    "total_signals_tracked": 8,
+    "total_resolved": 4,
+    "total_open": 4,
+    "total_pnl_amount": 146.7,
+    "total_avoided_loss": 21.35,
+    "win_count": 3,
+    "lose_count": 1,
     "by_urgency": {
       "high": {
-        "count": 0,
-        "resolved": 0,
-        "total_pnl": 0.0,
-        "total_avoided_loss": 0
+        "count": 7,
+        "resolved": 3,
+        "total_pnl": 36.9,
+        "total_avoided_loss": 21.35
       },
       "low": {
-        "count": 0,
-        "resolved": 0,
-        "total_pnl": 0.0,
-        "total_avoided_loss": 0
+        "count": 1,
+        "resolved": 1,
+        "total_pnl": 109.8,
+        "total_avoided_loss": 0.0
       }
     },
     "by_priority": {
       "P0": {
-        "count": 0,
+        "count": 3,
         "resolved": 0,
         "total_pnl": 0.0
       },
       "P1": {
-        "count": 0,
-        "resolved": 0,
-        "total_pnl": 0.0
+        "count": 5,
+        "resolved": 4,
+        "total_pnl": 146.7
       },
       "P2": {
         "count": 0,
@@ -49,35 +336,35 @@
         "total_pnl": 0.0
       }
     },
-    "win_rate": null
+    "win_rate": 75.0
   },
   "aggregation": {
     "by_urgency": {
       "high": {
-        "count": 0,
-        "settled": 0,
-        "total_pnl": 0.0,
-        "win_count": 0
+        "count": 7,
+        "settled": 3,
+        "total_pnl": 36.9,
+        "win_count": 2
       },
       "low": {
-        "count": 0,
-        "settled": 0,
-        "total_pnl": 0.0,
-        "win_count": 0
+        "count": 1,
+        "settled": 1,
+        "total_pnl": 109.8,
+        "win_count": 1
       }
     },
     "by_priority": {
       "P0": {
-        "count": 0,
+        "count": 3,
         "settled": 0,
         "total_pnl": 0.0,
         "win_count": 0
       },
       "P1": {
-        "count": 0,
-        "settled": 0,
-        "total_pnl": 0.0,
-        "win_count": 0
+        "count": 5,
+        "settled": 4,
+        "total_pnl": 146.7,
+        "win_count": 3
       },
       "P2": {
         "count": 0,
@@ -86,7 +373,51 @@
         "win_count": 0
       }
     },
-    "by_trade_type": {},
-    "by_ticker": {}
+    "by_trade_type": {
+      "buy": {
+        "count": 4,
+        "settled": 3,
+        "total_pnl": 146.7,
+        "win_count": 3
+      },
+      "sell": {
+        "count": 4,
+        "settled": 1,
+        "total_pnl": 0.0,
+        "win_count": 0
+      }
+    },
+    "by_ticker": {
+      "159326": {
+        "count": 1,
+        "settled": 1,
+        "total_pnl": 20.9,
+        "win_count": 1
+      },
+      "512480": {
+        "count": 2,
+        "settled": 2,
+        "total_pnl": 109.8,
+        "win_count": 1
+      },
+      "159899": {
+        "count": 2,
+        "settled": 1,
+        "total_pnl": 16.0,
+        "win_count": 1
+      },
+      "518880": {
+        "count": 2,
+        "settled": 0,
+        "total_pnl": 0.0,
+        "win_count": 0
+      },
+      "159825": {
+        "count": 1,
+        "settled": 0,
+        "total_pnl": 0.0,
+        "win_count": 0
+      }
+    }
   }
 }

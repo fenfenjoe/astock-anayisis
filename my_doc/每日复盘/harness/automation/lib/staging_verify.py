@@ -68,16 +68,21 @@ def _dates_in(content: str) -> list:
 
 def check_review_staging(task_state: dict, staging_results: list, tomorrow: str) -> list:
     """复盘后 staging 新鲜度检查（从 auto_logic_inspect B4 下沉）。
-    task_state: 解析后的 task_state dict（tasks.evening_review.status/completed_at）
+    task_state: 解析后的 task_state dict（tasks.evening_review.status/executed_at/completed_at）
     staging_results: [{path, content, mtime(datetime), size, missing}] 由调用方读取
     tomorrow: 明日日期 'YYYY-MM-DD'
-    返回失败列表（空=通过）。evening_review 未完成 → 豁免返回 []。"""
+    返回失败列表（空=通过）。evening_review 未完成 → 豁免返回 []。
+
+    BUG-007 修复（2026-09-01）：时间比对基准从 completed_at 改为 executed_at——
+    staging 文件在复盘流程 11.1/11.2 生成（发生在 completed_at 之前），mtime < completed_at
+    是正常现象，用 completed_at 作基准恒报 STALE 假阳性。正确语义：staging 必须在
+    本次复盘开始（executed_at）之后被刷新。executed_at 缺失时跳过时间比对（内容检查仍生效）。"""
     er = task_state.get('tasks', {}).get('evening_review', {})
     if er.get('status') != 'completed':
         return []  # evening_review 未完成，staging 新鲜度豁免
 
     failures = []
-    er_completed_time = er.get('completed_at')
+    er_start_time = er.get('executed_at')
     today_str = tomorrow  # 用于"未来日期"判断的基准（明日即最新）
 
     for r in staging_results:
@@ -86,13 +91,13 @@ def check_review_staging(task_state: dict, staging_results: list, tomorrow: str)
             continue
 
         mtime = r.get('mtime')
-        if er_completed_time and mtime is not None:
+        if er_start_time and mtime is not None:
             try:
-                er_time = datetime.fromisoformat(er_completed_time)
+                er_time = datetime.fromisoformat(er_start_time)
                 if mtime < er_time:
                     failures.append(
                         f'STALE: {r["path"]} mtime={mtime.strftime("%Y-%m-%d %H:%M")} '
-                        f'< evening_review完成={er_completed_time}')
+                        f'< evening_review开始={er_start_time}')
                     continue
             except (ValueError, TypeError):
                 pass  # 无法解析时间戳，跳过时间比对
@@ -133,19 +138,52 @@ def check_sections(content: str, required_sections: list, min_after_chars: int =
     return failures
 
 
+def _section_after(content: str, keyword: str) -> str:
+    """定位含 keyword 的章节之后的文本（直到下一个标题或结尾）。
+
+    定位优先级：① 标题行（行首 #，如 `### 9/1 核心变量`）→ ② 独立短行（如 `核心变量`）。
+    回退规则要求该行去除空白后长度接近 keyword（≤ keyword 长度+12），避免命中正文长句
+    （BUG-011：核心教训正文含"仍是核心变量"导致裸 split 切分点错误）。
+    返回空串 = 未定位到章节。
+    """
+    lines = (content or '').split('\n')
+    start = None
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith('#') and keyword in s:
+            start = i + 1
+            break
+    if start is None:
+        for i, line in enumerate(lines):
+            s = line.strip().lstrip('#').strip()
+            if keyword in s and len(s) <= len(keyword) + 12:
+                start = i + 1
+                break
+    if start is None:
+        return ''
+    out = []
+    for line in lines[start:]:
+        if line.strip().startswith('#'):
+            break
+        out.append(line)
+    return '\n'.join(out)
+
+
 def check_lessons_and_vars(content: str, min_lessons: int = 2, min_vars: int = 3) -> list:
-    """复盘 staging 核心教训≥2 / 核心变量≥3 检查（从 B2 下沉）。"""
+    """复盘 staging 核心教训≥2 / 核心变量≥3 检查（从 B2 下沉）。
+
+    BUG-011 修复（2026-09-01）：
+    - 章节定位改为标题行优先（`### 9/1 核心变量`），杜绝正文"核心变量"字样干扰切分
+    - 变量计数正则支持 `- 🔑 **` 前缀（8/31 起 staging 用 🔑 标记核心变量）"""
     failures = []
-    lesson_section = content.split('核心教训')
-    if len(lesson_section) >= 2:
-        lesson_text = lesson_section[1].split('###')[0] if '###' in lesson_section[1] else lesson_section[1][:1000]
-        lesson_count = len(re.findall(r'\d+\.\s*\*\*', lesson_text))
+    lesson_text = _section_after(content, '核心教训')
+    if lesson_text:
+        lesson_count = len(re.findall(r'^\s*\d+\.\s*\*\*', lesson_text, re.M))
         if lesson_count < min_lessons:
             failures.append(f'核心教训不足: 仅{lesson_count}条（需要≥{min_lessons}条）')
-    var_section = content.split('核心变量')
-    if len(var_section) >= 2:
-        var_text = var_section[1].split('###')[0] if '###' in var_section[1] else var_section[1][:1500]
-        var_count = len(re.findall(r'-\s*\*\*', var_text))
+    var_text = _section_after(content, '核心变量')
+    if var_text:
+        var_count = len(re.findall(r'^\s*-\s*(?:🔑\s*)?\*\*', var_text, re.M))
         if var_count < min_vars:
             failures.append(f'核心变量不足: 仅{var_count}个（需要≥{min_vars}个）')
     return failures

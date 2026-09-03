@@ -1,6 +1,6 @@
 ---
 name: daily-review-harness
-description: A股每日复盘Harness编排层 — 统一协调早盘分析、盘中监控、收盘复盘、经验沉淀、次日prompt生成的完整工作流。将"厨房"(harness: 模板/经验/配置/工具)与"菜"(reports: 报告产出)分离。触发条件：用户要求执行每日复盘、早盘分析、盘中分析、收盘复盘、或提到"每日复盘""早盘""盘中""复盘""harness"时。
+description: 'A股每日复盘Harness编排层 — 统一协调早盘分析、盘中监控、收盘复盘、经验沉淀、次日prompt生成的完整工作流。将"厨房"(harness: 模板/经验/配置/工具)与"菜"(reports: 报告产出)分离。触发条件：用户要求执行每日复盘、早盘分析、盘中分析、收盘复盘、或提到"每日复盘""早盘""盘中""复盘""harness"时。'
 origin: custom
 version: 1.4.0
 triggers:
@@ -127,6 +127,15 @@ my_doc/每日复盘/
 8. **生成次日 staging prompts**（见下文协议）
 9. **归档当日 staging** → `harness/archive/{today}/`
 10. **自动同步持仓配置**：读取 `每日调仓.md` "当前持仓"表 → 覆写 `harness/config/持仓.md`。比对上一日持仓，在复盘报告中列出变更
+
+## 复盘执行协议（Generator-Evaluator 分离）
+
+> **⚠️ 复盘/早盘/盘中/周报读取持仓与调仓前，必须先同步云端（2026-08-31 BUG 修复）**：
+> dashboard「持仓/资产」页面在 TOS 云端模式（`etf-strategies/scripts/config/cloud.json` 已配置）下，
+> 录入的调仓只写云端 `holdings/每日调仓.md`/`holdings/持仓.md`，本地文件不更新。所有读取
+> `每日调仓.md`/`config/持仓.md` 的任务执行前，先运行
+> `python etf-strategies/scripts/sync_holdings_cloud.py`（必须看到 `PULLED` 或 `SKIP` 输出），
+> 否则会读到过期持仓/调仓（曾导致复盘误报"今日调仓：无"、信号执行缺失）。
 
 ## Generator-Monitor-Evaluator 分离（核心 Harness 模式）
 

@@ -245,7 +245,7 @@ def generate_signal(strat_id, strat_name, strat):
 def main():
     parser = argparse.ArgumentParser(description="ETF策略每日信号")
     parser.add_argument("strategy", nargs="?", default=None,
-                        help="策略编号 (S1-S11) 或 '--all'")
+                        help="策略编号 (S1-S19) 或 '--all'")
     parser.add_argument("--all", action="store_true", default=False,
                         help="显示所有策略信号")
     args = parser.parse_args()

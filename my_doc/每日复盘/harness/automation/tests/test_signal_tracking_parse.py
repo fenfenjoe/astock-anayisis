@@ -367,6 +367,44 @@ def _mk_new_md(rows: list[str], verify: list[str] | None = None) -> str:
     return md
 
 
+class TestParseMarkdownBoldStatus:
+    """BUG-012: 盘中信号总表状态列带 markdown 加粗（**已触发**）时解析失败"""
+
+    def test_bold_triggered_status_parsed(self):
+        """**已触发** → 正确解析为已触发信号"""
+        md = _mk_new_md([
+            "| P1 | 电网ETF(159326) | 站上1.70 | 正T | **已触发** | 买入 | 高 | 40 | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ], verify=[
+            _vrow('SIG-20260826-06', '电网ETF(159326)', '正T', '1,975份', '现价1.70'),
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        assert len(records) == 1
+        assert records[0]['signal_id'] == 'SIG-20260826-06'
+        assert records[0]['status'] == 'triggered'
+        assert records[0]['entry_price'] == pytest.approx(1.70)
+
+    def test_bold_executed_status_parsed(self):
+        """**已执行** → 正确解析"""
+        md = _mk_new_md([
+            "| P1 | 电网ETF(159326) | 站上1.70 | 正T | **已执行** | 买入 | 高 | 40 | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ], verify=[
+            _vrow('SIG-20260826-06', '电网ETF(159326)', '正T', '1,975份', '现价1.70'),
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        assert len(records) == 1
+        assert records[0]['status'] == 'triggered'
+
+    def test_bold_expired_status_not_tracked(self):
+        """**已过期** → 不追踪（与纯文本行为一致）"""
+        md = _mk_new_md([
+            "| P1 | 电网ETF(159326) | 站上1.70 | 正T | **已过期** | 买入 | 高 | 40 | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ], verify=[
+            _vrow('SIG-20260826-06', '电网ETF(159326)', '正T', '1,975份', '现价1.70'),
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        assert records == []
+
+
 class TestParseNewColumns:
     def test_expected_trigger_rate(self):
         md = _mk_new_md([

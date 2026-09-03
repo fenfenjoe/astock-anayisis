@@ -30,10 +30,10 @@
   --border:        oklch(0.22 0.03 210);     /* 边框(带色相灰) */
   --border-light:  oklch(0.28 0.03 210);     /* 亮边框 */
 
-  /* Typography */
-  --font-heading:  'IBM Plex Sans', 'Noto Sans SC', sans-serif;
-  --font-body:     'Noto Sans SC', 'IBM Plex Sans', sans-serif;
-  --font-mono:     'JetBrains Mono', 'Fira Code', monospace;
+  /* Typography — 本地字体栈（Google Fonts 外链不可达，改用系统字体，保证零外网渲染） */
+  --font-heading:  'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --font-body:     'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --font-mono:     'Cascadia Code', 'JetBrains Mono', 'Consolas', 'Fira Code', monospace;
   --font-scale:    1.25;  /* major third */
 
   /* Spacing (4px base) */
@@ -992,6 +992,32 @@ body {
   border-color: var(--border-light);
 }
 
+/* 模式切换：主页只显示 nav-home，后台只显示 nav-admin */
+.topnav .nav-admin { display: none; }
+.topnav.mode-admin .nav-home { display: none; }
+.topnav.mode-admin .nav-admin { display: inline-block; }
+
+/* 主页/后台 切换按钮（仅管理员可见，放 header 左侧开头） */
+.btn-mode-switch {
+  background: oklch(0.20 0.06 265);
+  border-color: oklch(0.32 0.10 265);
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+.btn-mode-switch:hover {
+  background: oklch(0.26 0.08 265);
+  color: var(--accent-cyan);
+}
+.btn-mode-switch.mode-on {
+  background: oklch(0.22 0.08 80);
+  border-color: oklch(0.34 0.12 80);
+  color: var(--accent-green);
+}
+.btn-mode-switch.mode-on:hover {
+  background: oklch(0.28 0.10 80);
+  color: var(--accent-green);
+}
+
 /* 视图容器 */
 .view { display: none; }
 .view.view-active { display: block; }
@@ -1015,6 +1041,33 @@ body {
   border-top: 1px solid var(--border);
 }
 .pf-label { font-size: 0.75rem; color: var(--text-secondary); }
+
+/* 交易录入区（每日调仓.md 账本） */
+.pf-trade {
+  margin: var(--space-2) var(--space-6) var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+.pf-trade-head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); flex-wrap: wrap; }
+.pf-trade-title { margin: 0; font-size: 0.9rem; font-weight: 600; }
+.pf-trade-form {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3);
+}
+.pf-trade-field { display: flex; flex-direction: column; gap: 4px; }
+.pf-trade-field input[type="date"] { width: 140px; }
+.pf-trade-field .select-mini { width: 110px; }
+.pf-trade-field-wide .select-mini { width: 220px; }
+.pf-trade-actions { display: flex; gap: var(--space-2); padding-bottom: 2px; }
+.pf-trade-trades { margin-top: var(--space-3); }
+.pf-trade-trades .data-table th, .pf-trade-trades .data-table td { font-size: 0.75rem; padding: 4px 8px; }
+.pf-trade-tag {
+  display: inline-block; border-radius: 4px; padding: 0 6px; font-size: 0.7rem; font-weight: 600;
+}
+.pf-trade-tag.buy { color: #e5484d; background: color-mix(in oklch, #e5484d 12%, transparent); }
+.pf-trade-tag.sell { color: #30a46c; background: color-mix(in oklch, #30a46c 12%, transparent); }
+.pf-trade-remark-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* KPI 摘要（面板内联版，去外间距/居中） */
 .kpi-grid-inline {

@@ -1,0 +1,33 @@
+[2026-09-02T17:07:54] LOGIC_INSPECT 开始 | 交易日=是
+=== 逻辑巡检报告 20260902 ===
+交易日: 是
+执行时间: 2026-09-02T17:14:57
+
+A 组 (归档完整性):
+  A1: PASS — archive/20260902/早盘分析-staging.md (14684 bytes)
+  A2: PASS — archive/20260902/复盘分析-staging.md (7835 bytes)
+
+B 组 (Staging 章节对齐):
+  B1: PASS — 今日-早盘分析.md 8 章节完整
+  B2: PASS — 今日-复盘分析.md 5 章节完整，教训≥2条/变量≥3个
+  B3: PASS — staging 代码-名称映射与 config/持仓.md 一致
+  B4: PASS — staging 新鲜，指向 09/03 且内容充实（evening_review staging_generated=True）
+
+C 组 (报告章节对齐):
+  C1: PASS — reports/20260902/早盘报告.md 7 核心章节完整
+  C2: PASS — reports/20260902/每日信号.md 7 核心章节完整
+  C3: PASS — reports/20260902/复盘报告.md 8 核心章节完整（含「4.2 做T建议复盘」+「九、次日核心关注」）→ 验证 BUG-018 修复
+  C4: PASS — task_state 与报告产出一致（evening_review staging_generated=True）
+
+D 组 (数据一致性):
+  D1: PASS — config/持仓.md 与 每日调仓.md 一致 (5 个持仓)
+  D2: PASS — task_state date=20260902, trading_day=True
+  D3: PASS — 无孤立信号（8 条追踪中，无 open>30天）
+  D4: PASS — 信号模型一致性 7/7 目标一致
+
+E 组 (经验与元数据):
+  E1: PASS — 经验文件无内容矛盾（LLM 语义审查：高开低走vs跳空做T方向、晨间>3%不追高vs主线追入豁免、超跌反弹vs外盘熔断日、系统性普跌vs银行单向受益 等既往张力对均已带场景条件/交叉引用，非无限定相反建议；REQ-005 重组后交叉引用健全）
+  E2: PASS — BUG_INDEX 统计 (OPEN=3, FIXED=12, WONT_FIX=1) 与实际一致
+
+总计: 16 PASS, 0 FAIL, 0 WARN
+新增 BUG: 0 | PENDING_CONFIRMATION: 维持 5 项（#8 BUG-018 已标注逻辑巡检验证 C3 PASS，待用户确认关闭）

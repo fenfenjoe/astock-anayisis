@@ -36,6 +36,26 @@
 
 详见 `harness/README.md`。
 
+## 定时任务（DSH 精确触发）
+
+当前自动化由 **Windows 计划任务**驱动（`dsh-trigger-*`，精确时刻触发、空闲零 token），
+调度定义见 `.claude/scripts/task_schedule.json`（21 条：早盘/盘中×7/复盘/巡检/REQ 等）。
+
+**查看执行时间（cron 表）**：
+
+```powershell
+# 终端打印 + 更新 docs/定时任务cron表.md
+python .claude/scripts/dsh_cron.py --save
+
+# 只打印，不写文件
+python .claude/scripts/dsh_cron.py
+```
+
+cron 表实时生成自 `task_schedule.json`，含每条任务的 cron 表达式（`分 时 日 月 周`）、
+执行时间、交易日标记；改过调度后重跑一次即刷新 `docs/定时任务cron表.md`。
+
+管理命令（启用/停用/执行状态/日志）见 `.claude/prompts/setup_dsh_loop.md`。
+
 ## 数据纪律
 
 - 所有 A 股数据走 `a-stock-data` skill

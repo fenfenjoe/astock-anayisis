@@ -1,0 +1,10 @@
+[2026-08-31T12:17:00+08:00] CODE_INSPECT 开始 — 代码质量巡检 (bug_inspect_code)
+[2026-08-31T12:17:00+08:00] 第一步 正确性定义: 读取 correctness_definitions.yaml (v1.0, 4组件22条定义)
+[2026-08-31T12:17:00+08:00] 第二步 静态分析: 语法检查 OK — backtest/tests 全部 .py 编译通过; 注册一致性 OK — 18 个 Strategy 子类在 run_backtest/daily_signal/list_strategies/strategy_kb 全部注册; 硬编码路径 OK — 无 C:/ D:/ 绝对路径; 发现硬编码日期 end=2026-07-01 过时(run_backtest.py L29/L110, data.py L11 默认值, strategy_kb.py 13处, sync.py 13处)
+[2026-08-31T12:17:00+08:00] 第三步 覆盖率: 总体 84% — 最低模块 canary_defense.py 47%, base.py 62%, momentum_rotation.py 66%, rsrs_momentum.py 83%, rsrs_reversal_momentum.py 85%; 低覆盖模块的 correctness 定义(STR-001/002/004)均有专项测试; 覆盖率稳定无回归
+[2026-08-31T12:17:00+08:00] 第四步 全量测试: 宿主环境(DB_MODE=memory 泄漏)首次运行 100+ 失败并卡死 60% 处 >5 分钟, 按异常处理条款记录超时终止; 定位根因后以 DB_MODE=file 重跑 → 400 passed, 1 failed (test_load_env.py::test_loads_keys_and_does_not_override_existing — conftest 预置 CLOUD_RESTORE_ON_START=0 冲突, 干净环境必失败, 新 BUG-010), 2 skipped (东财网络环境性跳过), 耗时 61s
+[2026-08-31T12:17:00+08:00] 第五步 定义逐条验证: 22/22 条有实现与测试对应; ENG-004(BUG-007 年化换手率口径)与 MET-005(BUG-005 胜率分母)仍与定义矛盾, 均 MANUAL_REVIEW 待人工; 新发现 conftest.py 测试隔离缺陷(2026-08-31 事故修复未提交): setdefault("DB_MODE","file") 无法覆盖宿主继承的 DB_MODE=memory → memory 模式泄漏导致 100+ 测试失败+挂起+TOS 污染风险(新 BUG-009)
+[2026-08-31T12:17:00+08:00] 第六步 新发现 BUG: 3 — BUG-009 (HIGH, tests, auto_fix_eligible=true, conftest DB_MODE 隔离缺陷); BUG-010 (MEDIUM, tests, auto_fix_eligible=true, conftest 预置 CLOUD_RESTORE_ON_START 破坏 test_load_env); BUG-011 (MEDIUM, data, auto_fix_eligible=true, 硬编码回测窗口 end=2026-07-01 过时)
+[2026-08-31T12:17:00+08:00] 第七步 BUG_INDEX 更新: OPEN 1→4, 巡检历史追加 2026-08-31 代码巡检 3新增
+[2026-08-31T12:17:00+08:00] 第八步 已有OPEN复查: BUG-005 仍复现(win_rate 0.75 vs 定义 0.6, MANUAL_REVIEW 待人工) — 保持; BUG-007 仍复现(turnover 23.5 年化 vs 定义 ≤2, MANUAL_REVIEW 待人工) — 保持; BUG-008 缓存仍过期(mtime 08-27/28, auto_fix_eligible=true, 待 bug_auto_fix) — 保持
+[2026-08-31T12:17:00+08:00] CODE_INSPECT 结束 — 发现 3 新 BUG, 仍开放 6 (OPEN 4: BUG-008/009/010/011 + MANUAL_REVIEW 2: BUG-005/007), 无 CRITICAL; 需人工确认: BUG-005/007 指标口径; 需 bug_auto_fix 自动修复: BUG-008 缓存刷新 + BUG-009/010 conftest 隔离 + BUG-011 回测窗口

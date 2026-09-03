@@ -1,0 +1,24 @@
+[2026-08-26T17:07:31] LOGIC_INSPECT 开始 | 交易日=是
+
+[2026-08-26T17:12:06] === 巡检结果汇总 ===
+A1:FAIL archive/20260826/早盘分析-staging.md 不存在（归档机制退化，BUG-002）
+A2:FAIL archive/20260826/复盘分析-staging.md 不存在（同上，BUG-002）
+B1:PASS 早盘 staging 8 章节完整
+B2:PASS 复盘 staging 5 章节完整，教训>=2 变量>=3
+B3:PASS 代码-名称交叉校验通过
+B4:PASS staging 新鲜，指向明日（8/27）
+C1:PASS 早盘报告章节完整
+C2:PASS 每日信号章节完整
+C3:FAIL 复盘报告缺「做T建议复盘/核心回顾/操作预案」（BUG-003）
+C4:PASS task_state 与报告一致（WARN: staging_generated 字段为空）
+D1:FAIL 每日调仓.md 持仓表解析失败（"持仓："说明行致正则失配，内容实际一致，BUG-004）
+D2:WARN task_state date=20260814 != today=20260826
+D3:PASS 无孤立信号
+D4:PASS（修正解包后）信号模型一致（BUG-005：prompt 脚本解包失效需修复）
+E1:WARN 经验矛盾：系统性普跌日银行正T（投资经验禁止 vs 短线经验可做）→ PENDING_CONFIRMATION #3
+E2:FAIL BUG_INDEX 统计口径误报（BUG-006：closed 目录 WONT_FIX 被误计 FIXED）
+---
+总计: 6 PASS, 5 FAIL, 2 WARN（FAIL 全部转 BUG）
+新增 BUG: BUG-002~006 共 5 个（OPEN=3: BUG-004/005/006, MANUAL_REVIEW=2: BUG-002/003）
+PENDING_CONFIRMATION: 3 项（BUG-002/BUG-003/E1-经验矛盾）
+[2026-08-26T17:12:06] LOGIC_INSPECT 结束

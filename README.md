@@ -21,7 +21,7 @@ python -m pip install --user boto3
 
 ## 启动指南（含拟人 Agent「小满」）
 
-本项目有 **3 个可运行组件**：Dashboard（web 界面）、小满 Agent（常驻进程）、OpenViking（记忆服务，可选）。小满 Agent 内部通过 `dsh --profile xiaoman` 调用 LLM。
+本项目有 **2 个必跑组件**：Dashboard（web 界面）、小满 Agent（常驻进程）。记忆组件 **OpenViking 已接入火山云版**（无需本地服务）。小满 Agent 内部通过 `dsh --profile xiaoman` 调用 LLM。
 
 ### 启动前准备
 
@@ -44,7 +44,7 @@ cd astock-anayisis
 # 前置：先跑一次同步/校验
 powershell -ExecutionPolicy Bypass -File scripts\sync_dsh.ps1
 
-# 启动（openviking + dashboard + agent）
+# 启动（dashboard + agent；OpenViking 云版已配置时自动跳过本地 server）
 powershell -ExecutionPolicy Bypass -File scripts\start_all.ps1
 # 查看 / 停止
 powershell -ExecutionPolicy Bypass -File scripts\start_all.ps1 -Action status

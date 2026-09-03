@@ -264,6 +264,35 @@ def read_trades_md() -> list[dict] | None:
     return parse_trades_md(daily_text) if daily_text else None
 
 
+def pull_holdings_to_local() -> dict:
+    """TOS → 本地镜像（每日复盘 prompt 读取前置，2026-08-31 BUG 修复）。
+
+    背景：TOS 模式（严格零本地）下，Dashboard「持仓/资产」页面录入的调仓只写云端
+    `holdings/每日调仓.md` + `holdings/持仓.md`，本地 `my_doc/每日复盘/...` 文件不更新；
+    而每日复盘/早盘/盘中/周报 prompt 读取的是本地文件，导致复盘读到过期数据
+    （"今日调仓：无"、SIG 执行记录缺失）。本函数把云端两文件拉回本地，保证复盘与
+    dashboard 同源。未配置云端（_cs_get=None）或云端无对象 → 跳过（本地模式无需同步）。
+
+    返回 {'pulled': [key...], 'skipped': [key...]}；调用方（scheduler/脚本）据此打印结果。
+    """
+    result = {"pulled": [], "skipped": []}
+    if _cs_get is None:
+        return result
+    for key, local in ((TRADES_KEY, TRADES_MD), (HOLDINGS_KEY, HOLDINGS_MD)):
+        try:
+            text = _cs_get(key)
+        except Exception:
+            result["skipped"].append(key)
+            continue
+        if text is None:
+            result["skipped"].append(key)
+            continue
+        local.parent.mkdir(parents=True, exist_ok=True)
+        local.write_text(text, encoding="utf-8")
+        result["pulled"].append(key)
+    return result
+
+
 # ═══════════════════════════════════════════════════════════════
 # 实时估值计算（复用现有 K 线基建）
 # ═══════════════════════════════════════════════════════════════

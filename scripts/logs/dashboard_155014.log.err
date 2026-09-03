@@ -1,0 +1,13 @@
+INFO:     Started server process [35584]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[scheduler] start: 回收 4 条中断遗留的 running 记录 → failed
+[scheduler] run#222 bug_auto_fix → success (37.2s, engine=dsh)
+[scheduler] run#221 evening_review → success (1191.9s, engine=dsh)
+[scheduler] run#223 harness_bug_auto_fix → success (82.3s, engine=dsh)
+[scheduler] run#224 signal_quality_weekly → success (285.3s, engine=dsh)
+[scheduler] run#225 bug_auto_fix → success (47.8s, engine=dsh)
+[scheduler] run#227 pending_remind → success (77.3s, engine=dsh)
+[scheduler] run#226 logic_inspect → success (482.6s, engine=dsh)
+[scheduler] run#228 harness_bug_auto_fix → success (72.7s, engine=dsh)

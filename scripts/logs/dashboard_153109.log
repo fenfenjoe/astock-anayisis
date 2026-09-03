@@ -1,0 +1,200 @@
+[dashboard] AStock ETF Dashboard v2 starting at http://localhost:8000
+[app] DB in memory mode �� cloud backup loop started (15min)
+[app] Syncing strategy definitions (idempotent)...
+[sync] Strategy KB synced from strategy_kb.py
+[sync] Strategy definitions re-synced (idempotent).
+[app] Pre-loading strategy modules...
+[app]   daily_signal loaded (19 strategies)
+[app] Background: warming signal cache...
+[app] Startup complete — server ready at http://localhost:8000[app] Background: restoring data from cloud (TOS)...
+
+INFO:     127.0.0.1:57016 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57041 - "GET / HTTP/1.1" 200 OK
+[app]   Signal cache ready: 19/19 strategies
+[app]   restore exit=1: -anayisis\my_doc\ÿ�ո���\reports\weekly\2026-07-23_�ܱ�.md
+ok: daily-reports/weekly/2026-08-27_�ܱ�.md -> E:\ideaworkspace\astock-anayisis\my_doc\ÿ�ո���\reports\weekly\2026-08-27_�ܱ�.md
+�ָ�����ʧ�ܣ����ϡ�
+
+[app] Importing 每日复盘 data (reports/holdings/trades)...
+INFO:     127.0.0.1:57080 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57084 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57093 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57099 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57111 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57116 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57123 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57135 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57140 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57151 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57159 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57171 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57178 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57185 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57196 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57210 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57218 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57221 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57234 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57240 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57252 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57261 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57222 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57394 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57401 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57413 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57419 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57429 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57443 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57457 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57464 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57473 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57476 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57491 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+[app]   reports uploaded: 122, imported: 0
+[app]   trades imported from 每日调仓.md
+[scheduler] engine started (auto=True)
+[notify] watcher started
+INFO:     127.0.0.1:57499 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57503 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57527 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57545 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57545 - "GET /api/scheduler/status HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:57504 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57651 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57651 - "GET /static/vendor/echarts.min.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57652 - "GET /static/vendor/marked.min.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57651 - "GET /static/css/dashboard.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57652 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:57652 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57651 - "GET /api/strategies/S2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57652 - "GET /api/strategies/S1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57658 - "GET /api/strategies/S4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57660 - "GET /api/strategies/S3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57651 - "GET /api/strategies/S5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57660 - "GET /api/strategies/S8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57651 - "GET /api/strategies/S6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57658 - "GET /api/strategies/S9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57652 - "GET /api/strategies/S10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57660 - "GET /api/strategies/S7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57660 - "GET /api/strategies/S11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57658 - "GET /api/strategies/S13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57652 - "GET /api/strategies/S12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57651 - "GET /api/strategies/S14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57660 - "GET /api/strategies/S15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57658 - "GET /api/strategies/S19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57652 - "GET /api/strategies/S18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57651 - "GET /api/strategies/S17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57660 - "GET /api/strategies/S16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57660 - "GET /api/portfolio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57660 - "GET /api/portfolio/eastmoney/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57652 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57660 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57651 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57671 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57671 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57672 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57872 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57872 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57872 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57874 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57874 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57874 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57954 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57954 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57955 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58041 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58041 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58041 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58109 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58109 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58109 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58181 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58181 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58183 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58262 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58262 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58262 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58374 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58375 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58374 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58455 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58455 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58455 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58559 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58559 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58560 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58681 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58681 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58681 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58751 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58751 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58752 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/strategies/S2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/strategies/S1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/strategies/S3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/strategies/S4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/strategies/S5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/strategies/S6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/strategies/S7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/strategies/S8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/strategies/S9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/strategies/S10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/strategies/S12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/strategies/S11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/strategies/S13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/strategies/S14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/strategies/S15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/strategies/S17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/strategies/S16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/strategies/S18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/strategies/S19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/reports?date=20260902 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/reports/20260902/%E6%97%A9%E7%9B%98%E6%8A%A5%E5%91%8A HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58852 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58809 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58852 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58853 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58852 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58853 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58833 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58854 - "GET /api/scheduler/runs/212/log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58855 - "GET /api/scheduler/runs/211/log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58855 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58855 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58855 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58855 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58937 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58937 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58938 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58998 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59089 - "GET /api/scheduler/runs?limit=25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59121 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59118 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59120 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59120 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59142 - "GET /api/scheduler/runs/217/log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59144 - "GET /api/scheduler/runs/211/log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59172 - "GET /api/scheduler/runs?limit=25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59174 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59123 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59123 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59123 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59123 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59193 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59193 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59194 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59194 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59289 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59289 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59289 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59289 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59712 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59710 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59711 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59713 - "GET /api/agent/status HTTP/1.1" 200 OK

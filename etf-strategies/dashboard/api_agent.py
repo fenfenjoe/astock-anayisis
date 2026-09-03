@@ -34,6 +34,18 @@ async def _run_thread(fn):
 # 状态
 # ═══════════════════════════════════════════
 
+
+def _state(alive: bool, attendance: str, current_task: dict | None) -> str:
+    """机器可读状态枚举（桌宠/状态栏共用）：offline / leave / working / slack。"""
+    if not alive:
+        return "offline"
+    if attendance != "on":
+        return "leave"
+    if current_task:
+        return "working"
+    return "slack"
+
+
 @router.get("/status")
 def agent_status():
     """角色状态：进程存活（heartbeat 距今 <15min）、出勤（上班/请假）、当前任务。"""
@@ -47,8 +59,10 @@ def agent_status():
         pass
     attendance = (sched_status or {}).get("attendance") or "leave"
     current = (sched_status or {}).get("current_task")
+    alive = hb_age is not None and hb_age < 60 * 15
     return {
-        "alive": hb_age is not None and hb_age < 60 * 15,
+        "alive": alive,
+        "state": _state(alive, attendance, current),  # 机器可读状态（桌宠状态机）
         "heartbeat_age_seconds": hb_age,
         "dsh_ready": dsh_runner.find_dsh_bin() is not None,
         # 人格化状态

@@ -17,6 +17,8 @@ import json
 import os
 import sqlite3
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -78,7 +80,11 @@ def _client(cfg):
         region_name=cfg["region"],
         aws_access_key_id=cfg["ak"],
         aws_secret_access_key=cfg["sk"],
-        config=Config(s3={"addressing_style": "virtual"}, retries={"max_attempts": 3}),
+        config=Config(
+            connect_timeout=5,   # 连不上 5s 快速失败
+            read_timeout=20,     # 读响应超 20s 报错
+            s3={"addressing_style": "virtual"},
+            retries={"max_attempts": 2}),
     )
 
 
@@ -192,6 +198,7 @@ def upload_mode(cfg, s3, bucket, dry_run):
 
 def download_mode(cfg, s3, bucket, dry_run):
     ok_all = True
+    _lock = threading.Lock()
 
     def download(key: str, dest: Path):
         nonlocal ok_all
@@ -204,14 +211,18 @@ def download_mode(cfg, s3, bucket, dry_run):
             print(f"ok: {key} -> {dest}")
         except Exception as e:
             print(f"FAIL: {key}: {e}", file=sys.stderr)
-            ok_all = False
+            with _lock:
+                ok_all = False
+
+    # 收集全部待下载任务（并行动作：逐个串行会因高延迟 TOS 拖到分钟级）
+    tasks = []
 
     # 1. SQLite 最新快照 → 工作 DB
     latest = latest_sqlite_snapshot(s3, bucket)
     for src, name in SQLITE_DBS:
         key = latest.get(name)
         if key:
-            download(key, src)
+            tasks.append((key, src))
         else:
             print(f"skip: 云端无 sqlite 快照 {name}")
 
@@ -223,7 +234,11 @@ def download_mode(cfg, s3, bucket, dry_run):
             continue
         for k in keys:
             rel = k[len(prefix) + 1:]
-            download(k, local / rel)
+            tasks.append((k, local / rel))
+
+    # 并行下载（8 并发对单桶足够；boto3 client 线程安全）
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        list(ex.map(lambda t: download(*t), tasks))
 
     print("恢复完成。" if ok_all else "恢复部分失败，见上。")
     return 0 if ok_all else 1

@@ -1,4 +1,4 @@
-# ===========================================
+﻿# ===========================================
 # start_all.ps1 - one-command local startup of 3 services
 #                 (openviking / dashboard / agent)
 # ===========================================
@@ -29,10 +29,26 @@ $services = @(
   @{ Name = "openviking"; PidFile = "openviking.pid"; Log = "openviking.log";
      Cmd  = $ovExe; Args = @() },
   @{ Name = "dashboard";  PidFile = "dashboard.pid";  Log = "dashboard.log";
-     Cmd  = "python"; Args = @("dashboard\app.py"); WorkDir = $etfDir },
+     Cmd  = "python"; Args = @("-u", "dashboard\app.py"); WorkDir = $etfDir },
   @{ Name = "agent";      PidFile = "agent.pid";      Log = "agent.log";
-     Cmd  = "python"; Args = @("-m", "agent"); WorkDir = $etfDir }
+     Cmd  = "python"; Args = @("-u", "-m", "agent"); WorkDir = $etfDir }
 )
+
+# ── OpenViking 云版检测：ovcli.conf 指向云（非本地）→ 无需本地 server，跳过 ──
+$ovCliConf = Join-Path $env:USERPROFILE ".openviking\ovcli.conf"
+$cloudOpenViking = $false
+if (Test-Path $ovCliConf) {
+  try {
+    $ovConf = Get-Content $ovCliConf -Raw | ConvertFrom-Json
+    if ($ovConf.url -and $ovConf.url -notmatch "127\.0\.0\.1|localhost|:1933") {
+      $cloudOpenViking = $true
+    }
+  } catch { }
+}
+if ($cloudOpenViking) {
+  $services[0].Cmd = $null   # 云版：本地 openviking-server 不需要
+  Write-Host "OpenViking 云版已配置（$($ovConf.url)）— 跳过本地 openviking-server"
+}
 
 function Get-PidFile([string]$name) { Join-Path $pidDir $name }
 
@@ -86,22 +102,46 @@ if ($env:CLOUD_RESTORE_ON_START -eq "1") {
   Write-Host "Restoring from cloud (TOS)..."
   python (Join-Path $scriptRoot "cloud_sync.py") --download 2>&1 | Select-Object -Last 3
 }
+$started = @{}   # name -> pid（仅记录本次实际拉起的服务）
 foreach ($s in $services) {
   $pf = Get-PidFile $s.PidFile
   if (Is-Running $pf) { Write-Host "already running, skip: $($s.Name)"; continue }
-  if (-not $s.Cmd) { Write-Warning "openviking-server not found (pip install --user openviking)"; continue }
+  if (-not $s.Cmd) {
+    if ($s.Name -eq "openviking" -and $cloudOpenViking) {
+      Write-Host "skip: openviking — 云版模式已配置（$($ovConf.url)），本地 server 无需启动"
+    } else {
+      Write-Warning "openviking-server not found (pip install --user openviking)"
+    }
+    continue
+  }
   $logOut = Join-Path $logsDir $s.Log
   $proc = Start-Process -FilePath $s.Cmd -ArgumentList $s.Args -WorkingDirectory $s.WorkDir `
           -RedirectStandardOutput $logOut -RedirectStandardError "$logOut.err" `
           -WindowStyle Hidden -PassThru
   Set-Content $pf $proc.Id
+  $started[$s.Name] = $proc.Id
   Write-Host "started: $($s.Name) (PID $($proc.Id), log $($s.Log))"
   Start-Sleep -Milliseconds 800
 }
 
 Write-Host ""
 Write-Host "All services started."
-Write-Host "  dashboard : http://localhost:8000"
-Write-Host "  openviking: http://127.0.0.1:1933"
+if ($started.ContainsKey("dashboard")) {
+  Write-Host "  dashboard : http://localhost:8000  (进程已拉起；首次就绪需等云恢复/初始化，看 dashboard.log)"
+} else {
+  Write-Host "  dashboard : 未启动（见 dashboard.log.err）"
+}
+if ($started.ContainsKey("openviking")) {
+  Write-Host "  openviking: http://127.0.0.1:1933"
+} elseif ($cloudOpenViking) {
+  Write-Host "  openviking: 云版模式（本地未启动）— $($ovConf.url)"
+} else {
+  Write-Host "  openviking: 未启动"
+}
+if ($started.ContainsKey("agent")) {
+  Write-Host "  agent     : 已启动 (python -m agent)"
+} else {
+  Write-Host "  agent     : 未启动"
+}
 Write-Host "  logs      : $logsDir"
 Write-Host "  stop      : rerun with -Action stop"

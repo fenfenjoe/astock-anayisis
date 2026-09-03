@@ -46,6 +46,9 @@ def test_status_endpoint(client):
     # 人格化状态字段
     assert "attendance" in data
     assert "mood" in data
+    # 机器可读状态枚举（桌宠状态机用）
+    assert "state" in data
+    assert data["state"] in ("offline", "leave", "working", "slack")
 
 
 def test_mood_demo():
@@ -54,6 +57,21 @@ def test_mood_demo():
     assert api_mod._mood("on", None)["label"] == "摸鱼中"
     mobj = api_mod._mood("on", {"name": "早盘分析", "started_at": "09:07"})
     assert "正在做" in mobj["label"]
+
+
+def test_state_derivation():
+    """桌宠状态机四态推导：offline 优先 → leave → working → slack。"""
+    from dashboard import api_agent as api_mod
+    # 进程未运行（无论出勤/任务）→ offline
+    assert api_mod._state(False, "on", {"task_id": "x", "name": "n"}) == "offline"
+    assert api_mod._state(False, "leave", None) == "offline"
+    # 请假（alive）→ leave
+    assert api_mod._state(True, "leave", None) == "leave"
+    # 上班 + 有任务 → working
+    assert api_mod._state(True, "on",
+                          {"task_id": "morning_analysis", "name": "早盘分析"}) == "working"
+    # 上班 + 无任务 → slack
+    assert api_mod._state(True, "on", None) == "slack"
 
 
 def test_create_and_list_session(client):

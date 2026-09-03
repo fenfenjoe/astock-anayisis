@@ -389,6 +389,117 @@ class TestSchedulerCli:
         assert cli.main(["--task", "no_such_task"]) == 1
 
 
+# ═══════════════════════════════════════════════════════════════
+# S6: 失败重试限次（2026-08-31 重试风暴修复）
+# ═══════════════════════════════════════════════════════════════
+# 背景：引擎每 20s tick，失败任务不在 scheduler_window_done 的完成状态
+# （success/timeout）里 → 同一窗口内无限重试 → 7 分钟窗口可触发 20+ 次
+# 失败风暴（实证：harness_bug_auto_fix run#85-91 连续 7 次失败）。
+# 修复：同一窗口内 auto 失败达 MAX_AUTO_FAILURES_PER_WINDOW 次后跳过。
+
+class TestAutoFailureRetryLimit:
+    TASK = {"task_id": "hourly_fail", "hourly": True, "target_minute": 17,
+            "hourly_range": [9, 10, 11], "days_of_week": None}
+
+    def test_window_done_after_max_failures(self, monkeypatch):
+        """同一窗口内失败达上限后，scheduler_window_done 视为已完成（阻止再重试）。"""
+        from dashboard import db as db_mod
+        in_mem = _in_memory_db(monkeypatch)
+        db_mod.init_db()
+        now = datetime(2026, 8, 31, 11, 18)  # 窗口内（:17 + 7min）
+        wkey = scheduler.make_window_key(self.TASK, now)
+        max_f = scheduler.MAX_AUTO_FAILURES_PER_WINDOW
+        task_id = self.TASK["task_id"]
+
+        # 初始：无运行记录 → 未 done
+        assert db_mod.scheduler_window_done(task_id, wkey, max_failures=max_f) is False
+
+        # 插入 max_f-1 条 failed → 仍可重试
+        for _ in range(max_f - 1):
+            db_mod.scheduler_run_insert(task_id, wkey, "auto",
+                                        "2026-08-31 11:17:00", status="failed")
+        assert db_mod.scheduler_window_done(task_id, wkey, max_failures=max_f) is False, \
+            "未达失败上限前不应视为 done"
+
+        # 再插 1 条 failed → 达上限 → done
+        db_mod.scheduler_run_insert(task_id, wkey, "auto",
+                                    "2026-08-31 11:18:00", status="failed")
+        assert db_mod.scheduler_window_done(task_id, wkey, max_failures=max_f) is True, \
+            "失败达上限后应视为 done（阻止重试风暴）"
+        in_mem.close()
+
+    def test_success_still_marks_done_immediately(self, monkeypatch):
+        """success 仍立即可见（原语义不变）。"""
+        from dashboard import db as db_mod
+        in_mem = _in_memory_db(monkeypatch)
+        db_mod.init_db()
+        now = datetime(2026, 8, 31, 11, 18)
+        wkey = scheduler.make_window_key(self.TASK, now)
+        db_mod.scheduler_run_insert(self.TASK["task_id"], wkey, "auto",
+                                    "2026-08-31 11:17:00", status="success")
+        assert db_mod.scheduler_window_done(self.TASK["task_id"], wkey) is True
+        in_mem.close()
+
+    def test_manual_trigger_bypasses_failure_limit(self, monkeypatch):
+        """手动触发不受失败限次影响（manual window_key 独立）。"""
+        from dashboard import db as db_mod
+        in_mem = _in_memory_db(monkeypatch)
+        db_mod.init_db()
+        now = datetime(2026, 8, 31, 11, 18)
+        auto_wkey = scheduler.make_window_key(self.TASK, now)
+        for _ in range(scheduler.MAX_AUTO_FAILURES_PER_WINDOW):
+            db_mod.scheduler_run_insert(self.TASK["task_id"], auto_wkey, "auto",
+                                        "2026-08-31 11:17:00", status="failed")
+        # auto 窗口已耗尽 → run_task auto 应拒绝
+        r = scheduler.run_task(dict(self.TASK), trigger="auto", now=now)
+        assert r.get("started") is False
+        assert r.get("reason") == "idempotent"
+        # manual 触发仍可跑（手动 window_key 独立；mock _run_prompt 防真实执行）
+        monkeypatch.setattr(scheduler, "_run_prompt", lambda task, run_id: None)
+        r2 = scheduler.run_task(dict(self.TASK), trigger="manual", now=now)
+        assert r2.get("started") is True
+        import time
+        time.sleep(0.3)  # 等后台线程跑完 mock（不产生未处理线程异常）
+        in_mem.close()
+
+
+# ═══════════════════════════════════════════════════════════════
+# 僵尸 running 清理：进程重启后遗留 running 记录在 start() 时回收
+# ═══════════════════════════════════════════════════════════════
+
+class TestStartCleansZombieRuns:
+    def test_start_marks_zombie_running_failed(self, monkeypatch):
+        """start() 引擎启动前，把 DB 遗留 running 记录标记为 failed（重启中断）。"""
+        from dashboard import db as db_mod
+        in_mem = _in_memory_db(monkeypatch)
+        db_mod.init_db()
+        rid = db_mod.scheduler_run_insert("morning_analysis", "morning_analysis:2026-09-02",
+                                          "auto", "2026-09-02 14:30:00", status="running")
+        # 防止真实启动引擎线程（daemon 循环），只验证清理逻辑被触发
+        monkeypatch.setattr(scheduler.SchedulerEngine, "_loop",
+                            lambda self: None)
+
+        scheduler.start()
+
+        r = db_mod.scheduler_run_get(rid)
+        assert r["status"] == "failed"
+        assert "中断" in (r["output"] or "")
+        in_mem.close()
+
+    def test_start_no_running_no_cleanup(self, monkeypatch):
+        """无 running 记录时 start() 不报错、无清理动作。"""
+        from dashboard import db as db_mod
+        in_mem = _in_memory_db(monkeypatch)
+        db_mod.init_db()
+        db_mod.scheduler_run_insert("morning_analysis", "morning_analysis:2026-09-02",
+                                    "auto", "2026-09-02 14:30:00", status="success")
+        monkeypatch.setattr(scheduler.SchedulerEngine, "_loop",
+                            lambda self: None)
+        scheduler.start()
+        assert db_mod.scheduler_running_tasks() == []
+        in_mem.close()
+
+
 # ── helper：把 dashboard.db 指向内存库（与 test_dashboard_db.py 一致）──
 def _in_memory_db(monkeypatch):
     import sqlite3
@@ -409,3 +520,139 @@ def _in_memory_db(monkeypatch):
 
     monkeypatch.setattr(db_mod, "get_conn", _get_conn)
     return mem_conn
+
+
+# ═══════════════════════════════════════════════════════════════
+# S5: 报告上传云（upload_reports_to_cloud）
+# ═══════════════════════════════════════════════════════════════
+# 设计（用户确认 2026-08-31）：保持"导入只扫云"不变——定时任务产出后
+# 先把本地新报告上传 TOS daily-reports/，云优先导入自然能拉到。
+# 上传用 mtime 守卫幂等；云未配置 → 0 上传不报错（降级）。
+
+class _FakeCloud:
+    """内存 fake TOS：put/get/list 同一份 dict。"""
+
+    def __init__(self):
+        self.objects: dict[str, str] = {}
+
+    def put(self, key: str, text: str):
+        self.objects[key] = text
+
+    def get(self, key: str) -> str | None:
+        return self.objects.get(key)
+
+    def list(self, prefix: str) -> list[str]:
+        return sorted(k for k in self.objects if k.startswith(prefix))
+
+
+class TestReportUploadToCloud:
+    def _setup(self, tmp_path, monkeypatch):
+        from dashboard import db as db_mod
+        in_mem = _in_memory_db(monkeypatch)
+        db_mod.init_db()
+        monkeypatch.setattr(scheduler, "REPORTS_DIR", tmp_path)
+        cloud = _FakeCloud()
+        monkeypatch.setattr(scheduler, "_cs_put", cloud.put)
+        monkeypatch.setattr(scheduler, "_cs_get", cloud.get)
+        monkeypatch.setattr(scheduler, "_cs_list", cloud.list)
+        return tmp_path, cloud, in_mem
+
+    def test_upload_new_reports(self, tmp_path, monkeypatch):
+        _, cloud, in_mem = self._setup(tmp_path, monkeypatch)
+        d = tmp_path / "20260831"
+        d.mkdir()
+        (d / "早盘报告.md").write_text("# 早盘", encoding="utf-8")
+        (d / "每日信号.md").write_text("# 信号", encoding="utf-8")
+
+        r = scheduler.upload_reports_to_cloud()
+        assert r["uploaded"] == 2
+        assert "daily-reports/20260831/早盘报告.md" in cloud.objects
+        assert "daily-reports/20260831/每日信号.md" in cloud.objects
+        in_mem.close()
+
+    def test_upload_skips_unchanged(self, tmp_path, monkeypatch):
+        _, cloud, in_mem = self._setup(tmp_path, monkeypatch)
+        d = tmp_path / "20260831"
+        d.mkdir()
+        (d / "早盘报告.md").write_text("# 早盘", encoding="utf-8")
+
+        assert scheduler.upload_reports_to_cloud()["uploaded"] == 1
+        assert scheduler.upload_reports_to_cloud()["uploaded"] == 0  # mtime 未变
+        in_mem.close()
+
+    def test_upload_changed_file_reupload(self, tmp_path, monkeypatch):
+        _, cloud, in_mem = self._setup(tmp_path, monkeypatch)
+        d = tmp_path / "20260831"
+        d.mkdir()
+        f = d / "每日信号.md"
+        f.write_text("# v1", encoding="utf-8")
+        scheduler.upload_reports_to_cloud()
+        assert cloud.objects["daily-reports/20260831/每日信号.md"] == "# v1"
+
+        f.write_text("# v2（盘中更新）", encoding="utf-8")
+        assert scheduler.upload_reports_to_cloud()["uploaded"] == 1
+        assert cloud.objects["daily-reports/20260831/每日信号.md"] == "# v2（盘中更新）"
+        in_mem.close()
+
+    def test_upload_weekly(self, tmp_path, monkeypatch):
+        _, cloud, in_mem = self._setup(tmp_path, monkeypatch)
+        w = tmp_path / "weekly"
+        w.mkdir()
+        (w / "2026-08-27_周报.md").write_text("# 周报", encoding="utf-8")
+        r = scheduler.upload_reports_to_cloud()
+        assert r["uploaded"] == 1
+        assert "daily-reports/weekly/2026-08-27_周报.md" in cloud.objects
+        in_mem.close()
+
+    def test_upload_no_cloud_degrades(self, tmp_path, monkeypatch):
+        from dashboard import db as db_mod
+        in_mem = _in_memory_db(monkeypatch)
+        db_mod.init_db()
+        monkeypatch.setattr(scheduler, "REPORTS_DIR", tmp_path)
+        monkeypatch.setattr(scheduler, "_cs_put", None)
+        d = tmp_path / "20260831"
+        d.mkdir()
+        (d / "早盘报告.md").write_text("# 早盘", encoding="utf-8")
+        r = scheduler.upload_reports_to_cloud()
+        assert r["uploaded"] == 0
+        in_mem.close()
+
+    def test_upload_then_import_picks_from_cloud(self, tmp_path, monkeypatch):
+        """组合验证：本地新报告上传云后，云优先导入能入库（保持只扫云设计）。"""
+        from dashboard import db as db_mod
+        _, cloud, in_mem = self._setup(tmp_path, monkeypatch)
+        d = tmp_path / "20260831"
+        d.mkdir()
+        (d / "早盘报告.md").write_text("# 早盘报告内容", encoding="utf-8")
+        (d / "每日信号.md").write_text("# 每日信号内容", encoding="utf-8")
+
+        # 云上已有历史对象（触发云优先分支）
+        cloud.put("daily-reports/20260828/早盘报告.md", "# 旧")
+
+        scheduler.upload_reports_to_cloud()
+        result = scheduler.import_reports_from_disk()
+        assert result["source"] == "tos"
+        rep = db_mod.report_get("20260831", "早盘报告")
+        assert rep is not None
+        assert "# 早盘报告内容" in rep["markdown"]
+        in_mem.close()
+
+    def test_upload_weekly_then_import_from_cloud(self, tmp_path, monkeypatch):
+        """周报上传云（daily-reports/weekly/）后，云优先导入也能入库（云分支支持 weekly）。"""
+        from dashboard import db as db_mod
+        _, cloud, in_mem = self._setup(tmp_path, monkeypatch)
+        w = tmp_path / "weekly"
+        w.mkdir()
+        (w / "2026-08-27_周报.md").write_text("# 周报内容", encoding="utf-8")
+
+        # 云上已有历史对象（触发云优先分支）
+        cloud.put("daily-reports/20260828/早盘报告.md", "# 旧")
+
+        scheduler.upload_reports_to_cloud()
+        result = scheduler.import_reports_from_disk()
+        assert result["source"] == "tos"
+        rep = db_mod.report_get("20260827", "周报")
+        assert rep is not None
+        assert "# 周报内容" in rep["markdown"]
+        assert rep["source_file"] == "tos:daily-reports/weekly/2026-08-27_周报.md"
+        in_mem.close()

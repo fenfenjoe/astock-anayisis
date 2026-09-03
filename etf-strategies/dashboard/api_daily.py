@@ -48,9 +48,27 @@ class EastmoneyConfigPayload(BaseModel):
     note: str = ""
 
 
-# 并发保护：价格刷新 / 东财刷新 各自串行，避免同操作为并发写坏估值快照
+class TradePayload(BaseModel):
+    """一笔交易录入（字段与 每日调仓.md §2 调仓记录 表一致）。
+
+    side: 买入 | 卖出；quantity 为正整数；remark 可带「做T」等标记。
+    fee: 手续费（元，可选，默认 0）——买入时现金多扣、卖出时现金少收，
+    手续费会自动并入备注（"手续费X元"），便于在 每日调仓.md 中留痕。
+    """
+    trade_date: str = ""
+    name: str = ""
+    code: str = ""
+    quantity: float = 0
+    price: float = 0
+    side: str = ""
+    remark: str = ""
+    fee: float = 0
+
+
+# 并发保护：价格刷新 / 东财刷新 / 交易录入 各自串行，避免并发写坏估值快照与账本文件
 _price_refresh_lock = threading.Lock()
 _em_refresh_lock = threading.Lock()
+_trade_lock = threading.Lock()
 
 
 def _now_str() -> str:
@@ -83,9 +101,11 @@ def _build_portfolio_response() -> dict:
         snapshot = None
 
     has_creds = db.meta_get("eastmoney_has_creds") == "1"
+    trades = db.portfolio_trades_get_all()
     return {
         "holdings": db.portfolio_holdings_get_all(),
-        "trades_count": len(db.portfolio_trades_get_all()),
+        "trades": trades[:30],
+        "trades_count": len(trades),
         "meta": meta,
         "valuation": snapshot,
         "eastmoney": {
@@ -141,9 +161,9 @@ def put_portfolio_holdings(payload: HoldingsPayload):
 
     db.portfolio_holdings_replace(rows)
 
-    # 回写 持仓.md（保持 prompt 期望的表格格式）
+    # 回写 持仓.md（保持 prompt 期望的表格格式；可用金额行一并写回/保留）
     try:
-        portfolio.write_holdings_md(rows)
+        portfolio.write_holdings_md(rows, available_cash=payload.available_cash)
         mtime = portfolio.holdings_md_mtime()
         if mtime is not None:
             db.meta_set("holdings_md_mtime", str(mtime))
@@ -157,6 +177,75 @@ def put_portfolio_holdings(payload: HoldingsPayload):
 
     _recompute_valuation_and_store(refresh_prices=False)
     return _build_portfolio_response()
+
+
+def _sync_ledger_to_db(state: dict) -> None:
+    """把账本状态（来自 每日调仓.md）同步进 DB：持仓表 + 调仓记录表 + 可用金额 + 估值快照。
+
+    append_trade/undo 都会重写 每日调仓.md 与 持仓.md，这里是让 Dashboard 的
+    DB 镜像与文件保持一致（portfolio_holdings / portfolio_trades / portfolio_meta）。
+    """
+    db.portfolio_holdings_replace(state.get("positions") or [])
+    db.portfolio_trades_replace_all(state.get("trades") or [])
+    cash = state.get("cash")
+    if cash is not None:
+        db.meta_set("available_cash", str(cash))
+    val = _recompute_valuation_and_store(refresh_prices=False, available_cash=cash)
+    totals = (val or {}).get("totals") or {}
+    if totals.get("total_assets") is not None:
+        db.meta_set("total_assets", str(totals["total_assets"]))
+
+
+@router.post("/portfolio/trades")
+def post_portfolio_trade(payload: TradePayload):
+    """录入一笔交易（买入/卖出/做T）→ 追加 每日调仓.md §2 + 自动重算持仓/可用金额。
+
+    写 每日调仓.md（§0 金额 + §1 持仓 + §2 记录）与 持仓.md，并同步 DB。
+    校验失败（卖出超持仓 / T+1 / 可用金额不足 / 代码-名称不一致）返回 400。
+    """
+    trade = {
+        "trade_date": (payload.trade_date or "").strip(),
+        "name": (payload.name or "").strip(),
+        "code": (payload.code or "").strip(),
+        "quantity": payload.quantity,
+        "price": payload.price,
+        "side": (payload.side or "").strip(),
+        "remark": (payload.remark or "").strip(),
+        "fee": float(payload.fee or 0),
+    }
+    with _trade_lock:
+        try:
+            state = portfolio.append_trade(trade)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        except OSError as e:
+            raise HTTPException(500, f"写账本文件失败: {e}")
+        _sync_ledger_to_db(state)
+    last = state["trades"][-1]
+    fee_txt = f"，手续费 {trade['fee']:.2f} 元" if trade["fee"] > 0 else ""
+    return {
+        **_build_portfolio_response(),
+        "message": (f"已录入 {last['trade_date']} {last['side']} {last['name']}({last['code']}) "
+                    f"{portfolio._fmt_qty(last['quantity'])} 份 @ {last['price']}{fee_txt}；"
+                    f"可用现金已更新为 {portfolio._fmt_qty(state['cash'] or 0)} 元"),
+    }
+
+
+@router.post("/portfolio/trades/undo")
+def post_portfolio_trade_undo():
+    """撤销最近一笔界面录入（回滚文件快照 + 重新同步 DB）。"""
+    with _trade_lock:
+        try:
+            state = portfolio.undo_last_trade()
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        except OSError as e:
+            raise HTTPException(500, f"回滚账本文件失败: {e}")
+        _sync_ledger_to_db(state)
+    return {
+        **_build_portfolio_response(),
+        "message": "已撤销最近一笔录入，持仓与可用金额已回滚",
+    }
 
 
 @router.post("/portfolio/refresh")
@@ -278,18 +367,22 @@ def post_eastmoney_refresh():
 # 每日信号 / 报告（只读展示）
 # ═════════════════════════════════════════════════════════════════
 
-# 信号总表列名（与 每日信号.md 模板列一致）
+# 信号总表列名（与 每日信号.md v2.0 模板列一致 — 12 列，早盘模板 §5.1）
+# 2026-08 信号体系升级：移除 升级条件/预期收益日/操作来源/生成依据，
+# 新增 预期触发率/目标止损（P0 预期触发率=—，P1 必填百分比）。
 _SIGNAL_COLUMNS = [
     "优先级", "标的", "触发条件", "操作类型", "状态", "方向", "紧急度",
-    "升级条件", "预期收益日", "有效时段", "仓位", "操作来源", "生成依据", "信号ID",
+    "预期触发率", "目标/止损", "有效时段", "仓位", "信号ID",
 ]
 
 
 def _parse_signals(markdown: str) -> list[dict]:
     """从 每日信号.md 解析「信号总表」为结构化行。
 
-    规则：定位 '## 信号总表' 段，取其中 markdown 表格，按 _SIGNAL_COLUMNS 映射。
-    解析失败返回 []（调用方 fallback 到全文渲染，绝不硬失败）。
+    规则：定位 '## 信号总表' 段，取其中 markdown 表格；表头驱动映射
+    （列名 → 索引），按 _SIGNAL_COLUMNS 逐列取值，列名缺失时按位置兜底
+    （兼容旧 14 列格式）。解析失败返回 []（调用方 fallback 到全文渲染，
+    绝不硬失败）。
     """
     lines = markdown.splitlines()
     idx = None
@@ -301,6 +394,7 @@ def _parse_signals(markdown: str) -> list[dict]:
         return []
 
     rows = []
+    header: dict[str, int] | None = None
     for line in lines[idx + 1:]:
         if line.strip().startswith("## "):
             break  # 下一个段落结束
@@ -308,16 +402,24 @@ def _parse_signals(markdown: str) -> list[dict]:
         if not s.startswith("|"):
             continue
         cells = [c.strip() for c in s.strip("|").split("|")]
-        # 跳过表头/分隔行：表头含 '优先级'，分隔行全为 -/: 字符
         joined = "".join(cells)
-        if "优先级" in joined:
+        if not joined:
             continue
-        if joined and set(joined) <= set("-|: "):
+        if set(joined) <= set("-|: "):
+            continue  # 分隔行 |---|---|
+        if header is None:
+            # 第一个非分隔行 = 表头 → 建立 列名→索引 映射
+            header = {name: i for i, name in enumerate(cells) if name}
             continue
-        # 尽量按列数填充，不足补空
+        # 表头驱动取值；表头缺列名 → 按 _SIGNAL_COLUMNS 位置兜底（旧格式兼容）
         record = {}
-        for j, col in enumerate(_SIGNAL_COLUMNS):
-            record[col] = cells[j] if j < len(cells) else ""
+        for col in _SIGNAL_COLUMNS:
+            j = header.get(col)
+            if j is not None:
+                record[col] = cells[j] if j < len(cells) else ""
+            else:
+                k = _SIGNAL_COLUMNS.index(col)
+                record[col] = cells[k] if k < len(cells) else ""
         # 信号ID 缺失则该行跳过（信号行必须含 ID）
         if not record.get("信号ID"):
             continue
@@ -378,9 +480,10 @@ def get_report(report_date: str, report_type: str):
 
 @router.post("/reports/import")
 def post_reports_import():
-    """手动重扫 reports/ 目录（幂等 upsert）。"""
+    """手动重扫 reports/ 目录（幂等 upsert）：先上传本地新报告到云，再云优先导入。"""
+    upload = scheduler.upload_reports_to_cloud()
     result = scheduler.import_reports_from_disk()
-    return {"ok": True, **result}
+    return {"ok": True, **result, "uploaded": upload.get("uploaded", 0)}
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -423,6 +526,47 @@ def get_scheduler_tasks():
 @router.get("/scheduler/status")
 def get_scheduler_status():
     return scheduler.engine.status()
+
+
+@router.get("/scheduler/engine")
+def get_scheduler_engine():
+    """当前执行引擎（dsh=主 / claude=辅）与可选项。"""
+    from dashboard import scheduler as sched_mod
+    return {
+        "engine": sched_mod.resolve_engine(),
+        "available": ["dsh", "claude"],
+        "default": sched_mod.DEFAULT_ENGINE,
+        "dsh_installed": sched_mod._find_dsh() is not None,
+    }
+
+
+@router.put("/scheduler/engine")
+def put_scheduler_engine(payload: dict):
+    """切换执行引擎：dsh | claude（持久化到 meta，下次运行生效）。"""
+    from dashboard import scheduler as sched_mod
+    engine = str((payload or {}).get("engine", "")).strip().lower()
+    if engine not in ("dsh", "claude"):
+        raise HTTPException(400, "engine 必须是 dsh 或 claude")
+    if engine == "dsh" and sched_mod._find_dsh() is None:
+        raise HTTPException(400, "本机未安装 dsh CLI，无法切换到 dsh")
+    db.meta_set("scheduler_engine", engine)
+    return {"ok": True, "engine": engine}
+
+
+@router.post("/scheduler/auto")
+def post_scheduler_auto(payload: dict):
+    """切换内置调度引擎的 auto 模式（持久化到 DB，引擎每 tick 读 meta，即时生效）。
+
+    body: {"enabled": true|false}
+    """
+    enabled = bool((payload or {}).get("enabled"))
+    scheduler.engine.set_auto_enabled(enabled)
+    return {
+        "ok": True,
+        "auto_enabled": scheduler.engine.auto_enabled(),
+        "message": "自动调度已开启（引擎随 dashboard 进程运行）" if enabled
+        else "自动调度已关闭（仅保留手动触发）",
+    }
 
 
 @router.post("/scheduler/run/{task_id}")

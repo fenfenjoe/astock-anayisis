@@ -4,29 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AStock ETF 量化策略 Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- 字体：移除 Google Fonts 外链（国内不可达/阻塞渲染），改用本地字体栈（见 dashboard.css --font-* 变量） -->
 <link rel="stylesheet" href="/static/css/dashboard.css">
 <link rel="stylesheet" href="/static/css/agent.css">
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<link rel="stylesheet" href="/static/css/pet.css">
+<!-- echarts / marked 本地化（原 CDN 外链在国内不稳定 → 慢加载/误报失败） -->
+<script src="/static/vendor/echarts.min.js"></script>
+<script src="/static/vendor/marked.min.js"></script>
 <script>
-  if (typeof echarts === 'undefined') {
-    document.write('<script src="https://unpkg.com/echarts@5.5.0/dist/echarts.min.js"><\/script>');
-  }
-</script>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script>
-  if (typeof marked === 'undefined') {
-    document.write('<script src="https://unpkg.com/marked/marked.min.js"><\/script>');
-  }
+  // 备用：本地 vendor 加载失败时提示（不再依赖外部 CDN 竞态）
+  window.__vendorFail = { echarts: false, marked: false };
+  window.addEventListener('error', function (e) {
+    if (e.target && e.target.tagName === 'SCRIPT') {
+      const src = e.target.src || '';
+      if (src.indexOf('echarts') !== -1) window.__vendorFail.echarts = true;
+      if (src.indexOf('marked') !== -1) window.__vendorFail.marked = true;
+    }
+  }, true);
 </script>
 <script>
   window.addEventListener('load', function() {
-    if (typeof echarts === 'undefined') {
+    if (typeof echarts === 'undefined' || window.__vendorFail.echarts) {
       var banner = document.createElement('div');
       banner.style.cssText = 'background:#5c3a1e;color:#ffb74d;padding:8px 16px;text-align:center;font-size:0.8rem;position:sticky;top:0;z-index:9999';
-      banner.textContent = '⚠️ 图表组件加载失败，请检查网络后刷新页面';
+      banner.textContent = '⚠️ 图表组件加载失败（/static/vendor/echarts.min.js 缺失或损坏），请检查部署';
       document.body.insertBefore(banner, document.body.firstChild);
     }
   });
@@ -64,6 +65,7 @@
 <!-- ═══ HEADER ═══ -->
 <header class="header">
   <div class="header-left">
+    <button class="btn btn-sm btn-mode-switch" id="mode-switch-btn" onclick="switchMode()" title="进入后台" style="display:none">🛠️ 进入后台</button>
     <h1 class="header-title">🏦 AStock ETF <span class="header-accent">量化策略</span></h1>
     <span class="header-badge">Dashboard v2.1</span>
   </div>
@@ -80,14 +82,16 @@
   </div>
 </header>
 
-<!-- ═══ TOP NAV (每日复盘集成视图) ═══ -->
+<!-- ═══ TOP NAV (每日复盘集成视图) ═══
+     主页模式（nav-home）：策略全景 / 持仓 / 信号 / 报告
+     后台模式（nav-admin）：工作日程 / 角色 —— 仅管理员可见，由 JS 按模式显示 -->
 <nav class="topnav" id="topnav">
-  <button class="topnav-item topnav-active" data-view="view-strategies" onclick="switchView('view-strategies')">📊 策略全景</button>
-  <button class="topnav-item" data-view="view-portfolio" onclick="switchView('view-portfolio')">💰 持仓/资产</button>
-  <button class="topnav-item" data-view="view-signals" onclick="switchView('view-signals')">📡 每日信号</button>
-  <button class="topnav-item" data-view="view-reports" onclick="switchView('view-reports')">📄 报告</button>
-  <button class="topnav-item" data-view="view-scheduler" onclick="switchView('view-scheduler')">🗓️ 工作日程</button>
-  <button class="topnav-item" data-view="view-agent" onclick="switchView('view-agent')">💬 角色</button>
+  <button class="topnav-item nav-home topnav-active" data-view="view-strategies" onclick="switchView('view-strategies')">📊 策略全景</button>
+  <button class="topnav-item nav-home" data-view="view-portfolio" onclick="switchView('view-portfolio')">💰 持仓/资产</button>
+  <button class="topnav-item nav-home" data-view="view-signals" onclick="switchView('view-signals')">📡 每日信号</button>
+  <button class="topnav-item nav-home" data-view="view-reports" onclick="switchView('view-reports')">📄 报告</button>
+  <button class="topnav-item nav-admin" data-view="view-scheduler" onclick="switchView('view-scheduler')">🗓️ 工作日程</button>
+  <button class="topnav-item nav-admin" data-view="view-agent" onclick="switchView('view-agent')">💬 角色</button>
 </nav>
 
 <!-- ═══ VIEW: 策略全景（原全部内容）═══ -->
@@ -487,6 +491,32 @@
 <!-- Toast Container -->
 <div class="toast-container" id="toast-container"></div>
 
+<!-- ═══ 小满 LIVE2D 桌宠（看板娘：全局右下角 fixed，滚动不位移）
+     状态驱动：working / slack / leave / offline / thinking（见 pet.js 状态机）
+     渲染层(LIVE2D)与场景层(小桌/笔记本 SVG)由 pet.js 装配；资产缺失时降级为占位形态 -->
+<div class="xm-pet" id="xm-pet" data-state="unknown" aria-hidden="true">
+  <div class="xm-pet-stage" id="xm-pet-stage">
+    <!-- 渲染层：LIVE2D canvas 挂载点 -->
+    <div class="xm-pet-canvas" id="xm-pet-canvas"></div>
+    <!-- 渲染层降级占位（无模型资产 / WebGL 不可用时） -->
+    <div class="xm-pet-fallback" id="xm-pet-fallback" hidden>🌾</div>
+    <!-- 场景层：小桌 + 笔记本（pet.js 注入 SVG 骨架，CSS 驱动敲键盘/盯屏动画） -->
+    <div class="xm-pet-scene" id="xm-pet-scene"></div>
+    <!-- 台词气泡 -->
+    <div class="xm-pet-bubble" id="xm-pet-bubble" hidden></div>
+    <!-- 睡觉 Zzz -->
+    <div class="xm-pet-zzz" id="xm-pet-zzz" hidden><span>Z</span><span>z</span><span>z</span></div>
+    <!-- 状态小灯 -->
+    <span class="xm-pet-dot" id="xm-pet-dot"></span>
+  </div>
+  <div class="xm-pet-bar">
+    <button class="xm-pet-btn" id="xm-pet-btn-min" title="收起为小圆点" aria-label="收起小满">—</button>
+    <button class="xm-pet-btn" id="xm-pet-btn-hide" title="隐藏（小圆点可召回）" aria-label="隐藏小满">×</button>
+  </div>
+</div>
+<!-- 最小化/隐藏后的小圆点（召回入口） -->
+<button class="xm-pet-mini" id="xm-pet-mini" hidden title="召唤小满" aria-label="召唤小满">🌾</button>
+
 </div><!-- /#app-main -->
 
 <!-- ═══ SCRIPTS ═══ -->
@@ -494,5 +524,6 @@
 <script src="/static/js/dashboard.js"></script>
 <script src="/static/js/daily.js"></script>
 <script src="/static/js/agent.js"></script>
+<script src="/static/js/pet.js"></script>
 </body>
 </html>

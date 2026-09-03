@@ -74,8 +74,10 @@ class TestCheckReviewStaging:
             mtime = datetime(2026, 8, 26, 16, 0)
         return {'path': path, 'content': content, 'mtime': mtime, 'size': size, 'missing': missing}
 
-    def _state(self, status='completed', completed_at='2026-08-26T15:52:00'):
-        return {'tasks': {'evening_review': {'status': status, 'completed_at': completed_at}}}
+    def _state(self, status='completed', executed_at='2026-08-26T15:45:00',
+               completed_at='2026-08-26T15:52:00'):
+        return {'tasks': {'evening_review': {
+            'status': status, 'executed_at': executed_at, 'completed_at': completed_at}}}
 
     def test_not_completed_exempt(self):
         assert check_review_staging(self._state(status='running'), [], '2026-08-27') == []
@@ -90,11 +92,32 @@ class TestCheckReviewStaging:
         failures = check_review_staging(self._state(), [r], '2026-08-27')
         assert any('MISSING' in f for f in failures)
 
-    def test_stale_mtime_before_review(self):
+    def test_stale_mtime_before_review_execution(self):
+        """BUG-007: staging mtime 早于复盘开始(executed_at) = 未在本次复盘刷新 → STALE"""
         from datetime import datetime
-        r = self._result(mtime=datetime(2026, 8, 26, 14, 0))  # 早于复盘完成 15:52
+        r = self._result(mtime=datetime(2026, 8, 26, 14, 0))  # 早于 executed_at 15:45
         failures = check_review_staging(self._state(), [r], '2026-08-27')
         assert any('STALE' in f for f in failures)
+
+    def test_mtime_between_executed_and_completed_passes(self):
+        """BUG-007 回归: staging 在复盘窗口内生成(mtime ≥ executed_at 且 < completed_at) → 不报 STALE。
+        修复前误用 completed_at 作基准，staging 必然 mtime < completed_at → 恒报 STALE 假阳性。"""
+        from datetime import datetime
+        # 复盘 15:45 开始、16:30 完成；staging 16:08 生成（复盘流程 11.1/11.2 发生在完成前）
+        state = self._state(executed_at='2026-08-26T15:45:00', completed_at='2026-08-26T16:30:00')
+        r = self._result(content='# 今日早盘分析 — 2026-08-27\n' + 'x' * 600, size=620,
+                         mtime=datetime(2026, 8, 26, 16, 8))
+        failures = check_review_staging(state, [r], '2026-08-27')
+        assert failures == []  # 不应报 STALE
+
+    def test_no_executed_at_skips_time_check(self):
+        """executed_at 缺失 → 跳过时间比对（内容检查仍生效），不因 completed_at 误报"""
+        from datetime import datetime
+        state = self._state(executed_at=None)
+        r = self._result(content='# 今日早盘分析 — 2026-08-27\n' + 'x' * 600, size=620,
+                         mtime=datetime(2026, 8, 26, 16, 0))
+        failures = check_review_staging(state, [r], '2026-08-27')
+        assert failures == []
 
     def test_outdated_no_tomorrow(self):
         r = self._result(content='# 今日早盘分析 — 2026-08-26\n' + 'x' * 600)  # 旧日期
@@ -111,7 +134,7 @@ class TestCheckReviewStaging:
         r1 = self._result(path='a.md', content='# 今日早盘分析 — 2026-08-27\n' + 'x' * 600, size=620)
         r2 = self._result(path='b.md', content='旧内容', size=50, mtime=datetime(2026, 8, 25, 9, 0))
         failures = check_review_staging(self._state(), [r1, r2], '2026-08-27')
-        # r1 通过；r2 的 STALE（mtime 早于复盘完成）短路（continue），仅报 STALE
+        # r1 通过；r2 的 STALE（mtime 早于复盘开始）短路（continue），仅报 STALE
         assert len(failures) == 1
         assert any('STALE' in f and 'b.md' in f for f in failures)
 
@@ -144,6 +167,33 @@ class TestCheckLessonsAndVars:
         content = "核心教训\n1. **a**\n2. **b**\n核心变量\n- **仅两个**\n- **变量**"
         failures = check_lessons_and_vars(content)
         assert any('变量不足' in e for e in failures)
+
+    def test_lesson_text_containing_keyword(self):
+        """BUG-011 回归: 核心教训正文含"核心变量"字样，不得干扰核心变量定位/计数"""
+        content = ("### 核心教训\n1. **教训一**：……该逻辑仍是核心变量，需持续跟踪……\n2. **教训二**：def\n"
+                   "### 核心变量\n- **变量1**：x\n- **变量2**：y\n- **变量3**：z")
+        assert check_lessons_and_vars(content) == []
+
+    def test_key_prefix_vars_counted(self):
+        """BUG-011 回归: `- 🔑 **` 前缀变量必须计入（8/31 起 staging 用 🔑 标记核心变量）"""
+        content = ("### 核心变量\n- 🔑 **A**：x\n- 🔑 **B**：y\n- **C**：z")
+        assert check_lessons_and_vars(content) == []
+
+    def test_real_staging_format(self):
+        """真实 staging 格式（### 标题 + 🔑 前缀混合）"""
+        content = (
+            "### 8/31 核心教训\n"
+            "1. **双 P0 执行到位**：abc\n"
+            "2. **上午方向≠全天方向**：def\n"
+            "3. **连续走强主线第3日降温**：ghi\n"
+            "### 9/1 核心变量\n"
+            "- 🔑 **8/31 已执行 P0 的后续跟踪**：黄金剩 2,600 份\n"
+            "- 🔑 **隔夜美股 + 现货金**：金价止跌？\n"
+            "- 🔑 **9/1 AI芯片龙头打新抽血**：资金分流\n"
+            "- 🔑 **传媒/AI应用涨停潮第3日**：晋级率验证\n"
+            "- **软件 0.725 vs 0.708**：放量收复确认\n"
+            "- **电网 1.70 硬门槛第 10 日**：量能确认")
+        assert check_lessons_and_vars(content) == []
 
 
 class TestCheckEtfCodeNames:
