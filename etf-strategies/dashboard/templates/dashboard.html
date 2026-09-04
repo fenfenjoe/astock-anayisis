@@ -71,14 +71,9 @@
   </div>
   <div class="header-right">
     <span class="header-user" id="header-user">—</span>
-    <button class="btn btn-sm" onclick="handleLogout()" title="退出登录">🚪</button>
+    <button class="btn btn-sm" onclick="handleLogout()" title="退出登录">退出登录</button>
     <span class="header-clock" id="header-clock">—</span>
-    <button class="btn btn-primary" onclick="refreshAll()" title="刷新所有数据">
-      <span class="btn-icon">🔄</span> 刷新数据
-    </button>
-    <button class="btn btn-accent" onclick="triggerBacktest()" title="运行全量回测（耗时较长）">
-      <span class="btn-icon">🚀</span> 运行回测
-    </button>
+
   </div>
 </header>
 
@@ -153,6 +148,8 @@
           <option value="calmar">Calmar</option>
         </select>
         <button class="btn-icon-only" onclick="toggleSortOrder()" title="切换升降序" id="btn-sort-order">↓</button>
+        <button class="btn btn-primary btn-sm" onclick="refreshAll()" title="刷新所有数据">🔄 刷新数据</button>
+        <button class="btn btn-accent btn-sm" onclick="triggerBacktest()" title="运行全量回测（耗时较长）">🚀 运行回测</button>
       </div>
     </div>
     <div class="table-wrap">
@@ -409,8 +406,10 @@
         <button class="btn btn-sm" onclick="schedLoad()">🔄 刷新</button>
       </div>
     </div>
+    <!-- 每日运行一次的任务 -->
+    <h3 class="em-title">每日任务</h3>
     <div class="table-wrap">
-      <table class="data-table" id="sched-table">
+      <table class="data-table" id="sched-daily-table">
         <thead>
           <tr>
             <th>任务</th>
@@ -421,7 +420,26 @@
             <th class="col-act">操作</th>
           </tr>
         </thead>
-        <tbody id="sched-tbody">
+        <tbody id="sched-daily-tbody">
+          <tr><td colspan="6" class="loading-cell">加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <!-- 其他频率的任务 -->
+    <h3 class="em-title">其他任务</h3>
+    <div class="table-wrap">
+      <table class="data-table" id="sched-other-table">
+        <thead>
+          <tr>
+            <th>任务</th>
+            <th class="col-num">时间</th>
+            <th class="col-num">需交易日</th>
+            <th class="col-num">最近状态</th>
+            <th class="col-num">最近运行</th>
+            <th class="col-act">操作</th>
+          </tr>
+        </thead>
+        <tbody id="sched-other-tbody">
           <tr><td colspan="6" class="loading-cell">加载中...</td></tr>
         </tbody>
       </table>
@@ -436,6 +454,7 @@
   <!-- 小满状态栏：请假中 / 摸鱼中 / 正在做XXX -->
   <div id="agent-status-bar" class="agent-status-bar">
     <span class="agent-status-pill" id="agent-mood"></span>
+    <button class="btn btn-sm btn-primary" id="agent-online-btn" onclick="Agent.toggleOnline()" style="margin-left:12px">🌱 让小满上线</button>
   </div>
   <div class="agent-tabs">
     <button class="agent-tab active" data-tab="chat" onclick="Agent.switchTab('chat')">💬 和小满聊天</button>

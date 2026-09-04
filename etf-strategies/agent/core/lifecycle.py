@@ -83,11 +83,13 @@ def _state_label(state_id):
 def tick(now=None, db=None, llm_fn=None):
     """一轮例行工作。
 
-    1. heartbeat + RSS 入库（服务端自动拉取，不进 Prompt）
-    2. 自定义源采集（节流，高成本 6h 间隔）
-    3. 状态机：检查过期 → 硬编码权重选状态 → 选中"阅读"时执行阅读 Prompt
-    4. 每日发文调度
-    5. cloud backup
+    1. heartbeat
+    2. 上线/下线闸门：xiaoman_online != "1" → 只写 heartbeat，其余全跳过
+    3. RSS 入库（服务端自动拉取，不进 Prompt）
+    4. 自定义源采集（节流，高成本 6h 间隔）
+    5. 状态机：检查过期 → 硬编码权重选状态 → 选中"阅读"时执行阅读 Prompt
+    6. 每日发文调度
+    7. cloud backup
     """
     now = now or datetime.now()
     db = db or agent_db
@@ -96,12 +98,21 @@ def tick(now=None, db=None, llm_fn=None):
 
     result = {
         "today": today,
+        "online": False,
         "rss": None,
         "custom": None,
         "state": None,
         "read": None,
         "publish": None,
     }
+
+    # 0. 上线/下线闸门
+    online = db.meta_get("xiaoman_online")
+    if online != "1":
+        result["online"] = False
+        return result
+
+    result["online"] = True
 
     # 1. RSS 入库（服务端自动执行，不入 Prompt；小满"阅读"时从库中选）
     if _rss_due(db, now):

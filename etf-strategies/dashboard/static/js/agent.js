@@ -68,10 +68,15 @@
 
   function renderStatus(s) {
     const el = document.getElementById('agent-mood');
+    const btn = document.getElementById('agent-online-btn');
     if (!el) return;
     const mood = s.mood || {};
     const parts = [];
-    parts.push((s.alive ? '🟢' : '⚪') + (mood.icon || ''));
+    if (s.online) {
+      parts.push((s.alive ? '🟢' : '⚪') + (mood.icon || ''));
+    } else {
+      parts.push('⚪😴');
+    }
     parts.push(mood.label || '未知状态');
     if (s.attendance === 'on' && s.current_task) {
       parts.push('· 开始于 ' + (s.current_task.started_at || ''));
@@ -79,10 +84,29 @@
     if (!s.alive) parts.push('·（小满进程未运行）');
     if (s.published_on) parts.push('· 今日已发文');
     el.textContent = parts.join(' ');
-    // 状态随出勤/任务态着色
-    const cls = s.attendance === 'leave' ? 'pill-leave'
-      : s.current_task ? 'pill-working' : 'pill-slack';
+    // 状态随出勤/任务态/上线着色
+    let cls;
+    if (!s.online) {
+      cls = 'pill-offline';
+    } else if (s.attendance === 'leave') {
+      cls = 'pill-leave';
+    } else if (s.current_task) {
+      cls = 'pill-working';
+    } else {
+      cls = 'pill-slack';
+    }
     el.className = 'agent-status-pill ' + cls;
+
+    // 上线/下线按钮
+    if (btn) {
+      if (s.online) {
+        btn.textContent = '😴 让小满休息';
+        btn.className = 'btn btn-sm btn-offline';
+      } else {
+        btn.textContent = '🌱 让小满上线';
+        btn.className = 'btn btn-sm btn-primary';
+      }
+    }
   }
 
   // 桌宠思考联动（让 pet.js 显示"思考中"瞬时态）
@@ -422,6 +446,22 @@
     }
   }
 
+  async function toggleOnline() {
+    const cache = window.__xmStatusCache;
+    const online = cache && cache.data && cache.data.online;
+    const endpoint = online ? '/api/agent/offline' : '/api/agent/online';
+    try {
+      await Auth.fetchPost(endpoint, {});
+      const resp = await Auth.fetchGet('/api/agent/status');
+      const s = await resp.json();
+      window.__xmStatusCache = { data: s, t: Date.now() };
+      renderStatus(s);
+      document.dispatchEvent(new CustomEvent('xm:status', { detail: s }));
+    } catch (e) {
+      alert('操作失败：' + e.message);
+    }
+  }
+
   window.Agent = {
     switchTab: switchTab,
     load: load,
@@ -433,5 +473,6 @@
     deleteSource: deleteSource,
     newSession: newSession,
     send: send,
-  }; 
+    toggleOnline: toggleOnline,
+  };
 })();

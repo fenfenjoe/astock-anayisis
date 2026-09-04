@@ -548,34 +548,50 @@ async function schedLoad(force) {
       apiGet('/api/scheduler/runs?limit=15'),
     ]);
     schedAuto = !!tasks.auto_enabled;
+    const online = !!tasks.online;
     const eng = $el('sched-engine');
     if (eng) {
-      eng.textContent = (schedAuto ? '👔 上班中 · 按日程表执行' : '🏖️ 请假中 · 定时任务暂停')
-        + ` · 今日交易日:${tasks.is_trading_day ? '是' : '否'}`
-        + (status.last_tick ? ' · 心跳:' + status.last_tick.slice(11, 19) : '');
+      if (!online) {
+        eng.textContent = '😴 小满未上线 · 定时任务暂停'
+          + ` · 今日交易日:${tasks.is_trading_day ? '是' : '否'}`
+          + (status.last_tick ? ' · 心跳:' + status.last_tick.slice(11, 19) : '');
+      } else {
+        eng.textContent = (schedAuto ? '👔 上班中 · 按日程表执行' : '🏖️ 请假中 · 定时任务暂停')
+          + ` · 今日交易日:${tasks.is_trading_day ? '是' : '否'}`
+          + (status.last_tick ? ' · 心跳:' + status.last_tick.slice(11, 19) : '');
+      }
     }
     const autoBtn = $el('sched-auto-btn');
     if (autoBtn) {
-      autoBtn.textContent = schedAuto ? '🏖️ 请假' : '👔 上班';
-      autoBtn.classList.toggle('btn-accent', schedAuto);
-      autoBtn.title = schedAuto ? '点击请假：暂停定时任务' : '点击上班：按日程表执行定时任务';
+      if (!online) {
+        autoBtn.style.display = 'none';
+      } else {
+        autoBtn.style.display = '';
+        autoBtn.textContent = schedAuto ? '🏖️ 请假' : '👔 上班';
+        autoBtn.classList.toggle('btn-accent', schedAuto);
+        autoBtn.title = schedAuto ? '点击请假：暂停定时任务' : '点击上班：按日程表执行定时任务';
+      }
     }
-    const tbody = $el('sched-tbody');
-    if (tbody) {
-      const stText = { success: '✅ 成功', failed: '❌ 失败', timeout: '⏱️ 超时', running: '⏳ 运行中', skipped: '⏭️ 跳过' };
-      tbody.innerHTML = tasks.tasks.map((t) => {
-        const last = t.last_run || {};
-        const running = last.status === 'running';
-        return `<tr>
-          <td class="col-name"><b>${escapeHtml(t.task_id)}</b><br><span class="muted">${escapeHtml(t.description || '')}</span></td>
-          <td class="col-num">${escapeHtml(t.target_time)}${t.hourly ? ' (每小时)' : ''}</td>
-          <td class="col-num">${t.trading_day_required ? '是' : '否'}</td>
-          <td class="col-num ${last.status === 'failed' ? 'num-danger' : ''}">${stText[last.status] || '—'}</td>
-          <td class="col-num">${last.run_time ? escapeHtml(last.run_time.slice(0, 19)) : '—'}</td>
-          <td class="col-act"><button class="btn btn-sm" onclick="schedRun('${t.task_id}')" ${running ? 'disabled' : ''}>▶ 立即运行</button></td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="6" class="loading-cell">无可调度任务</td></tr>';
+    const stText = { success: '✅ 成功', failed: '❌ 失败', timeout: '⏱️ 超时', running: '⏳ 运行中', skipped: '⏭️ 跳过' };
+    function renderTasks(taskList, tbodyId) {
+      const tbody = $el(tbodyId);
+      if (tbody) {
+        tbody.innerHTML = taskList.map((t) => {
+          const last = t.last_run || {};
+          const running = last.status === 'running';
+          return `<tr>
+            <td class="col-name"><b>${escapeHtml(t.task_id)}</b><br><span class="muted">${escapeHtml(t.description || '')}</span></td>
+            <td class="col-num">${escapeHtml(t.target_time)}${t.hourly ? ' (每小时)' : ''}</td>
+            <td class="col-num">${t.trading_day_required ? '是' : '否'}</td>
+            <td class="col-num ${last.status === 'failed' ? 'num-danger' : ''}">${stText[last.status] || '—'}</td>
+            <td class="col-num">${last.run_time ? escapeHtml(last.run_time.slice(0, 19)) : '—'}</td>
+            <td class="col-act"><button class="btn btn-sm" onclick="schedRun('${t.task_id}')" ${running ? 'disabled' : ''}>▶ 立即运行</button></td>
+          </tr>`;
+        }).join('') || '<tr><td colspan="6" class="loading-cell">暂无任务</td></tr>';
+      }
     }
+    renderTasks(tasks.daily_tasks || [], 'sched-daily-tbody');
+    renderTasks(tasks.other_tasks || [], 'sched-other-tbody');
     const runsEl = $el('sched-runs');
     if (runsEl) {
       runsEl.innerHTML = runs.items.map((r) => {
@@ -588,7 +604,8 @@ async function schedLoad(force) {
       }).join('') || '<p class="muted">暂无运行记录</p>';
     }
   } catch (e) {
-    safeSetHTML('sched-tbody', '<tr><td colspan="6" class="loading-cell">加载失败: ' + escapeHtml(e.message) + '</td></tr>');
+    safeSetHTML('sched-daily-tbody', '<tr><td colspan="6" class="loading-cell">加载失败: ' + escapeHtml(e.message) + '</td></tr>');
+    safeSetHTML('sched-other-tbody', '<tr><td colspan="6" class="loading-cell">加载失败: ' + escapeHtml(e.message) + '</td></tr>');
   }
 }
 

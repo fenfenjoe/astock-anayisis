@@ -1127,7 +1127,7 @@ body {
   border: 1px solid color-mix(in oklch, var(--accent-amber) 35%, var(--border));
   border-radius: var(--radius-md);
 }
-.em-title { font-size: 0.9rem; font-weight: 600; margin: 0 0 var(--space-2); color: var(--accent-amber); }
+.em-title { font-size: 0.9rem; font-weight: 600; margin: var(--space-4) 0 var(--space-2) var(--space-2); color: var(--accent-amber); }
 .em-badge {
   font-size: 0.65rem; font-weight: 600;
   color: #2a1a00; background: var(--accent-amber);

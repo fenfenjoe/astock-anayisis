@@ -3,7 +3,9 @@
 挂载：app.py 中 `app.include_router(api_agent.router)`（需认证，prefix /api/agent）。
 
 路由：
-  GET    /api/agent/status                  角色状态（进程存活/今日发文/LLM 配置）
+  GET    /api/agent/status                  角色状态（进程存活/今日发文/LLM 配置/上线状态）
+  POST   /api/agent/online                  小满上线
+  POST   /api/agent/offline                 小满下线
   POST   /api/agent/sessions                新建会话
   GET    /api/agent/sessions                会话列表
   DELETE /api/agent/sessions/{sid}          删除会话
@@ -36,8 +38,12 @@ async def _run_thread(fn):
 # ═══════════════════════════════════════════
 
 
-def _state(alive: bool, attendance: str, current_task: dict | None) -> str:
+def _state(
+    alive: bool, attendance: str, current_task: dict | None, online: bool
+) -> str:
     """机器可读状态枚举（桌宠/状态栏共用）：offline / leave / working / slack。"""
+    if not online:
+        return "offline"
     if not alive:
         return "offline"
     if attendance != "on":
@@ -61,18 +67,20 @@ def agent_status():
     attendance = (sched_status or {}).get("attendance") or "leave"
     current = (sched_status or {}).get("current_task")
     alive = hb_age is not None and hb_age < 60 * 15
+    online = agent_db.meta_get("xiaoman_online") == "1"
 
     state_id = agent_db.meta_get("xiaoman_current_state") or "daydream"
     state_until = agent_db.meta_get("xiaoman_state_until")
 
     return {
         "alive": alive,
-        "state": _state(alive, attendance, current),
+        "online": online,
+        "state": _state(alive, attendance, current, online),
         "heartbeat_age_seconds": hb_age,
         "dsh_ready": dsh_runner.find_dsh_bin() is not None,
         "attendance": attendance,
         "current_task": current,
-        "mood": _mood(attendance, current),
+        "mood": _mood(attendance, current, online),
         "published_on": agent_db.meta_get("published_on"),
         "last_rss_fetch_at": agent_db.meta_get("last_rss_fetch_at"),
         "current_state": state_id,
@@ -81,8 +89,10 @@ def agent_status():
     }
 
 
-def _mood(attendance, current_task):
+def _mood(attendance, current_task, online):
     """小满状态成语文案：请假中 / 摸鱼中 / 正在做XXX。"""
+    if not online:
+        return {"label": "未上线", "icon": "😴"}
     if attendance != "on":
         return {"label": "请假中", "icon": "🏖️"}
     if current_task:
@@ -92,6 +102,25 @@ def _mood(attendance, current_task):
             "task": current_task,
         }
     return {"label": "摸鱼中", "icon": "🐟"}
+
+
+# ═══════════════════════════════════════════
+# 上线/下线
+# ═══════════════════════════════════════════
+
+
+@router.post("/online")
+def agent_online():
+    """小满上线。"""
+    agent_db.meta_set("xiaoman_online", "1")
+    return {"ok": True, "online": True}
+
+
+@router.post("/offline")
+def agent_offline():
+    """小满下线。"""
+    agent_db.meta_set("xiaoman_online", "0")
+    return {"ok": True, "online": False}
 
 
 # ═══════════════════════════════════════════

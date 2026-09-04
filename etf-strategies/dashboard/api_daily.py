@@ -7,6 +7,7 @@
 ⚠️ 路由冲突陷阱：不得用 /api/signals/daily —— 现有 GET /api/signals/{sid} 会先匹配。
    每日信号一律走独立前缀 /api/daily-signals。
 """
+
 import json
 import re
 import threading
@@ -28,6 +29,7 @@ router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
 # ───────────────────────────────────────────────────────────────────
 # 请求/响应模型
 # ───────────────────────────────────────────────────────────────────
+
 
 class HoldingsRow(BaseModel):
     code: str
@@ -55,6 +57,7 @@ class TradePayload(BaseModel):
     fee: 手续费（元，可选，默认 0）——买入时现金多扣、卖出时现金少收，
     手续费会自动并入备注（"手续费X元"），便于在 每日调仓.md 中留痕。
     """
+
     trade_date: str = ""
     name: str = ""
     code: str = ""
@@ -119,13 +122,16 @@ def _build_portfolio_response() -> dict:
     }
 
 
-def _recompute_valuation_and_store(refresh_prices: bool = False, available_cash: float | None = None):
+def _recompute_valuation_and_store(
+    refresh_prices: bool = False, available_cash: float | None = None
+):
     """重算估值并持久化 valuation_snapshot（不触发同步时用缓存价）。"""
     holdings = db.portfolio_holdings_get_all()
     if available_cash is None:
         available_cash = _meta_num("available_cash", 0.0)
-    val = portfolio.compute_valuation(holdings, available_cash=available_cash,
-                                      refresh_prices=refresh_prices)
+    val = portfolio.compute_valuation(
+        holdings, available_cash=available_cash, refresh_prices=refresh_prices
+    )
     db.meta_set("valuation_snapshot", json.dumps(val, ensure_ascii=False))
     db.meta_set("last_refresh_at", _now_str())
     return val
@@ -134,6 +140,7 @@ def _recompute_valuation_and_store(refresh_prices: bool = False, available_cash:
 # ═════════════════════════════════════════════════════════════════
 # 持仓/资产
 # ═════════════════════════════════════════════════════════════════
+
 
 @router.get("/portfolio")
 def get_portfolio():
@@ -153,9 +160,14 @@ def put_portfolio_holdings(payload: HoldingsPayload):
         code = str(r.code or "").strip()
         if not (code.isdigit() and len(code) == 6):
             raise HTTPException(400, f"无效代码: {code!r}（需 6 位数字）")
-        rows.append({"code": code, "name": r.name or code,
-                     "shares": float(r.shares or 0),
-                     "cost_price": r.cost_price})
+        rows.append(
+            {
+                "code": code,
+                "name": r.name or code,
+                "shares": float(r.shares or 0),
+                "cost_price": r.cost_price,
+            }
+        )
     if not rows:
         raise HTTPException(400, "持仓不能为空")
 
@@ -225,9 +237,11 @@ def post_portfolio_trade(payload: TradePayload):
     fee_txt = f"，手续费 {trade['fee']:.2f} 元" if trade["fee"] > 0 else ""
     return {
         **_build_portfolio_response(),
-        "message": (f"已录入 {last['trade_date']} {last['side']} {last['name']}({last['code']}) "
-                    f"{portfolio._fmt_qty(last['quantity'])} 份 @ {last['price']}{fee_txt}；"
-                    f"可用现金已更新为 {portfolio._fmt_qty(state['cash'] or 0)} 元"),
+        "message": (
+            f"已录入 {last['trade_date']} {last['side']} {last['name']}({last['code']}) "
+            f"{portfolio._fmt_qty(last['quantity'])} 份 @ {last['price']}{fee_txt}；"
+            f"可用现金已更新为 {portfolio._fmt_qty(state['cash'] or 0)} 元"
+        ),
     }
 
 
@@ -270,12 +284,17 @@ def post_portfolio_refresh():
             _price_refresh_lock.release()
 
     threading.Thread(target=_worker, daemon=True).start()
-    return {"started": True, "message": "市值刷新已在后台启动", "server_time": _now_str()}
+    return {
+        "started": True,
+        "message": "市值刷新已在后台启动",
+        "server_time": _now_str(),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════
 # 东财实验功能（可选）
 # ═════════════════════════════════════════════════════════════════
+
 
 @router.get("/portfolio/eastmoney/config")
 def get_eastmoney_config():
@@ -309,7 +328,9 @@ def put_eastmoney_config(payload: EastmoneyConfigPayload):
 
     db.meta_set("eastmoney_config", token)
     db.meta_set("eastmoney_has_creds", "1")
-    db.meta_set("eastmoney_account_suffix", eastmoney.account_suffix({"account": account}))
+    db.meta_set(
+        "eastmoney_account_suffix", eastmoney.account_suffix({"account": account})
+    )
     db.meta_set("eastmoney_note", payload.note)
     db.meta_set("last_eastmoney_error", "")  # 清掉旧错误
     return {"ok": True, "account_suffix": db.meta_get("eastmoney_account_suffix")}
@@ -336,13 +357,18 @@ def post_eastmoney_refresh():
             try:
                 data = eastmoney.fetch_positions(creds)
             except eastmoney.EastmoneyUnavailable as e:
-                db.meta_set("last_eastmoney_error", f"{datetime.now():%Y-%m-%d %H:%M:%S} 东财拉取失败: {e}")
+                db.meta_set(
+                    "last_eastmoney_error",
+                    f"{datetime.now():%Y-%m-%d %H:%M:%S} 东财拉取失败: {e}",
+                )
                 return  # 手动数据保持不动
 
             rows = data.get("holdings") or []
             if not rows:
-                db.meta_set("last_eastmoney_error",
-                            f"{datetime.now():%Y-%m-%d %H:%M:%S} 东财返回持仓为空（可能需人工过验证码）")
+                db.meta_set(
+                    "last_eastmoney_error",
+                    f"{datetime.now():%Y-%m-%d %H:%M:%S} 东财返回持仓为空（可能需人工过验证码）",
+                )
                 return
             db.portfolio_holdings_replace(rows)
             if data.get("total_assets") is not None:
@@ -360,7 +386,11 @@ def post_eastmoney_refresh():
             _em_refresh_lock.release()
 
     threading.Thread(target=_worker, daemon=True).start()
-    return {"started": True, "message": "东财刷新已在后台启动", "server_time": _now_str()}
+    return {
+        "started": True,
+        "message": "东财刷新已在后台启动",
+        "server_time": _now_str(),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -371,8 +401,18 @@ def post_eastmoney_refresh():
 # 2026-08 信号体系升级：移除 升级条件/预期收益日/操作来源/生成依据，
 # 新增 预期触发率/目标止损（P0 预期触发率=—，P1 必填百分比）。
 _SIGNAL_COLUMNS = [
-    "优先级", "标的", "触发条件", "操作类型", "状态", "方向", "紧急度",
-    "预期触发率", "目标/止损", "有效时段", "仓位", "信号ID",
+    "优先级",
+    "标的",
+    "触发条件",
+    "操作类型",
+    "状态",
+    "方向",
+    "紧急度",
+    "预期触发率",
+    "目标/止损",
+    "有效时段",
+    "仓位",
+    "信号ID",
 ]
 
 
@@ -395,7 +435,7 @@ def _parse_signals(markdown: str) -> list[dict]:
 
     rows = []
     header: dict[str, int] | None = None
-    for line in lines[idx + 1:]:
+    for line in lines[idx + 1 :]:
         if line.strip().startswith("## "):
             break  # 下一个段落结束
         s = line.strip()
@@ -455,16 +495,30 @@ def get_daily_signals(date: str | None = None):
 
 
 @router.get("/reports")
-def get_reports(report_type: str | None = Query(None, alias="type"),
-                limit: int = 50, date: str | None = None):
+def get_reports(
+    report_type: str | None = Query(None, alias="type"),
+    limit: int = 50,
+    date: str | None = None,
+):
     """报告列表（不含 markdown）。?type=&limit=&date= 过滤。"""
     if date:
         rows = []
         for t in db.report_types_for_date(date):
             r = db.report_get(date, t)
             if r:
-                rows.append({k: r[k] for k in
-                             ("id", "report_date", "report_type", "status", "generated_at", "source_file")})
+                rows.append(
+                    {
+                        k: r[k]
+                        for k in (
+                            "id",
+                            "report_date",
+                            "report_type",
+                            "status",
+                            "generated_at",
+                            "source_file",
+                        )
+                    }
+                )
         return {"items": rows, "count": len(rows)}
     items = db.report_list(limit=min(max(limit, 1), 500), report_type=report_type)
     return {"items": items, "count": len(items)}
@@ -490,36 +544,90 @@ def post_reports_import():
 # 调度器
 # ═════════════════════════════════════════════════════════════════
 
+
 @router.get("/scheduler/tasks")
 def get_scheduler_tasks():
     """task_schedule.json 中每日复盘任务 + 今日交易日状态 + 最近一次运行。"""
+    from agent import db as agent_db
+
     today = datetime.now().date()
+    today_str = today.strftime("%Y-%m-%d")
     is_td = scheduler.is_trading_day(today)
+    online = agent_db.meta_get("xiaoman_online") == "1"
+
+    def _is_daily(task):
+        """每天运行一次：非 hourly 且 days_of_week 是全部工作日或 None。"""
+        if task.get("hourly"):
+            return False
+        days = task.get("days_of_week")
+        if days is None:
+            return True
+        return len(days) >= 5
+
+    def _last_run_for_task(task, latest):
+        """构造 last_run，daily 且今天未运行 → 返回 None。"""
+        if latest is None:
+            return None
+        if _is_daily(task) and (latest["run_time"] or "").startswith(today_str):
+            return {
+                "status": latest["status"],
+                "trigger": latest["trigger"],
+                "run_time": latest["run_time"],
+                "duration_sec": latest["duration_sec"],
+                "id": latest["id"],
+            }
+        if _is_daily(task):
+            return None
+        return {
+            "status": latest["status"],
+            "trigger": latest["trigger"],
+            "run_time": latest["run_time"],
+            "duration_sec": latest["duration_sec"],
+            "id": latest["id"],
+        }
+
     tasks = []
     for t in scheduler.scoped_tasks():
         latest = db.scheduler_latest(t["task_id"])
-        tasks.append({
-            "task_id": t["task_id"],
-            "description": t.get("description", ""),
-            "target_time": t.get("target_time") or f"每小时 :{t.get('target_minute','?')}",
-            "hourly": bool(t.get("hourly")),
-            "days_of_week": t.get("days_of_week"),
-            "trading_day_required": bool(t.get("trading_day_required", False)),
-            "prompt_file": t.get("prompt_file", ""),
-            "last_run": {
-                "status": latest["status"] if latest else None,
-                "trigger": latest["trigger"] if latest else None,
-                "run_time": latest["run_time"] if latest else None,
-                "duration_sec": latest["duration_sec"] if latest else None,
-                "id": latest["id"] if latest else None,
-            } if latest else None,
-        })
+        tasks.append(
+            {
+                "task_id": t["task_id"],
+                "description": t.get("description", ""),
+                "target_time": t.get("target_time")
+                or f"每小时 :{t.get('target_minute', '?')}",
+                "hourly": bool(t.get("hourly")),
+                "days_of_week": t.get("days_of_week"),
+                "trading_day_required": bool(t.get("trading_day_required", False)),
+                "prompt_file": t.get("prompt_file", ""),
+                "is_daily": _is_daily(t),
+                "last_run": _last_run_for_task(t, latest),
+            }
+        )
+
+    # 拆分：每日一次 vs 其他频率，各自按时间排序
+    daily_tasks = [t for t in tasks if t["is_daily"]]
+    other_tasks = [t for t in tasks if not t["is_daily"]]
+
+    def _time_sort_key(task):
+        t = task["target_time"]
+        try:
+            h, m = t.split(":")
+            return (int(h), int(m))
+        except (ValueError, IndexError):
+            return (99, 0)
+
+    daily_tasks.sort(key=_time_sort_key)
+    other_tasks.sort(key=_time_sort_key)
+
     return {
         "date": today.isoformat(),
         "is_trading_day": is_td,
         "next_trading_day": (scheduler.next_trading_day(today) or today).isoformat(),
         "auto_enabled": scheduler.engine.auto_enabled(),
+        "online": online,
         "tasks": tasks,
+        "daily_tasks": daily_tasks,
+        "other_tasks": other_tasks,
     }
 
 
@@ -532,6 +640,7 @@ def get_scheduler_status():
 def get_scheduler_engine():
     """当前执行引擎（dsh=主 / claude=辅）与可选项。"""
     from dashboard import scheduler as sched_mod
+
     return {
         "engine": sched_mod.resolve_engine(),
         "available": ["dsh", "claude"],
@@ -544,6 +653,7 @@ def get_scheduler_engine():
 def put_scheduler_engine(payload: dict):
     """切换执行引擎：dsh | claude（持久化到 meta，下次运行生效）。"""
     from dashboard import scheduler as sched_mod
+
     engine = str((payload or {}).get("engine", "")).strip().lower()
     if engine not in ("dsh", "claude"):
         raise HTTPException(400, "engine 必须是 dsh 或 claude")
@@ -564,7 +674,8 @@ def post_scheduler_auto(payload: dict):
     return {
         "ok": True,
         "auto_enabled": scheduler.engine.auto_enabled(),
-        "message": "自动调度已开启（引擎随 dashboard 进程运行）" if enabled
+        "message": "自动调度已开启（引擎随 dashboard 进程运行）"
+        if enabled
         else "自动调度已关闭（仅保留手动触发）",
     }
 
@@ -581,7 +692,9 @@ def post_scheduler_run(task_id: str):
 
 @router.get("/scheduler/runs")
 def get_scheduler_runs(task_id: str | None = None, limit: int = 50):
-    return {"items": db.scheduler_runs_list(task_id=task_id, limit=min(max(limit, 1), 200))}
+    return {
+        "items": db.scheduler_runs_list(task_id=task_id, limit=min(max(limit, 1), 200))
+    }
 
 
 @router.get("/scheduler/runs/{run_id}/log")
@@ -595,6 +708,7 @@ def get_scheduler_run_log(run_id: int):
 # ═════════════════════════════════════════════════════════════════
 # 企业微信信号通知
 # ═════════════════════════════════════════════════════════════════
+
 
 @router.get("/notify/status")
 def get_notify_status():

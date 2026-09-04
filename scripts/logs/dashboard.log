@@ -1,1 +1,35 @@
 [dashboard] AStock ETF Dashboard v2 starting at http://localhost:8000
+[app] DB in memory mode �� cloud backup loop started (15min)
+[app] Syncing strategy definitions (idempotent)...
+[sync] Strategy KB synced from strategy_kb.py
+[sync] Strategy definitions re-synced (idempotent).
+[app] Pre-loading strategy modules...
+[app]   daily_signal loaded (19 strategies)
+[app] Background: warming signal cache...
+[app] Startup complete — server ready at http://localhost:8000
+[app] Background: restoring data from cloud (TOS)...
+INFO:     127.0.0.1:54176 - "GET /api/agent/status HTTP/1.1" 200 OK
+[sync] K-line fetch returned empty for 513100 (2026-09-03~2026-09-04), API may not have recent data available
+[app]   restore exit=1: tock-anayisis\my_doc\ÿ�ո���\reports\weekly\�ź������ܱ�.md
+ok: daily-reports/weekly/2026-09-03_�ܱ�.md -> E:\ideaworkspace\astock-anayisis\my_doc\ÿ�ո���\reports\weekly\2026-09-03_�ܱ�.md
+�ָ�����ʧ�ܣ����ϡ�
+
+[app] Importing 每日复盘 data (reports/holdings/trades)...
+[sync] K-line fetch returned empty for 518880 (2026-09-03~2026-09-04), API may not have recent data available
+[app]   Signal cache ready: 19/19 strategies
+INFO:     127.0.0.1:54178 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54344 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54345 - "GET /api/agent/status HTTP/1.1" 200 OK
+[app]   reports uploaded: 128, imported: 0
+[app]   trades imported from 每日调仓.md
+[scheduler] engine started (auto=True)
+[notify] watcher started
+INFO:     127.0.0.1:54552 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54553 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54764 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54767 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54964 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54966 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55165 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55166 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55381 - "GET /api/agent/status HTTP/1.1" 200 OK
