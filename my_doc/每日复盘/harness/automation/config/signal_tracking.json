@@ -2,7 +2,7 @@
   "_schema": "1.0",
   "_description": "跨日信号追踪数据库: 记录所有已触发信号的完整生命周期和P&L",
   "_created": "2026-07-24",
-  "_updated": "2026-09-02",
+  "_updated": "2026-09-03",
   "_rules": {
     "high_urgency_tracking_days": 2,
     "low_urgency_default_days": 5,
@@ -261,14 +261,26 @@
       "trigger_date": "2026-09-01",
       "entry_price": 0.767,
       "shares": 12200,
-      "status": "triggered",
+      "status": "settled",
       "status_history": [
         {
           "date": "2026-09-01",
           "status": "triggered",
           "note": "从每日信号.md解析录入"
+        },
+        {
+          "date": "2026-09-03",
+          "status": "settled",
+          "note": "T+3目标价结算: miss @0.748"
         }
-      ]
+      ],
+      "pnl": -231.8,
+      "avoided_loss": 0.0,
+      "outcome": "miss",
+      "settle_price": 0.748,
+      "settle_date": "2026-09-03",
+      "exit_date": "2026-09-03",
+      "holding_days": 3
     },
     {
       "signal_id": "SIG-20260902-01",
@@ -299,17 +311,17 @@
   ],
   "aggregates": {
     "total_signals_tracked": 8,
-    "total_resolved": 4,
-    "total_open": 4,
-    "total_pnl_amount": 146.7,
+    "total_resolved": 5,
+    "total_open": 3,
+    "total_pnl_amount": -85.1,
     "total_avoided_loss": 21.35,
     "win_count": 3,
-    "lose_count": 1,
+    "lose_count": 2,
     "by_urgency": {
       "high": {
         "count": 7,
-        "resolved": 3,
-        "total_pnl": 36.9,
+        "resolved": 4,
+        "total_pnl": -194.9,
         "total_avoided_loss": 21.35
       },
       "low": {
@@ -327,8 +339,8 @@
       },
       "P1": {
         "count": 5,
-        "resolved": 4,
-        "total_pnl": 146.7
+        "resolved": 5,
+        "total_pnl": -85.1
       },
       "P2": {
         "count": 0,
@@ -336,14 +348,14 @@
         "total_pnl": 0.0
       }
     },
-    "win_rate": 75.0
+    "win_rate": 60.0
   },
   "aggregation": {
     "by_urgency": {
       "high": {
         "count": 7,
-        "settled": 3,
-        "total_pnl": 36.9,
+        "settled": 4,
+        "total_pnl": -194.9,
         "win_count": 2
       },
       "low": {
@@ -362,8 +374,8 @@
       },
       "P1": {
         "count": 5,
-        "settled": 4,
-        "total_pnl": 146.7,
+        "settled": 5,
+        "total_pnl": -85.10000000000002,
         "win_count": 3
       },
       "P2": {
@@ -376,8 +388,8 @@
     "by_trade_type": {
       "buy": {
         "count": 4,
-        "settled": 3,
-        "total_pnl": 146.7,
+        "settled": 4,
+        "total_pnl": -85.10000000000002,
         "win_count": 3
       },
       "sell": {
@@ -414,8 +426,8 @@
       },
       "159825": {
         "count": 1,
-        "settled": 0,
-        "total_pnl": 0.0,
+        "settled": 1,
+        "total_pnl": -231.8,
         "win_count": 0
       }
     }

@@ -1472,9 +1472,10 @@ function applyModeUI(mode) {
   _currentMode = mode;
   const nav = $el('topnav');
   if (nav) nav.classList.toggle('mode-admin', mode === 'admin');
+  const inAdmin = mode === 'admin';
+  document.body.classList.toggle('mode-admin', inAdmin);
   const btn = $el('mode-switch-btn');
   if (btn) {
-    const inAdmin = mode === 'admin';
     btn.textContent = inAdmin ? '🏠 进入主页' : '🛠️ 进入后台';
     btn.title = inAdmin ? '返回主页' : '进入后台';
     btn.classList.toggle('mode-on', inAdmin);
@@ -1490,7 +1491,7 @@ function switchMode() {
   const target = _currentMode === 'admin' ? 'home' : 'admin';
   applyModeUI(target);
   // 进入后台默认落在“工作日程”，进入主页默认落在“策略全景”
-  switchView(target === 'admin' ? 'view-scheduler' : 'view-strategies');
+  switchView(target === 'admin' ? 'view-agent' : 'view-strategies');
 }
 
 function setupModeUI() {

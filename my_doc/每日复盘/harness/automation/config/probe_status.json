@@ -1,32 +1,32 @@
 {
   "status": {
-    "push2": "fail",
-    "push2his": "fail",
+    "push2": "ok",
+    "push2his": "ok",
     "tencent": "ok",
     "ths": "ok",
     "push2ex": "ok",
     "mootdx": "ok",
     "datacenter": "ok",
-    "timestamp": "2026-09-03 09:14:05"
+    "timestamp": "2026-09-03 15:52:58"
   },
-  "overall": "partial",
-  "ok_count": 5,
+  "overall": "all_ok",
+  "ok_count": 7,
   "total_sources": 7,
   "paths": {
     "industry_ranking": {
-      "primary": "腾讯财经批量行情自算（push2 不可达）",
-      "fallback": "同花顺热点题材频次推断",
-      "note": "⚠️ push2 不可达，板块排名基于腾讯批量行情 + 同花顺热点题材频次综合判断"
+      "primary": "东财 push2 industry_comparison",
+      "fallback": "腾讯财经批量行情自算",
+      "note": ""
     },
     "northbound": {
-      "primary": "同花顺 hsgtApi（实时）",
-      "fallback": "本地 CSV 缓存（历史数据）",
-      "note": "⚠️ push2 不可达，北向资金数据源自同花顺 hsgtApi 或本地缓存"
+      "primary": "东财 push2 北向数据",
+      "fallback": "同花顺 hsgtApi + 本地 CSV 缓存",
+      "note": ""
     },
     "fund_flow": {
-      "primary": "mootdx 量价估算 + 腾讯换手率",
-      "fallback": "标记'数据缺失'",
-      "note": "⚠️ push2his 不可达，资金流数据基于 mootdx 量价 + 腾讯换手率估算，精度有限"
+      "primary": "东财 push2his 个股资金流（日级120日）",
+      "fallback": "mootdx 量价估算 + 腾讯换手率",
+      "note": ""
     },
     "margin": {
       "primary": "东财 datacenter 融资融券",

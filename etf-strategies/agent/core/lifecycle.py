@@ -1,15 +1,38 @@
-"""lifecycle.py — 常驻进程生命周期：主循环 / 健康探针 / RSS 节流.
+"""lifecycle.py — 常驻进程生命周期：主循环 / 健康探针 / 行为状态机.
 
 设计：
 - tick() 可独立调用并返回状态 dict（便于测试与手动触发）
 - AgentLoop.run() 死循环（常驻入口 `python -m agent` 使用）
 - heartbeat 写 metadata['agent_heartbeat']，dashboard 状态接口据此判断存活
 """
+
 import time
 from datetime import datetime
 
 from agent import config, db as agent_db
 from agent.core import behavior, knowledge
+
+_STATE_LABELS = {
+    "reading": "📖 阅读",
+    "gaming": "🎮 打游戏",
+    "drama": "🎬 煲剧",
+    "shopping": "🛍️ 逛淘宝",
+    "music": "🎧 听歌",
+    "cooking": "🍳 煮泡面",
+    "cat": "🐱 撸猫",
+    "yoga": "🧘 做瑜伽",
+    "tea": "☕ 喝奶茶",
+    "drawing": "🎨 画画",
+    "social": "📱 刷朋友圈",
+    "cleaning": "🧹 收拾房间",
+    "takeout": "🍜 叫外卖",
+    "nap": "💤 补觉",
+    "daydream": "🌙 发呆",
+    "sleep": "😴 睡觉",
+    "emo": "🌧️ emo",
+    "writing": "📝 写日记",
+    "thinking": "💡 思考",
+}
 
 
 def heartbeat(db=None):
@@ -53,50 +76,99 @@ def _custom_due(db, now):
     return (now - prev).total_seconds() >= config.CUSTOM_SOURCE_FETCH_INTERVAL_SECONDS
 
 
-def tick(now=None, db=None, llm_fn=None):
-    """一轮例行工作：heartbeat + RSS 增量（节流）+ 自定义源采集 + 发文调度。
+def _state_label(state_id):
+    return _STATE_LABELS.get(state_id, "🌙 发呆")
 
-    返回状态 dict：{"today", "rss", "custom", "publish"}；异常不抛出，记入返回。
+
+def tick(now=None, db=None, llm_fn=None):
+    """一轮例行工作。
+
+    1. heartbeat + RSS 入库（服务端自动拉取，不进 Prompt）
+    2. 自定义源采集（节流，高成本 6h 间隔）
+    3. 状态机：检查过期 → 硬编码权重选状态 → 选中"阅读"时执行阅读 Prompt
+    4. 每日发文调度
+    5. cloud backup
     """
     now = now or datetime.now()
     db = db or agent_db
     today = now.strftime("%Y-%m-%d")
     heartbeat(db)
 
-    result = {"today": today, "rss": None, "custom": None, "publish": None,
-              "post": None}
+    result = {
+        "today": today,
+        "rss": None,
+        "custom": None,
+        "state": None,
+        "read": None,
+        "publish": None,
+    }
 
+    # 1. RSS 入库（服务端自动执行，不入 Prompt；小满"阅读"时从库中选）
     if _rss_due(db, now):
         try:
-            result["rss"] = knowledge.fetch_and_store(db=db)
+            rss_result = knowledge.fetch_and_store(db=db)
+            result["rss"] = rss_result
             db.meta_set("last_rss_fetch_at", now.strftime("%Y-%m-%d %H:%M:%S"))
         except Exception as e:
             result["rss"] = {"error": str(e)}
 
+    # 2. 自定义源采集（节流，LLM 调用）
     if _custom_due(db, now):
         try:
-            result["custom"] = knowledge.collect_custom_sources(
-                db=db, llm_fn=llm_fn)
+            result["custom"] = knowledge.collect_custom_sources(db=db, llm_fn=llm_fn)
             db.meta_set("last_custom_fetch_at", now.strftime("%Y-%m-%d %H:%M:%S"))
         except Exception as e:
             result["custom"] = {"error": str(e)}
 
-    # 发动态（③：微博式短文本，活跃时段 + 节流由 run_post_pipeline 判断）
-    try:
-        result["post"] = behavior.run_post_pipeline(
-            now=now, llm_fn=llm_fn, db=db)
-    except Exception as e:
-        result["post"] = {"posted": False, "reason": f"error: {e}",
-                          "post_id": None}
+    # 3. 状态机
+    state_current = db.meta_get("xiaoman_current_state")
+    state_until = db.meta_get("xiaoman_state_until")
+    state_expired = True
+    if state_until:
+        try:
+            if datetime.strptime(state_until, "%Y-%m-%d %H:%M:%S") > now:
+                state_expired = False
+        except ValueError:
+            pass
 
+    if state_expired:
+        decision = behavior.pick_random_state(db=db, now=now)
+        until_dt = datetime.fromisoformat(decision["until_iso"])
+        db.meta_set("xiaoman_current_state", decision["id"])
+        db.meta_set("xiaoman_state_until", until_dt.strftime("%Y-%m-%d %H:%M:%S"))
+
+        if decision["require_llm"] and decision["id"] == "reading":
+            try:
+                result["read"] = behavior.execute_reading(db=db, llm_fn=llm_fn)
+            except Exception as e:
+                result["read"] = {"error": str(e)}
+
+        result["state"] = {
+            "id": decision["id"],
+            "label": decision["label"],
+            "duration_minutes": decision["duration_minutes"],
+            "until": decision["until_display"],
+        }
+    else:
+        result["state"] = {
+            "id": state_current or "daydream",
+            "label": _state_label(state_current or "daydream"),
+            "active": True,
+        }
+
+    # 4. 每日发文
     try:
         result["publish"] = behavior.run_publish_pipeline(
-            today, now=(now.hour, now.minute), llm_fn=llm_fn, db=db)
+            today, now=(now.hour, now.minute), llm_fn=llm_fn, db=db
+        )
     except Exception as e:
-        result["publish"] = {"published": False, "reason": f"error: {e}",
-                             "article_id": None}
+        result["publish"] = {
+            "published": False,
+            "reason": f"error: {e}",
+            "article_id": None,
+        }
 
-    # 严格零本地：memory 模式快照回传 TOS（file 模式 no-op）
+    # 5. cloud backup
     try:
         result["backup"] = agent_db.cloud_backup()
     except Exception as e:
@@ -121,7 +193,7 @@ class AgentLoop:
         try:
             self.last_status = tick(db=self.db)
             self.last_error = None
-        except Exception as e:  # 兜底：单轮异常不杀进程
+        except Exception as e:
             self.last_error = str(e)
         return self.last_status
 

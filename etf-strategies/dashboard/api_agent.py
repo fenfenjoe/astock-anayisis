@@ -11,6 +11,7 @@
   GET    /api/agent/articles                文章列表
   GET    /api/agent/articles/{aid}          文章详情
 """
+
 import json
 
 import anyio
@@ -48,29 +49,35 @@ def _state(alive: bool, attendance: str, current_task: dict | None) -> str:
 
 @router.get("/status")
 def agent_status():
-    """角色状态：进程存活（heartbeat 距今 <15min）、出勤（上班/请假）、当前任务。"""
+    """角色状态：进程存活（heartbeat 距今 <15min）、出勤（上班/请假）、当前任务、行为状态。"""
     hb_age = lifecycle.heartbeat_age_seconds()
-    # 聚合调度器：上班=auto 开 / 请假=auto 关；正在做XXX = 当前执行任务
     sched_status = None
     try:
         from dashboard import scheduler as sched
+
         sched_status = sched.engine.status()
     except Exception:
         pass
     attendance = (sched_status or {}).get("attendance") or "leave"
     current = (sched_status or {}).get("current_task")
     alive = hb_age is not None and hb_age < 60 * 15
+
+    state_id = agent_db.meta_get("xiaoman_current_state") or "daydream"
+    state_until = agent_db.meta_get("xiaoman_state_until")
+
     return {
         "alive": alive,
-        "state": _state(alive, attendance, current),  # 机器可读状态（桌宠状态机）
+        "state": _state(alive, attendance, current),
         "heartbeat_age_seconds": hb_age,
         "dsh_ready": dsh_runner.find_dsh_bin() is not None,
-        # 人格化状态
         "attendance": attendance,
         "current_task": current,
         "mood": _mood(attendance, current),
         "published_on": agent_db.meta_get("published_on"),
         "last_rss_fetch_at": agent_db.meta_get("last_rss_fetch_at"),
+        "current_state": state_id,
+        "current_state_label": lifecycle._state_label(state_id),
+        "state_until": state_until,
     }
 
 
@@ -79,14 +86,18 @@ def _mood(attendance, current_task):
     if attendance != "on":
         return {"label": "请假中", "icon": "🏖️"}
     if current_task:
-        return {"label": f"正在做：{current_task.get('name', '任务')}",
-                "icon": "💼", "task": current_task}
+        return {
+            "label": f"正在做：{current_task.get('name', '任务')}",
+            "icon": "💼",
+            "task": current_task,
+        }
     return {"label": "摸鱼中", "icon": "🐟"}
 
 
 # ═══════════════════════════════════════════
 # 会话
 # ═══════════════════════════════════════════
+
 
 @router.post("/sessions")
 def create_session(body: dict):
@@ -120,6 +131,7 @@ def get_session_messages(sid: int):
 # 聊天（SSE 流式）
 # ═══════════════════════════════════════════
 
+
 @router.post("/sessions/{sid}/messages")
 async def chat_message(sid: int, request: Request):
     body = await request.json()
@@ -135,8 +147,7 @@ async def chat_message(sid: int, request: Request):
 
     async def event_gen():
         try:
-            status, out = await _run_thread(
-                lambda: dsh_runner.run_task(task))
+            status, out = await _run_thread(lambda: dsh_runner.run_task(task))
             if status != "success":
                 raise dsh_runner.DshRunnerError(f"dsh {status}: {out}")
             agent_db.message_add(sid, "assistant", out, sources=sources)
@@ -154,6 +165,7 @@ async def chat_message(sid: int, request: Request):
 # ═══════════════════════════════════════════
 # 素材源（① 自定义站点 / 手动喂 URL）
 # ═══════════════════════════════════════════
+
 
 @router.get("/sources")
 def list_sources():
@@ -208,13 +220,17 @@ def toggle_source(sid: int):
 # 文章
 # ═══════════════════════════════════════════
 
+
 @router.get("/articles")
 def list_articles(limit: int = 50, kind: str | None = None):
     """文章/动态列表；kind=article|post 过滤（省略返回全部，时间倒序）。"""
     if kind and kind not in ("article", "post"):
         raise HTTPException(400, "kind 必须是 article 或 post")
-    return {"articles": [web.article_card(a)
-                         for a in agent_db.article_list(limit, kind=kind)]}
+    return {
+        "articles": [
+            web.article_card(a) for a in agent_db.article_list(limit, kind=kind)
+        ]
+    }
 
 
 @router.get("/articles/{aid}")

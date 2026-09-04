@@ -64,7 +64,49 @@
   --header-h: 56px;
 }
 
-/* ── Reset ── */
+/* ── Admin mode: 小满暖色系覆写 ── */
+body.mode-admin {
+  --accent-blue:  oklch(0.78 0.15 60);   /* 蜜橘替代科技蓝 */
+  --accent-cyan:  oklch(0.72 0.12 90);   /* 琥珀替代数据青 */
+  --accent-green: oklch(0.66 0.15 130);   /* 暖绿 */
+  --accent-red:   oklch(0.58 0.22 20);    /* 暖红 */
+  --bg-deep:      oklch(0.06 0.015 80);   /* 暖暗底 */
+  --bg-primary:   oklch(0.10 0.018 85);
+  --bg-surface:   oklch(0.13 0.018 85);
+  --bg-surface-2: oklch(0.16 0.018 85);
+  --bg-hover:     oklch(0.19 0.02 85);
+  --bg-selected:  oklch(0.22 0.04 70);
+  --border:       oklch(0.24 0.03 85);
+  --border-light: oklch(0.30 0.03 85);
+}
+body.mode-admin .bg-glow {
+  background: radial-gradient(circle, oklch(0.78 0.15 60 / 0.08) 0%, transparent 70%);
+}
+body.mode-admin .tab.active {
+  color: var(--accent-cyan);
+  border-bottom-color: var(--accent-cyan);
+}
+body.mode-admin .btn-primary {
+  background: oklch(0.25 0.08 70);
+  border-color: oklch(0.35 0.10 70);
+  color: var(--accent-cyan);
+}
+body.mode-admin .btn-primary:hover {
+  background: oklch(0.30 0.09 70);
+}
+body.mode-admin .btn-mode-switch {
+  background: oklch(0.20 0.06 70);
+  border-color: oklch(0.32 0.10 70);
+  color: var(--accent-cyan);
+}
+body.mode-admin .btn-mode-switch:hover {
+  background: oklch(0.26 0.08 70);
+}
+body.mode-admin .btn-mode-switch.mode-on {
+  background: oklch(0.22 0.08 220);
+  border-color: oklch(0.34 0.12 220);
+  color: oklch(0.68 0.16 145);
+}
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html {

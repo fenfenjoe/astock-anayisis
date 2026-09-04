@@ -12,6 +12,7 @@ agent_metadata   key-value（heartbeat / 每日发文状态）
 设计：与 dashboard/db.py 同模式（get_conn + WAL + foreign_keys）。
 多进程（dashboard + agent 常驻）共用同一 db 文件安全（WAL 短事务）。
 """
+
 import json
 import os
 import sqlite3
@@ -33,8 +34,11 @@ _mem_conn: sqlite3.Connection | None = None
 _SNAPSHOT_KEY = "agent.db"  # TOS 内 sqlite/<ts>/agent.db
 
 try:
-    from cloud_store import (get_object as _cs_get, put_object as _cs_put,
-                             list_objects as _cs_list)
+    from cloud_store import (
+        get_object as _cs_get,
+        put_object as _cs_put,
+        list_objects as _cs_list,
+    )
 except ImportError:
     _cs_get = _cs_put = _cs_list = None
 
@@ -56,6 +60,7 @@ def _deserialize_mem(data: bytes) -> bool:
     tmp = None
     try:
         import tempfile
+
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             f.write(data)
             tmp = f.name
@@ -103,6 +108,7 @@ def cloud_backup() -> bool:
     except Exception:
         return False
 
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS agent_sessions (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -148,10 +154,14 @@ CREATE TABLE IF NOT EXISTS agent_knowledge (
     url          TEXT NOT NULL UNIQUE,       -- 去重 key
     summary      TEXT,
     content      TEXT,
+    viewpoint    TEXT,                       -- LLM 提取的核心观点（摘要级）
+    emotion      TEXT,                       -- 小满读完后的情绪标签：excited|angry|curious|calm|skeptical
+    memory       TEXT,                       -- 阅读记忆：LLM 生成的个人感受/联想（可跨会话检索）
+    read_at      TEXT,                       -- 小满最后阅读该条目的时间
     published_at TEXT,                       -- 源发布时间
     consumed     INTEGER NOT NULL DEFAULT 0, -- 已被发文消费
     fetched_at   TEXT DEFAULT (datetime('now','localtime'))
-);
+); 
 
 CREATE TABLE IF NOT EXISTS agent_metadata (
     key   TEXT PRIMARY KEY,
@@ -189,13 +199,21 @@ def init_db(db_path=None):
 
 
 def _migrate(conn):
-    """轻量列迁移（幂等）：老库补 kind 列。"""
-    cols = [r["name"] for r in conn.execute(
-        "PRAGMA table_info(agent_articles)")]
+    """轻量列迁移（幂等）：老库补 kind / viewpoint / emotion / memory / read_at 列。"""
+    cols = [r["name"] for r in conn.execute("PRAGMA table_info(agent_articles)")]
     if "kind" not in cols:
         conn.execute(
-            "ALTER TABLE agent_articles "
-            "ADD COLUMN kind TEXT NOT NULL DEFAULT 'article'")
+            "ALTER TABLE agent_articles ADD COLUMN kind TEXT NOT NULL DEFAULT 'article'"
+        )
+    kcols = [r["name"] for r in conn.execute("PRAGMA table_info(agent_knowledge)")]
+    for col, ddl in [
+        ("viewpoint", "ALTER TABLE agent_knowledge ADD COLUMN viewpoint TEXT"),
+        ("emotion", "ALTER TABLE agent_knowledge ADD COLUMN emotion TEXT"),
+        ("memory", "ALTER TABLE agent_knowledge ADD COLUMN memory TEXT"),
+        ("read_at", "ALTER TABLE agent_knowledge ADD COLUMN read_at TEXT"),
+    ]:
+        if col not in kcols:
+            conn.execute(ddl)
 
 
 @contextmanager
@@ -238,10 +256,12 @@ def _row_dict(row):
 # Schema 检查（测试用）
 # ═══════════════════════════════════════════
 
+
 def list_tables():
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
         return [r["name"] for r in rows]
 
 
@@ -249,25 +269,28 @@ def list_tables():
 # 会话 / 消息
 # ═══════════════════════════════════════════
 
+
 def session_create(title="新会话", persona=config.PERSONA_ID):
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO agent_sessions(persona, title) VALUES (?, ?)",
-            (persona, title))
+            "INSERT INTO agent_sessions(persona, title) VALUES (?, ?)", (persona, title)
+        )
         return cur.lastrowid
 
 
 def session_list():
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT * FROM agent_sessions ORDER BY updated_at DESC").fetchall()
+            "SELECT * FROM agent_sessions ORDER BY updated_at DESC"
+        ).fetchall()
         return [_row_dict(r) for r in rows]
 
 
 def session_get(session_id):
     with get_conn() as conn:
         r = conn.execute(
-            "SELECT * FROM agent_sessions WHERE id=?", (session_id,)).fetchone()
+            "SELECT * FROM agent_sessions WHERE id=?", (session_id,)
+        ).fetchone()
         return dict(r) if r else None
 
 
@@ -275,7 +298,9 @@ def session_rename(session_id, title):
     with get_conn() as conn:
         conn.execute(
             "UPDATE agent_sessions SET title=?, updated_at=datetime('now','localtime') "
-            "WHERE id=?", (title, session_id))
+            "WHERE id=?",
+            (title, session_id),
+        )
 
 
 def session_delete(session_id):
@@ -288,19 +313,21 @@ def message_add(session_id, role, content, sources=None):
         cur = conn.execute(
             "INSERT INTO agent_messages(session_id, role, content, sources) "
             "VALUES (?,?,?,?)",
-            (session_id, role, content,
-             json.dumps(sources or [], ensure_ascii=False)))
+            (session_id, role, content, json.dumps(sources or [], ensure_ascii=False)),
+        )
         conn.execute(
             "UPDATE agent_sessions SET updated_at=datetime('now','localtime') "
-            "WHERE id=?", (session_id,))
+            "WHERE id=?",
+            (session_id,),
+        )
         return cur.lastrowid
 
 
 def messages_by_session(session_id):
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT * FROM agent_messages WHERE session_id=? ORDER BY id",
-            (session_id,)).fetchall()
+            "SELECT * FROM agent_messages WHERE session_id=? ORDER BY id", (session_id,)
+        ).fetchall()
         return [_row_dict(r) for r in rows]
 
 
@@ -314,16 +341,30 @@ def messages_all():
 # 文章
 # ═══════════════════════════════════════════
 
-def article_create(title, summary, content, topics=None, sources=None,
-                   status="published", kind="article"):
+
+def article_create(
+    title,
+    summary,
+    content,
+    topics=None,
+    sources=None,
+    status="published",
+    kind="article",
+):
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO agent_articles(title, summary, content, topics, sources, status, kind) "
             "VALUES (?,?,?,?,?,?,?)",
-            (title, summary, content,
-             json.dumps(topics or [], ensure_ascii=False),
-             json.dumps(sources or [], ensure_ascii=False),
-             status, kind))
+            (
+                title,
+                summary,
+                content,
+                json.dumps(topics or [], ensure_ascii=False),
+                json.dumps(sources or [], ensure_ascii=False),
+                status,
+                kind,
+            ),
+        )
         return cur.lastrowid
 
 
@@ -333,19 +374,22 @@ def article_list(limit=50, kind=None):
             rows = conn.execute(
                 "SELECT * FROM agent_articles WHERE kind=? "
                 "ORDER BY published_at DESC, id DESC LIMIT ?",
-                (kind, limit)).fetchall()
+                (kind, limit),
+            ).fetchall()
         else:
             rows = conn.execute(
                 "SELECT * FROM agent_articles "
                 "ORDER BY published_at DESC, id DESC LIMIT ?",
-                (limit,)).fetchall()
+                (limit,),
+            ).fetchall()
         return [_row_dict(r) for r in rows]
 
 
 def article_get(article_id):
     with get_conn() as conn:
         r = conn.execute(
-            "SELECT * FROM agent_articles WHERE id=?", (article_id,)).fetchone()
+            "SELECT * FROM agent_articles WHERE id=?", (article_id,)
+        ).fetchone()
         return _row_dict(r) if r else None
 
 
@@ -353,26 +397,27 @@ def article_get(article_id):
 # 观点库
 # ═══════════════════════════════════════════
 
+
 def opinion_add(topic, opinion, article_id=None):
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO agent_opinions(topic, opinion, article_id) VALUES (?,?,?)",
-            (topic, opinion, article_id))
+            (topic, opinion, article_id),
+        )
         return cur.lastrowid
 
 
 def opinions_by_topic(topic):
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT * FROM agent_opinions WHERE topic=? ORDER BY id",
-            (topic,)).fetchall()
+            "SELECT * FROM agent_opinions WHERE topic=? ORDER BY id", (topic,)
+        ).fetchall()
         return [_row_dict(r) for r in rows]
 
 
 def opinions_all():
     with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM agent_opinions ORDER BY id").fetchall()
+        rows = conn.execute("SELECT * FROM agent_opinions ORDER BY id").fetchall()
         return [_row_dict(r) for r in rows]
 
 
@@ -380,19 +425,57 @@ def opinions_all():
 # 知识条目（RSS/搜索素材）
 # ═══════════════════════════════════════════
 
-def knowledge_upsert(source, title, url, summary=None, content=None,
-                     published_at=None):
+
+def knowledge_upsert(source, title, url, summary=None, content=None, published_at=None):
     """按 url 去重入库。返回 True=新增；False=已存在（不更新，保序）。"""
     with get_conn() as conn:
         exists = conn.execute(
-            "SELECT 1 FROM agent_knowledge WHERE url=?", (url,)).fetchone()
+            "SELECT 1 FROM agent_knowledge WHERE url=?", (url,)
+        ).fetchone()
         if exists:
             return False
         conn.execute(
             "INSERT INTO agent_knowledge(source, title, url, summary, content, published_at) "
             "VALUES (?,?,?,?,?,?)",
-            (source, title, url, summary, content, published_at))
+            (source, title, url, summary, content, published_at),
+        )
         return True
+
+
+def knowledge_set_memory(kid, viewpoint=None, emotion=None, memory=None, read_at=None):
+    """将阅读后的观点/情绪/记忆写回知识条目（阅读完成回调）。"""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE agent_knowledge SET "
+            "viewpoint=COALESCE(?, viewpoint), "
+            "emotion=COALESCE(?, emotion), "
+            "memory=COALESCE(?, memory), "
+            "read_at=COALESCE(?, read_at) "
+            "WHERE id=?",
+            (viewpoint, emotion, memory, read_at, kid),
+        )
+
+
+def knowledge_with_memory(limit=20):
+    """检索已有阅读记忆的条目（可供下次阅读时做上下文联想）。"""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM agent_knowledge WHERE memory IS NOT NULL "
+            "ORDER BY read_at DESC, id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [_row_dict(r) for r in rows]
+
+
+def knowledge_unread(limit=10):
+    """获取尚未被小满阅读过的条目（read_at IS NULL）。"""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM agent_knowledge WHERE read_at IS NULL AND consumed=0 "
+            "ORDER BY fetched_at DESC, id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [_row_dict(r) for r in rows]
 
 
 def knowledge_unconsumed(limit=20):
@@ -400,21 +483,21 @@ def knowledge_unconsumed(limit=20):
         rows = conn.execute(
             "SELECT * FROM agent_knowledge WHERE consumed=0 "
             "ORDER BY fetched_at DESC, id DESC LIMIT ?",
-            (limit,)).fetchall()
+            (limit,),
+        ).fetchall()
         return [_row_dict(r) for r in rows]
 
 
 def knowledge_mark_consumed(kid):
     with get_conn() as conn:
-        conn.execute(
-            "UPDATE agent_knowledge SET consumed=1 WHERE id=?", (kid,))
+        conn.execute("UPDATE agent_knowledge SET consumed=1 WHERE id=?", (kid,))
 
 
 def knowledge_all(limit=200):
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT * FROM agent_knowledge ORDER BY id DESC LIMIT ?",
-            (limit,)).fetchall()
+            "SELECT * FROM agent_knowledge ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
         return [_row_dict(r) for r in rows]
 
 
@@ -422,10 +505,12 @@ def knowledge_all(limit=200):
 # metadata（heartbeat / 每日发文状态）
 # ═══════════════════════════════════════════
 
+
 def meta_get(key):
     with get_conn() as conn:
         r = conn.execute(
-            "SELECT value FROM agent_metadata WHERE key=?", (key,)).fetchone()
+            "SELECT value FROM agent_metadata WHERE key=?", (key,)
+        ).fetchone()
         return r["value"] if r else None
 
 
@@ -434,18 +519,21 @@ def meta_set(key, value):
         conn.execute(
             "INSERT INTO agent_metadata(key, value) VALUES (?,?) "
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (key, value))
+            (key, value),
+        )
 
 
 # ═══════════════════════════════════════════
 # 素材源（自定义站点/手动 URL）
 # ═══════════════════════════════════════════
 
+
 def source_add(name, url, kind="website", note=None):
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO agent_sources(name, url, kind, note) VALUES (?,?,?,?)",
-            (name, url, kind, note))
+            (name, url, kind, note),
+        )
         return cur.lastrowid
 
 
@@ -453,18 +541,18 @@ def source_list(enabled_only=True):
     with get_conn() as conn:
         if enabled_only:
             rows = conn.execute(
-                "SELECT * FROM agent_sources WHERE enabled=1 "
-                "ORDER BY id").fetchall()
+                "SELECT * FROM agent_sources WHERE enabled=1 ORDER BY id"
+            ).fetchall()
         else:
-            rows = conn.execute(
-                "SELECT * FROM agent_sources ORDER BY id").fetchall()
+            rows = conn.execute("SELECT * FROM agent_sources ORDER BY id").fetchall()
         return [_row_dict(r) for r in rows]
 
 
 def source_get(source_id):
     with get_conn() as conn:
         r = conn.execute(
-            "SELECT * FROM agent_sources WHERE id=?", (source_id,)).fetchone()
+            "SELECT * FROM agent_sources WHERE id=?", (source_id,)
+        ).fetchone()
         return dict(r) if r else None
 
 
@@ -472,7 +560,8 @@ def source_set_enabled(source_id, enabled):
     with get_conn() as conn:
         conn.execute(
             "UPDATE agent_sources SET enabled=? WHERE id=?",
-            (1 if enabled else 0, source_id))
+            (1 if enabled else 0, source_id),
+        )
 
 
 def source_delete(source_id):

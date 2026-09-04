@@ -433,5 +433,5 @@
     deleteSource: deleteSource,
     newSession: newSession,
     send: send,
-  };
+  }; 
 })();

@@ -1,0 +1,19 @@
+﻿[2026-09-03T17:07:20] LOGIC_INSPECT 开始 | 交易日=是
+[A组] A1:PASS archive/20260903/早盘分析-staging.md 存在 (16724 bytes)
+[A组] A2:PASS archive/20260903/复盘分析-staging.md 存在 (9404 bytes)
+[B组] B1:PASS staging/今日-早盘分析.md 全部章节完整
+[B组] B2:PASS staging/今日-复盘分析.md 全部章节完整，核心教训>=2条，核心变量>=3个
+[B组] B3:PASS staging code-name 映射与 config/持仓.md 一致
+[B组] B4:PASS staging 文件新鲜，指向明日且内容充实
+[C组] C1:PASS reports/20260903/早盘报告.md 核心章节完整
+[C组] C2:PASS reports/20260903/每日信号.md 核心章节完整
+[C组] C3:PASS reports/20260903/复盘报告.md 核心章节完整
+[C组] C4:PASS task_state 与报告产出一致 (morning_analysis/evening_review 状态核对)
+[D组] D1:PASS config/持仓.md 与 每日调仓.md 一致 (5 个持仓, 含可用金额)
+[D组] D2:PASS task_state date=20260903, trading_day=True
+[D组] D3:PASS 无孤立信号 (8 条追踪中)
+[D组] D4:PASS 信号模型一致性 (模板/自动化/编排层 7 目标全部标记齐全)
+[E组] E1:PASS 经验文件无内容矛盾 (LLM 语义审查: 三份经验逐对比较, 冲突点均带场景限定+交叉引用)
+[E组] E2:PASS BUG_INDEX 统计 (OPEN=5,FIXED=12,WONT_FIX=1) 与实际一致
+汇总: 16 PASS, 0 FAIL, 0 WARN | 新增 BUG: 0 | PENDING_CONFIRMATION: 0 项
+[2026-09-03T17:08:31] LOGIC_INSPECT 结束 | 全部检查通过
