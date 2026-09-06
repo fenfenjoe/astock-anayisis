@@ -7,8 +7,9 @@
 #   powershell -ExecutionPolicy Bypass -File scripts/start_all.ps1 -Action stop
 #   powershell -ExecutionPolicy Bypass -File scripts/start_all.ps1 -Action status
 #
-# Deps: dsh (npm global), openviking-server (pip --user), python (etf-strategies)
-# Run scripts/sync_dsh.ps1 first to align versions and profiles.
+# Deps: node/npm (dsh 由 sync_dsh.ps1 自动检测/安装), python (etf-strategies)
+# Run scripts/sync_dsh.ps1 first: it auto-installs pnpm/dsh if missing,
+# syncs profiles, and installs profile plugin deps (dsh plugin --profile install).
 # ===========================================
 param([ValidateSet("start","stop","status")][string]$Action = "start")
 
@@ -34,6 +35,9 @@ $services = @(
      Cmd  = "python"; Args = @("-u", "-m", "agent"); WorkDir = $etfDir }
 )
 
+# dashboard 端口：8000 常被酷狗 KGService 等占用，改用 8010（app.py 支持 DASHBOARD_PORT）
+$env:DASHBOARD_PORT = "8010"
+
 # ── OpenViking 云版检测：ovcli.conf 指向云（非本地）→ 无需本地 server，跳过 ──
 $ovCliConf = Join-Path $env:USERPROFILE ".openviking\ovcli.conf"
 $cloudOpenViking = $false
@@ -54,8 +58,8 @@ function Get-PidFile([string]$name) { Join-Path $pidDir $name }
 
 function Is-Running([string]$pidFile) {
   if (Test-Path $pidFile) {
-    $pid = [int](Get-Content $pidFile -ErrorAction SilentlyContinue)
-    if ($pid -gt 0) { return [bool](Get-Process -Id $pid -ErrorAction SilentlyContinue) }
+    $procId = [int](Get-Content $pidFile -ErrorAction SilentlyContinue)
+    if ($procId -gt 0) { return [bool](Get-Process -Id $procId -ErrorAction SilentlyContinue) }
   }
   return $false
 }
@@ -126,20 +130,26 @@ foreach ($s in $services) {
 
 Write-Host ""
 Write-Host "All services started."
-if ($started.ContainsKey("dashboard")) {
-  Write-Host "  dashboard : http://localhost:8000  (进程已拉起；首次就绪需等云恢复/初始化，看 dashboard.log)"
+# 汇总以进程实际存活状态为准（$started 只含本次新拉起；早已在运行被 skip 的不在其中）
+$dashRun  = Is-Running (Get-PidFile "dashboard.pid")
+$agentRun = Is-Running (Get-PidFile "agent.pid")
+$ovRun    = Is-Running (Get-PidFile "openviking.pid")
+if ($dashRun) {
+  $note = if ($started.ContainsKey("dashboard")) { "进程已拉起；首次就绪需等云恢复/初始化，看 dashboard.log" } else { "已在运行" }
+  Write-Host "  dashboard : running  http://localhost:8010  ($note)"
 } else {
   Write-Host "  dashboard : 未启动（见 dashboard.log.err）"
 }
-if ($started.ContainsKey("openviking")) {
-  Write-Host "  openviking: http://127.0.0.1:1933"
+if ($ovRun) {
+  Write-Host "  openviking: running  http://127.0.0.1:1933"
 } elseif ($cloudOpenViking) {
   Write-Host "  openviking: 云版模式（本地未启动）— $($ovConf.url)"
 } else {
   Write-Host "  openviking: 未启动"
 }
-if ($started.ContainsKey("agent")) {
-  Write-Host "  agent     : 已启动 (python -m agent)"
+if ($agentRun) {
+  $note = if ($started.ContainsKey("agent")) { "本次拉起 (python -m agent)" } else { "已在运行 (python -m agent)" }
+  Write-Host "  agent     : running  $note"
 } else {
   Write-Host "  agent     : 未启动"
 }

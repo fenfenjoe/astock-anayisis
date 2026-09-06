@@ -15,11 +15,18 @@ try:
 except ImportError:
     pass
 
+from agent import db as agent_db
 from agent.core import lifecycle
 
 
 def main():
     print("[agent] 小满常驻进程启动（tick 间隔见 config）")
+    # ── 初始化 agent.db：file 模式建表/迁移；memory 模式在此从 TOS 载入最新快照，
+    #    保证台账/会话在每次启动后都能看到云端最新数据（含上次登录产生的内容）──
+    try:
+        agent_db.init_db()
+    except Exception as e:
+        print(f"[agent]   WARNING: agent.db init failed: {e}")
     # ── 云恢复：CLOUD_RESTORE_ON_START=1 时先拉取 TOS 最新数据 ──
     import os
     import subprocess

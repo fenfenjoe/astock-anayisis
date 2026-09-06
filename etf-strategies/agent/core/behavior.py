@@ -127,8 +127,21 @@ def run_publish_pipeline(today, now=None, llm_fn=None, db=None):
             "article_id": None,
         }
 
-    art = compose_article(pick["items"], llm_fn=llm_fn, db=db)
+    # "写文章" = 一条独立事件：开始 compose 时开记录，结束（含失败）时关闭
+    start_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ev_id = db.activity_start("writing", "📝 写文章", start_str, source="auto")
+
+    def _finish_writing(title=None, note=None):
+        db.activity_close_open(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        db.activity_set_note(ev_id, note or (f"标题：{title}" if title else ""))
+
+    try:
+        art = compose_article(pick["items"], llm_fn=llm_fn, db=db)
+    except Exception as e:
+        _finish_writing(note=f"写文异常：{e}")
+        raise
     if not art["ok"]:
+        _finish_writing(title=art.get("title") or "", note=f"未通过校验：{art['issues']}")
         return {
             "published": False,
             "reason": f"validation: {art['issues']}",
@@ -151,6 +164,7 @@ def run_publish_pipeline(today, now=None, llm_fn=None, db=None):
     for m in pick["items"]:
         db.knowledge_mark_consumed(m["id"])
     db.meta_set("published_on", today)
+    _finish_writing(title=art.get("title") or "", note=f"完成：{art.get('title') or ''}")
     return {"published": True, "reason": "done", "article_id": aid}
 
 
@@ -241,6 +255,104 @@ def pick_random_state(now=None, db=None):
     }
 
 
+# 认真/工作态（桌宠 working 语义，其余即"摸鱼"池）
+_PRODUCTIVE_IDS = {"reading", "writing", "thinking"}
+
+# 动作事件型状态：不占"常驻状态段"台账，由真实执行（阅读/写文章）时单独开/关事件记录
+_EVENT_KINDS = {"reading", "writing"}
+
+
+def pick_manual_slack(now=None, db=None):
+    """用户点"摸鱼"：从非工作/非睡觉的状态里按权重随机选一个。"""
+    now = now or datetime.now()
+    pool = load_behaviors()
+    cand = [
+        b for b in pool["behaviors"]
+        if b["id"] not in _PRODUCTIVE_IDS and b["id"] != "sleep"
+    ]
+    weights = [max(1, b["weight"]) for b in cand]
+    chosen = random.choices(cand, weights=weights, k=1)[0]
+    duration = random.randint(chosen["duration_min"], chosen["duration_max"])
+    until = now + timedelta(minutes=duration)
+    return {
+        "id": chosen["id"],
+        "label": chosen["label"],
+        "duration_minutes": duration,
+        "until_iso": until.isoformat(),
+        "until_display": until.strftime("%H:%M"),
+    }
+
+
+def pick_manual_reading(now=None):
+    """用户点"阅读"：固定进入阅读态（时长取行为池区间中值，30~60 取 45）。"""
+    now = now or datetime.now()
+    pool = load_behaviors()
+    b = next((x for x in pool["behaviors"] if x["id"] == "reading"), None)
+    label = b["label"] if b else "📖 阅读"
+    duration = 45
+    if b:
+        duration = (b.get("duration_min", 30) + b.get("duration_max", 60)) // 2
+    until = now + timedelta(minutes=duration)
+    return {
+        "id": "reading",
+        "label": label,
+        "duration_minutes": duration,
+        "until_iso": until.isoformat(),
+        "until_display": until.strftime("%H:%M"),
+    }
+
+
+def switch_state(target, now=None, db=None, source="auto"):
+    """统一的状态切换入口（自动状态机与用户手动按钮都走这里）。
+
+    语义（动作事件模型）：
+    - "阅读 / 写文章" 属动作事件：切换时只改 meta 当前状态，**不占常驻台账段**，
+      真正执行（execute_reading / 发文 compose）时再各自"开一条事件 → 结束后关闭"。
+    - 其余常驻状态（摸鱼/发呆/打游戏…）维持状态段台账：切换进来开一条（started_at），
+      切走时关掉上一条（ended_at）；tokens 暂无真实通道 → 保持 NULL=未计量。
+    - 每次切换把 xiaoman_state_seq +1（阅读执行器据此保证"每进一次阅读只读一次"）。
+    - 目标与当前常驻状态相同 → 不重复开记录，只顺延到期时间。
+
+    target: pick_random_state / pick_manual_* 返回的 dict（含 id/label/until_iso）。
+    返回 {"changed", "id", "label", "started_at", "until", "event"}。
+    """
+    now = now or datetime.now()
+    db = db or agent_db
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+    until_iso = target.get("until_iso") or ""
+    try:
+        until_dt = datetime.fromisoformat(until_iso) if until_iso else now
+    except ValueError:
+        until_dt = now
+    if not until_iso:
+        until_dt = now + timedelta(minutes=target.get("duration_minutes") or 30)
+
+    seq = int(db.meta_get("xiaoman_state_seq") or "0") + 1
+    db.meta_set("xiaoman_state_seq", str(seq))
+
+    is_event = target["id"] in _EVENT_KINDS
+    changed = True
+    if not is_event:
+        open_act = db.activity_open()
+        if open_act and open_act["kind"] == target["id"]:
+            changed = False  # 还在这件事上：不关旧开新，只顺延
+        if changed:
+            if open_act:
+                db.activity_close_open(now_str)
+            db.activity_start(target["id"], target["label"], now_str, source=source)
+
+    db.meta_set("xiaoman_current_state", target["id"])
+    db.meta_set("xiaoman_state_until", until_dt.strftime("%Y-%m-%d %H:%M:%S"))
+    return {
+        "changed": changed,
+        "id": target["id"],
+        "label": target["label"],
+        "started_at": now_str,
+        "until": until_dt.strftime("%H:%M"),
+        "event": is_event,
+    }
+
+
 def execute_reading(db=None, llm_fn=None):
     """执行阅读行为（进入"阅读"时调用一次）。
 
@@ -251,6 +363,19 @@ def execute_reading(db=None, llm_fn=None):
     """
     db = db or agent_db
     llm_fn = llm_fn or dsh_task_llm
+
+    # 阅读会话 = 一条独立事件：开始时开记录，结束（含失败）时关闭并写备注
+    start_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ev_id = db.activity_start("reading", "📖 阅读", start_str, source="auto")
+
+    def _finish_reading(result, err=None):
+        db.activity_close_open(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        note = f"读了 {result.get('read_count', 0)} 篇"
+        if err:
+            note += f"（异常：{err}）"
+        elif result.get("_parse_error"):
+            note += f"（解析异常：{result['_parse_error']}）"
+        db.activity_set_note(ev_id, note)
 
     template = load_reading_prompt()
     unread = db.knowledge_unread(limit=100)
@@ -281,7 +406,11 @@ def execute_reading(db=None, llm_fn=None):
     task = template.replace("<!-- UNREAD_ARTICLES -->", unread_text).replace(
         "<!-- PAST_MEMORIES -->", past_text
     )
-    text = llm_fn(task)
+    try:
+        text = llm_fn(task)
+    except Exception as e:
+        _finish_reading({"read_count": 0}, err=str(e))
+        raise
     result = _parse_reading_output(text)
 
     # 写入记忆：按 url 匹配
@@ -322,6 +451,7 @@ def execute_reading(db=None, llm_fn=None):
         posted += 1
 
     err = result.get("_parse_error")
+    _finish_reading(result)
     return {
         "read_count": result.get("read_count", 0),
         "posted_count": posted,
@@ -329,35 +459,45 @@ def execute_reading(db=None, llm_fn=None):
     }
 
 
-def _parse_reading_output(text):
-    """解析阅读输出 JSON（取最后一个完整的 {...} 块）。
+def _extract_outer_json(raw, wanted=None):
+    """从文本里提取可完整解码的 JSON 对象（容忍模型输出前后夹带的废话）。
 
-    容错：禁止 JSON {} 内的内容可能包含换行和嵌套对象，递归取最外层。
+    raw_decode 会从任一 '{' 起解码"第一个完整值"——嵌套对象自身也能解出，
+    所以不能直接取第一个：优先选含 wanted 键之一的对象；没有则退回解码成功里
+    最外层（位置最靠前的那个）。
     """
+    if not raw:
+        return None
+    dec = _json.JSONDecoder()
+    wanted = wanted or ()
+    best_pos, best_obj = None, None
+    idx = raw.rfind("{")
+    while idx != -1:
+        try:
+            obj, _ = dec.raw_decode(raw[idx:])
+        except Exception:
+            obj = None
+        if isinstance(obj, dict):
+            if wanted and any(k in obj for k in wanted):
+                return obj
+            if best_pos is None:
+                best_pos, best_obj = idx, obj
+        idx = raw.rfind("{", 0, idx)
+    return best_obj
+
+
+def _parse_reading_output(text):
+    """解析阅读输出 JSON（取含 read_count/articles/posts 的最外层完整对象）。"""
     if not text:
         return {"read_count": 0, "articles": [], "posts": [], "_parse_error": "empty"}
 
-    raw = text.strip()
-    # 从最后一个 { 到最后一个 } 之间提取
-    start = raw.rfind("{")
-    end = raw.rfind("}")
-    if start == -1 or end <= start:
+    obj = _extract_outer_json(text.strip(), wanted=("read_count", "articles", "posts"))
+    if obj is None:
         return {
             "read_count": 0,
             "articles": [],
             "posts": [],
             "_parse_error": "no_json_block",
-        }
-
-    raw = raw[start : end + 1]
-    try:
-        obj = _json.loads(raw)
-    except Exception as e:
-        return {
-            "read_count": 0,
-            "articles": [],
-            "posts": [],
-            "_parse_error": f"json_parse: {e}",
         }
 
     return {

@@ -17,7 +17,6 @@
     {"id": "daydream",   "label": "🌙 发呆",   "weight": 10, "duration_min": 8,  "duration_max": 30,  "require_llm": false},
     {"id": "sleep",      "label": "😴 睡觉",   "weight": 0,  "duration_min": 120, "duration_max": 360, "require_llm": false},
     {"id": "emo",        "label": "🌧️ emo",   "weight": 3,  "duration_min": 10, "duration_max": 30,  "require_llm": false},
-    {"id": "writing",    "label": "📝 写日记", "weight": 5,  "duration_min": 10, "duration_max": 25,  "require_llm": false},
     {"id": "thinking",   "label": "💡 思考",   "weight": 6,  "duration_min": 10, "duration_max": 30,  "require_llm": false}
   ],
   "time_modifiers": {

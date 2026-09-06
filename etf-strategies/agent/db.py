@@ -177,6 +177,17 @@ CREATE TABLE IF NOT EXISTS agent_sources (
     enabled     INTEGER NOT NULL DEFAULT 1,
     created_at  TEXT DEFAULT (datetime('now','localtime'))
 );
+
+CREATE TABLE IF NOT EXISTS agent_activities (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind        TEXT NOT NULL,                -- 事件/状态 id（reading/writing/tea/...）
+    label       TEXT NOT NULL,                -- 展示名（含 emoji，如 📖 阅读 / 📝 写文章）
+    source      TEXT NOT NULL DEFAULT 'auto', -- auto=自动 | manual=用户手动
+    started_at  TEXT NOT NULL,                -- 开始时间（切换/开始执行时写入）
+    ended_at    TEXT,                         -- 结束时间（完成/切换走时写入）
+    note        TEXT,                         -- 备注（如：读了哪几篇 / 写了哪篇文章）
+    tokens      INTEGER                       -- 该时段真实 token 用量（暂无通道 → NULL=未计量）
+);
 """
 
 _JSON_FIELDS = ("sources", "topics")
@@ -214,6 +225,9 @@ def _migrate(conn):
     ]:
         if col not in kcols:
             conn.execute(ddl)
+    acols = [r["name"] for r in conn.execute("PRAGMA table_info(agent_activities)")]
+    if "note" not in acols:
+        conn.execute("ALTER TABLE agent_activities ADD COLUMN note TEXT")
 
 
 @contextmanager
@@ -521,6 +535,68 @@ def meta_set(key, value):
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             (key, value),
         )
+
+
+# ═══════════════════════════════════════════
+# 活动台账（agent_activities）：状态切换时"关旧开新"，供认识页"做过的事"展示
+# ═══════════════════════════════════════════
+
+
+def activity_start(kind, label, started_at, source="auto"):
+    """开启一条新的活动记录（= 状态切换进来时调用）。返回新记录 id。"""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO agent_activities(kind, label, started_at, source) "
+            "VALUES (?,?,?,?)",
+            (kind, label, started_at, source),
+        )
+        return cur.lastrowid
+
+
+def activity_open():
+    """当前未结束（正在做）的活动；没有返回 None。"""
+    with get_conn() as conn:
+        r = conn.execute(
+            "SELECT * FROM agent_activities WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return _row_dict(r) if r else None
+
+
+def activity_close_open(ended_at, tokens=None):
+    """结束当前未完结的活动：写入结束时间与 token 用量（真实 usage 暂无 → 保持 NULL=未计量）。
+
+    返回被结束的记录 dict（无则 None）。tokens 参数为将来真实 usage 接入时的入口。
+    """
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM agent_activities WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return None
+        conn.execute(
+            "UPDATE agent_activities SET ended_at=?, tokens=? WHERE id=?",
+            (ended_at, tokens, row["id"]),
+        )
+        return _row_dict(row)
+
+
+def activity_set_note(activity_id, note):
+    """给活动补备注（如阅读会话：读了哪几篇）。"""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE agent_activities SET note=? WHERE id=?", (note, activity_id)
+        )
+
+
+def activity_list(limit=50):
+    """最近活动（进行中排最前，其余按开始时间倒序）。"""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM agent_activities "
+            "ORDER BY (ended_at IS NULL) DESC, started_at DESC, id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [_row_dict(r) for r in rows]
 
 
 # ═══════════════════════════════════════════

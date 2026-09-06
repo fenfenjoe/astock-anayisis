@@ -85,6 +85,23 @@ async def lifespan(app: FastAPI):
             print("[app] DB in memory mode — cloud backup loop started (15min)")
     except Exception as e:
         print(f"[app]   WARNING: backup loop start failed: {e}")
+    # agent.db 同样可能处于 memory 模式（DB_MODE=memory 全局生效）：dashboard 侧写入的
+    # 聊天/手动状态/活动台账也要定时回传 TOS，否则只在 agent 进程侧回传会丢 dashboard 写入。
+    try:
+        from agent import db as _agent_db
+        if _agent_db.USE_MEMORY:
+            def _agent_backup_loop():
+                import time as _t
+                while True:
+                    try:
+                        _agent_db.cloud_backup()
+                    except Exception:
+                        pass
+                    _t.sleep(60)
+            threading.Thread(target=_agent_backup_loop, daemon=True).start()
+            print("[app] agent.db in memory mode — agent snapshot backup loop started (60s)")
+    except Exception as e:
+        print(f"[app]   WARNING: agent.db backup loop start failed: {e}")
 
     # ── Seed default admin user if no users exist ──
     if not _in_test and user_count() == 0:

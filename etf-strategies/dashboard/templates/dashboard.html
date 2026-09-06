@@ -457,12 +457,18 @@
     <button class="btn btn-sm btn-primary" id="agent-online-btn" onclick="Agent.toggleOnline()" style="margin-left:12px">🌱 让小满上线</button>
   </div>
   <div class="agent-tabs">
-    <button class="agent-tab active" data-tab="chat" onclick="Agent.switchTab('chat')">💬 和小满聊天</button>
+    <button class="agent-tab active" data-tab="profile" onclick="Agent.switchTab('profile')">👋 认识小满</button>
+    <button class="agent-tab" data-tab="chat" onclick="Agent.switchTab('chat')">💬 和小满聊天</button>
     <button class="agent-tab" data-tab="articles" onclick="Agent.switchTab('articles')">📄 我的动态</button>
   </div>
 
+  <!-- 认识小满（介绍页） -->
+  <div class="agent-pane active" id="agent-pane-profile">
+    <div id="agent-profile" class="agent-profile"><p class="muted">加载中...</p></div>
+  </div>
+
   <!-- 聊天 -->
-  <div class="agent-pane active" id="agent-pane-chat">
+  <div class="agent-pane" id="agent-pane-chat">
     <div class="agent-chat-layout">
       <aside class="agent-sessions">
         <div class="agent-sessions-head">
@@ -511,7 +517,7 @@
 <div class="toast-container" id="toast-container"></div>
 
 <!-- ═══ 小满 LIVE2D 桌宠（看板娘：全局右下角 fixed，滚动不位移）
-     状态驱动：working / slack / leave / offline / thinking（见 pet.js 状态机）
+     状态驱动：working / slack / sleep / leave / offline / thinking（见 pet.js 状态机）
      渲染层(LIVE2D)与场景层(小桌/笔记本 SVG)由 pet.js 装配；资产缺失时降级为占位形态 -->
 <div class="xm-pet" id="xm-pet" data-state="unknown" aria-hidden="true">
   <div class="xm-pet-stage" id="xm-pet-stage">
@@ -519,14 +525,18 @@
     <div class="xm-pet-canvas" id="xm-pet-canvas"></div>
     <!-- 渲染层降级占位（无模型资产 / WebGL 不可用时） -->
     <div class="xm-pet-fallback" id="xm-pet-fallback" hidden>🌾</div>
-    <!-- 场景层：小桌 + 笔记本（pet.js 注入 SVG 骨架，CSS 驱动敲键盘/盯屏动画） -->
+    <!-- 场景层：小桌 + 笔记本（pet.js 注入骨架，CSS 驱动敲键盘/盯屏动画；阅读态隐藏） -->
     <div class="xm-pet-scene" id="xm-pet-scene"></div>
     <!-- 台词气泡 -->
     <div class="xm-pet-bubble" id="xm-pet-bubble" hidden></div>
     <!-- 睡觉 Zzz -->
     <div class="xm-pet-zzz" id="xm-pet-zzz" hidden><span>Z</span><span>z</span><span>z</span></div>
-    <!-- 状态小灯 -->
-    <span class="xm-pet-dot" id="xm-pet-dot"></span>
+  </div>
+  <!-- 状态切换（常驻可见，低透明度；点击直接改后端行为状态并记入"做过的事"） -->
+  <div class="xm-pet-modes" id="xm-pet-modes" role="group" aria-label="小满状态切换">
+    <button type="button" class="xm-pet-mode" data-mode="random" title="让状态机立刻随机一个状态">随机</button>
+    <button type="button" class="xm-pet-mode" data-mode="reading" title="切到阅读（阅读执行由常驻进程调度）">阅读</button>
+    <button type="button" class="xm-pet-mode" data-mode="slack" title="切到摸鱼状态">摸鱼</button>
   </div>
   <div class="xm-pet-bar">
     <button class="xm-pet-btn" id="xm-pet-btn-min" title="收起为小圆点" aria-label="收起小满">—</button>

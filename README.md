@@ -27,9 +27,9 @@ python -m pip install --user boto3
 
 | # | 项 | 说明 / 命令 |
 |---|----|------------|
-| 1 | **Node.js + dsh CLI** | 小满与调度引擎的大脑，必须。`npm i -g @deepseek-ai/dsh@0.1.0-rc.6` |
+| 1 | **Node.js + dsh CLI** | 小满与调度引擎的大脑，必须。先装 Node.js（Windows 推荐 nvm4w，npm 随自带）；**dsh 与 pnpm 无需手动装**，第 3 步 sync 脚本检测到缺失会自动安装（手动装：`npm i -g @deepseek-ai/dsh@0.1.0-rc.6`） |
 | 2 | **dsh 凭据** | `~/.dsh/.credentials.yaml` 填 `DEEPSEEK_API_KEY`（key 单点，Dashboard 与小满共用）；验证：`dsh --profile xiaoman "在吗"` |
-| 3 | **dsh profile 同步** | 把仓库 `.dsh/profiles`（xiaoman）同步到本机：`powershell -ExecutionPolicy Bypass -File scripts/sync_dsh.ps1`（也会校验 dsh/openviking 版本） |
+| 3 | **dsh 环境同步（一键）** | `powershell -ExecutionPolicy Bypass -File scripts/sync_dsh.ps1`：自动检测/安装 pnpm、dsh（缺失时），同步仓库 `.dsh/profiles`（xiaoman）到本机，并为每个 profile 自动安装插件依赖（`dsh plugin --profile <name> install`），最后校验凭据与版本 |
 | 4 | **Python 依赖** | `pip install -r etf-strategies/requirements.txt`；可选 `python -m pip install --user boto3`（云备份） |
 | 5 | **`.env` 配置（可选）** | 复制 `etf-strategies/.env.example` → `.env`。**严格零本地**加 `DB_MODE=memory` + `CLOUD_RESTORE_ON_START=1`；用 claude 兜底才需填 `ANTHROPIC_AUTH_TOKEN`（默认走 dsh 不需要） |
 | 6 | **OpenViking 记忆（可选）** | 已接入**火山云版**（`~/.openviking/ovcli.conf` 指向 `api.vikingdb.cn-beijing.volces.com/openviking`，含云 API Key，敏感不入 git）；无需本地跑 `openviking-server`，见 `docs/DEPLOYMENT.md` §4.1 |

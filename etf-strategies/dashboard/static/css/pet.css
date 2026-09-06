@@ -4,9 +4,10 @@
    Design: Tech Noir 骨架 + 小满蜜橘暖色延伸（复用 agent.css 的 --xm-accent 家族）
    Layout: 全局右下角 fixed（滚动不位移），z-700（内容之上 / toast 999 / 登录遮罩 1000 之下）
    Motion: 桌宠属于 delight 层允许 expressive，但 idle 节流 + 尊重 prefers-reduced-motion
-   结构:   .xm-pet > .xm-pet-stage(canvas/fallback/scene/bubble/zzz/dot) + .xm-pet-bar
-   状态:   data-state = unknown|offline|leave|slack|working|thinking（JS 切换）
-   姿态:   data-posture = type|code|data（working 细分，驱动键盘/屏幕动画）
+   结构:   .xm-pet > .xm-pet-stage(canvas/fallback/scene/bubble/zzz)
+           + .xm-pet-modes(状态切换按钮) + .xm-pet-bar(收起/隐藏)
+   状态:   data-state = unknown|offline|leave|sleep|slack|working|thinking（JS 切换）
+   姿态:   data-posture = type|code|data|read（working 细分；read=阅读，隐藏场景动画）
    ═══════════════════════════════════════════════════════════════ */
 
 /* ── 容器与层级 ── */
@@ -14,7 +15,7 @@
   position: fixed;
   right: 20px;
   bottom: 16px;
-  width: 300px;
+  width: 360px;
   z-index: 700;
   display: flex;
   flex-direction: column;
@@ -28,8 +29,8 @@
 /* ── 舞台 ── */
 .xm-pet-stage {
   position: relative;
-  width: 300px;
-  height: 250px;
+  width: 360px;
+  height: 300px;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   /* 极淡蜜橘光晕区分悬浮层级（不挡下层交互，pointer-events 仅容器） */
   background: radial-gradient(circle at 50% 92%, oklch(0.78 0.15 60 / 0.10) 0%, transparent 62%);
@@ -61,13 +62,16 @@
   position: absolute;
   left: 50%;
   bottom: 0;
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(1.2);
+  transform-origin: 50% 100%;
   width: 224px;
   height: 108px;
   z-index: 3;                  /* 盖住 canvas 底部：模型"坐"在桌后 */
   display: none;
 }
-.xm-pet[data-state="working"] .xm-pet-scene { display: block; }
+/* 场景层仅"对着电脑干活"时显示（打字/写代码/盯盘）；
+   阅读（read）不敲键盘不闪屏幕——非 LIVE2D 动画全部收掉，只留角色安静待机 */
+.xm-pet[data-state="working"]:not([data-posture="read"]) .xm-pet-scene { display: block; }
 
 .xm-desk {
   position: absolute;
@@ -110,10 +114,10 @@
 .xm-screen-art .xm-art-data,
 .xm-screen-art .xm-caret { display: none; }
 
-.xm-pet.posture-code .xm-art-code,
-.xm-pet.posture-data .xm-art-data,
-.xm-pet.posture-type .xm-caret { display: block; }
-.xm-pet.posture-type .xm-art-code { display: block; opacity: 0.45; }
+.xm-pet[data-posture="code"] .xm-art-code,
+.xm-pet[data-posture="data"] .xm-art-data,
+.xm-pet[data-posture="type"] .xm-caret { display: block; }
+.xm-pet[data-posture="type"] .xm-art-code { display: block; opacity: 0.45; }
 
 /* 代码行（缓慢上滚） */
 .xm-art-code {
@@ -193,13 +197,13 @@
   border-bottom: 2px solid oklch(0.20 0.03 210);
 }
 /* 敲键盘：键帽高亮律动（code/type 时开） */
-.xm-pet.posture-code .xm-key,
-.xm-pet.posture-type .xm-key {
+.xm-pet[data-posture="code"] .xm-key,
+.xm-pet[data-posture="type"] .xm-key {
   animation: xm-keypress 0.5s ease-in-out infinite;
   transform-origin: 50% 100%;
 }
-.xm-pet.posture-code .xm-key:nth-child(even),
-.xm-pet.posture-type .xm-key:nth-child(even) { animation-delay: .25s; }
+.xm-pet[data-posture="code"] .xm-key:nth-child(even),
+.xm-pet[data-posture="type"] .xm-key:nth-child(even) { animation-delay: .25s; }
 @keyframes xm-keypress {
   0%, 100% { transform: translateY(0); background: oklch(0.30 0.03 210); }
   50%      { transform: translateY(1.5px); background: var(--xm-accent); box-shadow: 0 0 6px oklch(0.78 0.15 60 / 0.8); }
@@ -210,22 +214,6 @@
   box-shadow: 0 0 0 1px var(--border), 0 0 14px oklch(0.78 0.15 60 / 0.28), inset 0 0 0 1px var(--bg-primary);
 }
 
-/* ── 状态灯 ── */
-.xm-pet-dot {
-  position: absolute;
-  top: 8px; left: 10px;
-  width: 9px; height: 9px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  z-index: 4;
-}
-.xm-pet[data-state="working"] .xm-pet-dot { background: var(--accent-green); box-shadow: 0 0 8px oklch(0.68 0.16 145 / 0.9); animation: xm-dot-blink 2s ease-in-out infinite; }
-.xm-pet[data-state="slack"]     .xm-pet-dot { background: var(--xm-accent); box-shadow: 0 0 8px oklch(0.78 0.15 60 / 0.7); }
-.xm-pet[data-state="leave"]     .xm-pet-dot { background: var(--accent-amber); }
-.xm-pet[data-state="offline"]   .xm-pet-dot { background: oklch(0.42 0.02 210); }
-.xm-pet[data-state="thinking"]  .xm-pet-dot { background: var(--accent-cyan); animation: xm-dot-blink 0.7s ease-in-out infinite; }
-@keyframes xm-dot-blink { 50% { opacity: 0.35; } }
-
 /* ── 状态对角色本体的处理 ── */
 .xm-pet[data-state="offline"] .xm-pet-canvas,
 .xm-pet[data-state="offline"] .xm-pet-fallback {
@@ -234,6 +222,20 @@
 .xm-pet[data-state="leave"] .xm-pet-canvas,
 .xm-pet[data-state="leave"] .xm-pet-fallback {
   filter: saturate(0.55) brightness(0.8);
+}
+.xm-pet[data-state="sleep"] .xm-pet-canvas,
+.xm-pet[data-state="sleep"] .xm-pet-fallback {
+  filter: saturate(0.45) brightness(0.62);   /* 入睡：整体压暗褪色 */
+}
+/* 摸鱼：暖色轻微提亮，呼应蜜橘 accent */
+.xm-pet[data-state="slack"] .xm-pet-canvas,
+.xm-pet[data-state="slack"] .xm-pet-fallback {
+  filter: saturate(1.08) brightness(1.02);
+}
+/* 思考中：轻微冷色偏移，酝酿灵感 */
+.xm-pet[data-state="thinking"] .xm-pet-canvas,
+.xm-pet[data-state="thinking"] .xm-pet-fallback {
+  filter: saturate(0.92) hue-rotate(-8deg);
 }
 
 /* ── 睡觉 Zzz ── */
@@ -249,7 +251,8 @@
   line-height: 1;
   pointer-events: none;
 }
-.xm-pet[data-state="leave"] .xm-pet-zzz { display: flex; }
+.xm-pet[data-state="leave"] .xm-pet-zzz,
+.xm-pet[data-state="sleep"] .xm-pet-zzz { display: flex; }
 .xm-pet-zzz span {
   animation: xm-zzz 2.4s ease-out infinite;
   opacity: 0;
@@ -269,7 +272,7 @@
   position: absolute;
   right: 4px; top: -6px;
   z-index: 5;
-  max-width: 216px;
+  max-width: 250px;
   padding: var(--space-2) var(--space-3);
   background: var(--bg-surface-2);
   border: 1px solid var(--border);
@@ -300,6 +303,52 @@
   from { transform: translateY(6px) scale(0.92); opacity: 0; }
   to   { transform: translateY(0) scale(1); opacity: 1; }
 }
+
+/* ── 状态切换按钮条（常驻可见，低透明度；悬停桌宠/按钮本身时高亮）── */
+.xm-pet-modes {
+  display: flex;
+  gap: 4px;
+  padding: 0 2px 4px 0;
+  opacity: 0.55;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.xm-pet:hover + .xm-pet-modes,
+.xm-pet-modes:hover,
+.xm-pet-modes:focus-within {
+  opacity: 1;
+}
+.xm-pet-mode {
+  min-width: 36px;
+  height: 24px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: oklch(0.12 0.02 210 / 0.85);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+.xm-pet-mode:hover {
+  color: var(--xm-accent);
+  border-color: var(--xm-accent);
+  background: var(--bg-hover);
+}
+.xm-pet-mode:active { transform: translateY(1px); }
+.xm-pet-mode.is-active {
+  color: var(--xm-accent);
+  border-color: oklch(0.78 0.15 60 / 0.7);
+  background: oklch(0.78 0.15 60 / 0.14);
+  box-shadow: 0 0 8px oklch(0.78 0.15 60 / 0.25);
+}
+.xm-pet-mode:focus-visible { outline: 2px solid var(--xm-accent); outline-offset: 2px; }
 
 /* ── 控制条 ── */
 .xm-pet-bar {
@@ -362,10 +411,8 @@
   .xm-art-code span,
   .xm-art-data i,
   .xm-caret,
-  .xm-pet.posture-code .xm-key,
-  .xm-pet.posture-type .xm-key,
-  .xm-pet[data-state="working"] .xm-pet-dot,
-  .xm-pet[data-state="thinking"] .xm-pet-dot {
+  .xm-pet[data-posture="code"] .xm-key,
+  .xm-pet[data-posture="type"] .xm-key {
     animation: none !important;
   }
   .xm-pet-zzz span { opacity: 0.55; }

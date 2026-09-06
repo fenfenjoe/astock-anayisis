@@ -25,9 +25,12 @@
     document.querySelectorAll('.agent-tab').forEach(function (b) {
       b.classList.toggle('active', b.getAttribute('data-tab') === tab);
     });
+    document.getElementById('agent-pane-profile').classList.toggle('active', tab === 'profile');
     document.getElementById('agent-pane-chat').classList.toggle('active', tab === 'chat');
     document.getElementById('agent-pane-articles').classList.toggle('active', tab === 'articles');
-    if (tab === 'articles') {
+    if (tab === 'profile') {
+      loadProfile();
+    } else if (tab === 'articles') {
       loadArticles();
       loadSources();
     }
@@ -37,6 +40,7 @@
   function load(force) {
     if (!force && state.loaded) return;
     state.loaded = true;
+    loadProfile();
     loadSessions();
     loadArticles();
     loadSources();
@@ -82,15 +86,14 @@
       parts.push('· 开始于 ' + (s.current_task.started_at || ''));
     }
     if (!s.alive) parts.push('·（小满进程未运行）');
-    if (s.published_on) parts.push('· 今日已发文');
     el.textContent = parts.join(' ');
-    // 状态随出勤/任务态/上线着色
+    // 状态随出勤/任务态/上线着色（阅读/写作/思考等认真态也算 working）
     let cls;
     if (!s.online) {
       cls = 'pill-offline';
     } else if (s.attendance === 'leave') {
       cls = 'pill-leave';
-    } else if (s.current_task) {
+    } else if (s.current_task || (mood.busy)) {
       cls = 'pill-working';
     } else {
       cls = 'pill-slack';
@@ -130,14 +133,42 @@
       data.sessions.forEach(function (s) {
         const el = document.createElement('div');
         el.className = 'agent-session-item' + (s.id === state.sessionId ? ' active' : '');
-        el.textContent = s.title;
         el.setAttribute('data-sid', s.id);
+        const name = document.createElement('span');
+        name.className = 'agent-session-name';
+        name.textContent = s.title;
+        const del = document.createElement('button');
+        del.className = 'agent-session-del';
+        del.title = '删除会话';
+        del.textContent = '✕';
+        del.onclick = function (ev) { ev.stopPropagation(); deleteSession(s.id); };
+        el.appendChild(name);
+        el.appendChild(del);
         el.onclick = function () { selectSession(s.id); };
         box.appendChild(el);
       });
       if (!state.sessionId) selectSession(data.sessions[0].id);
     } catch (e) {
       box.innerHTML = '<p class="agent-error">会话加载失败</p>';
+    }
+  }
+
+  async function deleteSession(id) {
+    if (!confirm('确定删除这个会话？聊天记录会一起删掉，且不可恢复。')) return;
+    try {
+      const resp = await fetch('/api/agent/sessions/' + id, {
+        method: 'DELETE',
+        headers: Auth.getHeaders(),
+      });
+      if (!resp.ok) { alert('删除失败'); return; }
+      if (state.sessionId === id) {
+        state.sessionId = null;
+        const box = document.getElementById('agent-messages');
+        box.innerHTML = '<p class="muted">会话已删除，选一个或新建会话开始聊。</p>';
+      }
+      await loadSessions();
+    } catch (e) {
+      alert('删除失败：' + e.message);
     }
   }
 
@@ -179,6 +210,7 @@
       return;
     }
     msgs.forEach(function (m) {
+      // 每条 assistant 消息本身就是一条气泡（拆几条由 dsh 决定，前端不再切文本）
       appendBubble(m.role, m.content, m.sources || []);
     });
     scrollBottom();
@@ -220,6 +252,32 @@
     }, 16);
   }
 
+  function typePromise(bubble, text) {
+    return new Promise(function (resolve) {
+      typewriter(bubble, text, resolve);
+    });
+  }
+
+  // 把 dsh 返回的多条消息逐条打字渲染（一条消息 = 一个气泡，像真人连发消息）
+  async function playAssistantMessages(msgs, sources) {
+    let lastBubble = null;
+    for (let i = 0; i < msgs.length; i++) {
+      const b = appendBubble('assistant', '', []);
+      lastBubble = b;
+      await typePromise(b, msgs[i]);
+    }
+    if (sources && sources.length && lastBubble) {
+      const src = document.createElement('div');
+      src.className = 'agent-msg-src';
+      src.innerHTML = '来源：' + sources.map(function (s) {
+        return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.title) + '</a>';
+      }).join('');
+      lastBubble.appendChild(src);
+    }
+    scrollBottom();
+    loadSessions(); // 会话 updated_at 刷新排序
+  }
+
   // ── 发送（dsh 非流式：SSE 单事件全文 + 前端打字机）──
   async function send() {
     const input = document.getElementById('agent-input');
@@ -234,10 +292,10 @@
     const btn = document.getElementById('agent-send-btn');
     btn.disabled = true;
 
-    const bubble = appendBubble('assistant', '', []);
-    bubble.innerHTML = '<span class="muted">小满正在思考…</span>';
+    const thinkBubble = appendBubble('assistant', '', []);
+    thinkBubble.innerHTML = '<span class="muted">小满正在思考…</span>';
     dispatchThinking(true);   // 桌宠进入"思考中"瞬时态
-    let md = '';
+    const msgParts = [];      // dsh 拆好的消息：一条消息 = 一个气泡
 
     try {
       const resp = await fetch('/api/agent/sessions/' + state.sessionId + '/messages', {
@@ -247,7 +305,7 @@
       });
       if (!resp.ok) {
         const err = await resp.json().catch(function () { return { detail: 'HTTP ' + resp.status }; });
-        bubble.innerHTML = '<span class="agent-error">' + esc(err.detail || '请求失败') + '</span>';
+        thinkBubble.innerHTML = '<span class="agent-error">' + esc(err.detail || '请求失败') + '</span>';
         dispatchThinking(false);
         return;
       }
@@ -267,31 +325,26 @@
             let evt;
             try { evt = JSON.parse(line.slice(6)); } catch (e) { return; }
             if (evt.delta) {
-              md += evt.delta; // dsh 非流式：通常一次到齐，先收集
+              msgParts.push(evt.delta); // 每条 delta = 一条消息（后端已按行拆好）
             } else if (evt.error) {
-              bubble.innerHTML = '<span class="agent-error">' + esc(evt.error) + '</span>';
+              thinkBubble.innerHTML = '<span class="agent-error">' + esc(evt.error) + '</span>';
             } else if (evt.done) {
               doneSources = evt.sources || [];
             }
           });
         });
       }
-      // 收集完毕 → 打字机渲染全文
-      typewriter(bubble, md, function () {
-        dispatchThinking(false);   // 回复完整展示 → 桌宠退出"思考中"
-        if (doneSources && doneSources.length && !bubble.querySelector('.agent-msg-src')) {
-          const src = document.createElement('div');
-          src.className = 'agent-msg-src';
-          src.innerHTML = '来源：' + doneSources.map(function (s) {
-            return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.title) + '</a>';
-          }).join('');
-          bubble.appendChild(src);
-        }
-        scrollBottom();
-        loadSessions(); // 会话 updated_at 刷新排序
-      });
+      // 收集完毕 → 去掉"思考中"占位，逐条消息打字出现（每条 = 一个气泡）
+      if (thinkBubble.parentNode) thinkBubble.remove();
+      if (!msgParts.length) {
+        dispatchThinking(false);
+        loadSessions();
+      } else {
+        await playAssistantMessages(msgParts, doneSources || []);
+        dispatchThinking(false); // 全部消息展示完 → 桌宠退出"思考中"
+      }
     } catch (e) {
-      bubble.innerHTML = '<span class="agent-error">请求失败：' + esc(e.message) + '</span>';
+      thinkBubble.innerHTML = '<span class="agent-error">请求失败：' + esc(e.message) + '</span>';
       dispatchThinking(false);
     } finally {
       state.streaming = false;
@@ -446,6 +499,98 @@
     }
   }
 
+  // ── 认识小满（介绍页）──
+  async function loadProfile() {
+    const box = document.getElementById('agent-profile');
+    if (!box) return;
+    try {
+      const resp = await Auth.fetchGet('/api/agent/profile');
+      const p = await resp.json();
+      renderProfile(p);
+    } catch (e) {
+      box.innerHTML = '<p class="agent-error">介绍加载失败</p>';
+    }
+  }
+
+  function renderProfile(p) {
+    const box = document.getElementById('agent-profile');
+    const chips = function (arr, cls) {
+      return (arr || []).map(function (t) {
+        return '<span class="xm-chip ' + cls + '">' + esc(t) + '</span>';
+      }).join('');
+    };
+
+    // 侧栏「关于我」= 人设卡「基本」节精简
+    const basicLi = (p.basic || []).map(function (b) {
+      return '<li class="xm-basic-item"><b>' + esc(b.k) + '</b>' + esc(b.v) + '</li>';
+    }).join('');
+
+    const sites = (p.sites || []).map(function (s) {
+      return '<a class="xm-site" href="' + esc(s.url) + '" target="_blank" rel="noopener">' +
+        '<span class="xm-site-name">' + esc(s.name) + '</span>' +
+        '<span class="xm-site-kind">' + esc(s.kind || '') + '</span></a>';
+    }).join('');
+
+    // 右侧「做过的事」：每条一行（类别 / 干了啥 / 时间 / token）
+    const actRows = (p.activity || []).map(function (a) {
+      const title = a.url
+        ? '<a class="xm-act-link" href="' + esc(a.url) + '" target="_blank" rel="noopener">' + esc(a.title) + '</a>'
+        : '<span class="xm-act-title">' + esc(a.title) + '</span>';
+      const range = a.ended
+        ? esc(a.at || '') + ' → ' + esc(a.ended || '')
+        : esc(a.at || '') + ' · <span class="xm-act-ing">进行中</span>';
+      return '<li class="xm-act-item' + (a.ended ? '' : ' ongoing') + '">' +
+        '<span class="xm-act-label">' + esc(a.label) + '</span>' +
+        '<span class="xm-act-main">' + title +
+          (a.meta ? '<span class="xm-act-meta">' + esc(a.meta) + '</span>' : '') +
+        '</span>' +
+        '<span class="xm-act-date">' + range + '</span>' +
+        '<span class="xm-act-tokens" title="该活动的真实 token 用量（需 dsh 暴露 usage 后接入；暂无通道 → 未计量）">' +
+          (a.tokens == null ? '—' : esc(String(a.tokens))) +
+        '</span>' +
+        '</li>';
+    }).join('');
+    const actHead =
+      '<div class="xm-act-head">' +
+        '<h3 class="em-title">🌱 做过的事</h3>' +
+        '<span class="xm-act-note">token 列：真实 usage 待接入，暂不估算</span>' +
+      '</div>';
+
+    box.innerHTML =
+      '<div class="xm-page">' +
+        '<aside class="xm-side">' +
+          '<div class="xm-hero xm-hero-side">' +
+            '<div class="xm-hero-avatar">🌾</div>' +
+            '<div class="xm-hero-text">' +
+              '<h2 class="xm-hero-name">小满</h2>' +
+              '<div class="xm-hero-sub">元气财经博主 · 名自二十四节气「小满」</div>' +
+            '</div>' +
+          '</div>' +
+          '<section class="xm-card">' +
+            '<h3 class="em-title">🌙 关于我</h3>' +
+            (basicLi ? '<ul class="xm-basic">' + basicLi + '</ul>' : '<p class="muted">（人设卡暂无「基本」节）</p>') +
+          '</section>' +
+          '<section class="xm-card">' +
+            '<h3 class="em-title">💛 爱好</h3>' +
+            '<div class="xm-chip-row"><span class="xm-chip-label">研究</span>' + chips(p.interests, 'xm-chip-blue') + '</div>' +
+            '<div class="xm-chip-row"><span class="xm-chip-label">生活</span>' + chips(p.hobbies, 'xm-chip-warm') + '</div>' +
+          '</section>' +
+          (sites
+            ? '<section class="xm-card">' +
+                '<h3 class="em-title">🌐 爱逛的地方</h3>' +
+                '<div class="xm-sites">' + sites + '</div>' +
+              '</section>'
+            : '') +
+        '</aside>' +
+        '<main class="xm-main">' +
+          '<section class="xm-card xm-card-activity">' +
+            actHead +
+            (actRows ? '<ul class="xm-act">' + actRows + '</ul>' : '<p class="muted">还没有自主活动记录——等她去阅读、写文章、逛站点吧～</p>') +
+          '</section>' +
+        '</main>' +
+      '</div>';
+  }
+
   async function toggleOnline() {
     const cache = window.__xmStatusCache;
     const online = cache && cache.data && cache.data.online;
@@ -465,6 +610,7 @@
   window.Agent = {
     switchTab: switchTab,
     load: load,
+    loadProfile: loadProfile,
     loadArticles: loadArticles,
     loadSources: loadSources,
     toggleSourcesForm: toggleSourcesForm,
@@ -472,6 +618,7 @@
     toggleSource: toggleSource,
     deleteSource: deleteSource,
     newSession: newSession,
+    deleteSession: deleteSession,
     send: send,
     toggleOnline: toggleOnline,
   };

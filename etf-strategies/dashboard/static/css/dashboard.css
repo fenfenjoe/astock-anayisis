@@ -373,6 +373,11 @@ body {
   max-height: 480px;
   overflow-y: auto;
 }
+/* 工作日程：任务表全量展示，不出现内部纵向滚动条（整页自然滚动） */
+#view-scheduler .table-wrap {
+  max-height: none;
+  overflow-y: visible;
+}
 
 .data-table {
   width: 100%;

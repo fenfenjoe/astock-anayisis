@@ -3,7 +3,8 @@
 挂载：app.py 中 `app.include_router(api_agent.router)`（需认证，prefix /api/agent）。
 
 路由：
-  GET    /api/agent/status                  角色状态（进程存活/今日发文/LLM 配置/上线状态）
+  GET    /api/agent/status                  角色状态（进程存活/今日发文/LLM 配置/上线状态/行为状态机）
+  GET    /api/agent/profile                 认识小满（人设/兴趣/最近动态/最近在读/爱逛站点）
   POST   /api/agent/online                  小满上线
   POST   /api/agent/offline                 小满下线
   POST   /api/agent/sessions                新建会话
@@ -15,15 +16,27 @@
 """
 
 import json
+from datetime import datetime
 
 import anyio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from agent import db as agent_db, dsh_runner
+from agent import config, db as agent_db, dsh_runner
 from agent.channels import web
 from agent.core import lifecycle
 from dashboard.auth import get_current_user
+
+# 状态机中属于"认真学习/工作"的状态（桌宠工作姿态 + 状态 pill 工作色）；其余为摸鱼活动
+_PRODUCTIVE_STATES = {"reading", "writing", "thinking"}
+
+# 内置 RSS 热榜 → 可点击的人类站点首页（介绍页"爱逛的地方"用）
+_SITE_HOME = {
+    "cls": ("财联社·电报", "https://www.cls.cn/telegraph"),
+    "wallstreetcn": ("华尔街见闻", "https://wallstreetcn.com/news/global"),
+    "zhihu": ("知乎热榜", "https://www.zhihu.com/hot"),
+    "xueqiu": ("雪球·今日话题", "https://xueqiu.com/today"),
+}
 
 router = APIRouter(prefix="/api/agent", dependencies=[Depends(get_current_user)])
 
@@ -39,9 +52,14 @@ async def _run_thread(fn):
 
 
 def _state(
-    alive: bool, attendance: str, current_task: dict | None, online: bool
+    alive: bool, attendance: str, current_task: dict | None, online: bool,
+    state_id: str | None = None,
 ) -> str:
-    """机器可读状态枚举（桌宠/状态栏共用）：offline / leave / working / slack。"""
+    """机器可读状态枚举（桌宠/状态栏共用）：offline / leave / working / slack。
+
+    working 有两类：调度器在跑定时任务，或小满状态机正处于学习/写作/思考等
+    "认真"状态（reading/writing/thinking）；其余摸鱼活动归 slack。
+    """
     if not online:
         return "offline"
     if not alive:
@@ -49,6 +67,8 @@ def _state(
     if attendance != "on":
         return "leave"
     if current_task:
+        return "working"
+    if state_id in _PRODUCTIVE_STATES:
         return "working"
     return "slack"
 
@@ -71,26 +91,34 @@ def agent_status():
 
     state_id = agent_db.meta_get("xiaoman_current_state") or "daydream"
     state_until = agent_db.meta_get("xiaoman_state_until")
+    state_label = lifecycle._state_label(state_id)
 
     return {
         "alive": alive,
         "online": online,
-        "state": _state(alive, attendance, current, online),
+        "state": _state(alive, attendance, current, online, state_id),
         "heartbeat_age_seconds": hb_age,
         "dsh_ready": dsh_runner.find_dsh_bin() is not None,
         "attendance": attendance,
         "current_task": current,
-        "mood": _mood(attendance, current, online),
-        "published_on": agent_db.meta_get("published_on"),
+        "mood": _mood(attendance, current, online, state_id, state_label),
+        # 仅当最后发文日=今天时才返回该字段，否则置空，避免前端误显示"今日已发文"
+        "published_on": agent_db.meta_get("published_on")
+        if agent_db.meta_get("published_on") == datetime.now().strftime("%Y-%m-%d")
+        else None,
         "last_rss_fetch_at": agent_db.meta_get("last_rss_fetch_at"),
         "current_state": state_id,
-        "current_state_label": lifecycle._state_label(state_id),
+        "current_state_label": state_label,
         "state_until": state_until,
     }
 
 
-def _mood(attendance, current_task, online):
-    """小满状态成语文案：请假中 / 摸鱼中 / 正在做XXX。"""
+def _mood(attendance, current_task, online, state_id=None, state_label=None):
+    """小满状态成语文案：未上线 / 请假中 / 正在做XXX / 状态机当前活动。
+
+    没有调度任务时，不再笼统显示"摸鱼中"，而是反映行为状态机的实时状态
+    （📖 阅读中 / 🎮 打游戏中 / 🌙 发呆中…），让"她在干嘛"可见。
+    """
     if not online:
         return {"label": "未上线", "icon": "😴"}
     if attendance != "on":
@@ -100,8 +128,155 @@ def _mood(attendance, current_task, online):
             "label": f"正在做：{current_task.get('name', '任务')}",
             "icon": "💼",
             "task": current_task,
+            "busy": True,
+        }
+    if state_label:
+        return {
+            "label": f"{state_label}中",
+            "icon": "",
+            "state": state_id,
+            "busy": state_id in _PRODUCTIVE_STATES,
         }
     return {"label": "摸鱼中", "icon": "🐟"}
+
+
+# ═══════════════════════════════════════════
+# 介绍页（人设 / 做过的事 / 爱好 / 爱逛的地方）
+# ═══════════════════════════════════════════
+
+_ACT_LABEL = {
+    "read": "📖 阅读",
+    "article": "📝 写文章",
+    "post": "✍️ 发动态",
+}
+
+
+def _persona_basic(persona_md):
+    """解析人设卡「## 基本」节 → [{k, v}]（认识页侧栏"关于我"只用这块）。"""
+    out = []
+    capture = False
+    for raw in (persona_md or "").splitlines():
+        line = raw.strip()
+        if line.startswith("## "):
+            capture = line == "## 基本"
+            continue
+        if not capture or not line.startswith("-"):
+            continue
+        item = line.lstrip("- ").strip()
+        k, sep, v = item.partition("：")
+        if not sep:
+            k, sep, v = item.partition(":")
+        if not sep:
+            continue
+        k = k.strip().strip("*").strip()
+        v = v.strip().strip("*").strip()
+        if k and v:
+            out.append({"k": k, "v": v})
+    return out
+
+
+def _build_activities(limit=30):
+    """小满"做过的事"（动作事件模型，只读活动台账，不含与你聊天）。
+
+    行类型：
+    - 事件：阅读（一次会话一条，备注读了哪几篇）/ 写文章（备注写了哪篇）——完成后关闭（有结束时间）；
+    - 常驻状态段：空闲时她"正在摸鱼/发呆/打游戏…"，结束后关闭。
+    进行中 = 台账里 ended_at 为 NULL 的那条（真实在执行/正停留在该状态）。
+
+    tokens：真实 usage 需 dsh 层暴露后才能计量（用户已确认不估算）→ 一律 None。
+    访问小红书 / 逛站等接入采集后，在这里追加对应事件来源即可。
+    """
+    acts = []
+    for a in agent_db.activity_list(limit=120):
+        raw = a.get("label") or a.get("kind") or "状态"
+        parts = raw.split(" ", 1)
+        emoji = parts[0] if len(parts) == 2 else raw
+        name = parts[1].strip() if len(parts) == 2 else raw
+        note = (a.get("note") or "").strip()
+        acts.append({
+            "kind": a.get("kind") or "episode",
+            "label": emoji,                       # 列头只放图标
+            "title": name,                        # 正文放名称（如"阅读"/"写文章"）
+            "url": None,
+            "at": a.get("started_at"),
+            "ended": a.get("ended_at"),
+            "meta": note or ("手动" if a.get("source") == "manual" else "自动"),
+            "tokens": a.get("tokens"),
+        })
+    # 进行中（未结束）排最前，其余按开始时间倒序
+    acts.sort(key=lambda x: (x.get("ended") is None, x.get("at") or ""), reverse=True)
+    return acts[:limit]
+
+
+@router.get("/profile")
+def agent_profile():
+    """认识小满页聚合数据：人设卡 + 最近动态 + 最近阅读 + 爱逛站点 + 兴趣爱好。"""
+    # 人设卡 markdown（personas/xiaoman/persona.md）
+    persona_md = ""
+    try:
+        persona_file = config.PERSONAS_DIR / config.PERSONA_ID / "persona.md"
+        persona_md = persona_file.read_text(encoding="utf-8")
+    except Exception:
+        persona_md = ""
+
+    # 最近动态（文章 / 微博式短动态）
+    recent_articles = [
+        {
+            "id": a.get("id"),
+            "title": a.get("title") or (a.get("content") or "")[:24],
+            "kind": a.get("kind"),
+            "published_at": a.get("published_at"),
+            "summary": a.get("summary"),
+        }
+        for a in agent_db.article_list(limit=6)
+    ]
+
+    # 最近在读（已读且留下记忆的素材）
+    recent_reads = [
+        {
+            "title": k.get("title"),
+            "url": k.get("url"),
+            "source": k.get("source"),
+            "read_at": k.get("read_at"),
+            "viewpoint": k.get("viewpoint"),
+        }
+        for k in agent_db.knowledge_with_memory(limit=8)
+    ]
+
+    # 爱逛的地方：内置热榜站点 + 自定义启用素材源
+    feed_ids = {f["id"] for f in config.RSS_FEEDS}
+    sites = [
+        {"name": name, "url": url, "kind": "内置热榜"}
+        for _id, (name, url) in _SITE_HOME.items()
+        if _id in feed_ids
+    ]
+    try:
+        for s in agent_db.source_list(enabled_only=True):
+            sites.append({
+                "name": s.get("name"),
+                "url": s.get("url"),
+                "kind": "常驻站点" if s.get("kind") == "website" else "单篇",
+            })
+    except Exception:
+        pass
+
+    # 兴趣：知识域 + 状态机里的摸鱼爱好（排除认真态/睡眠）
+    interests = ["A股", "ETF", "宏观经济", "国际时事", "产业趋势", "财经大V观点"]
+    hobbies = [
+        label for sid, label in lifecycle._STATE_LABELS.items()
+        if sid not in (_PRODUCTIVE_STATES | {"sleep", "nap"})
+    ][:8]
+
+    return {
+        "persona_md": persona_md,
+        "basic": _persona_basic(persona_md),      # 侧栏「关于我」精简版
+        "activity": _build_activities(),          # 右侧「做过的事」（token 待真实 usage）
+        "recent_articles": recent_articles,
+        "recent_reads": recent_reads,
+        "sites": sites,
+        "interests": interests,
+        "hobbies": hobbies,
+    }
 
 
 # ═══════════════════════════════════════════
@@ -121,6 +296,35 @@ def agent_offline():
     """小满下线。"""
     agent_db.meta_set("xiaoman_online", "0")
     return {"ok": True, "online": False}
+
+
+@router.post("/state")
+def agent_set_state(body: dict):
+    """手动切换小满状态：random=随机 / reading=阅读 / slack=摸鱼。
+
+    与自动状态机走同一个 switch_state：先结束上一条活动（记结束时间；token 为真实值，
+    暂无计量通道 → 未计量），再为当前状态开一条新活动记录。
+    """
+    action = (body.get("action") or "").strip().lower()
+    now = datetime.now()
+    from agent.core import behavior as behavior_mod
+
+    if action == "random":
+        target = behavior_mod.pick_random_state(now=now)
+    elif action == "reading":
+        target = behavior_mod.pick_manual_reading(now=now)
+    elif action == "slack":
+        target = behavior_mod.pick_manual_slack(now=now)
+    else:
+        raise HTTPException(400, "action 必须是 random | reading | slack 之一")
+    sw = behavior_mod.switch_state(target, now=now, source="manual")
+    # 严格零本地：memory 模式下立刻把这条活动记录回传 TOS（重启/下次登录可见）
+    try:
+        if agent_db.USE_MEMORY:
+            agent_db.cloud_backup()
+    except Exception:
+        pass
+    return {"ok": True, "state": sw}
 
 
 # ═══════════════════════════════════════════
@@ -179,9 +383,17 @@ async def chat_message(sid: int, request: Request):
             status, out = await _run_thread(lambda: dsh_runner.run_task(task))
             if status != "success":
                 raise dsh_runner.DshRunnerError(f"dsh {status}: {out}")
-            agent_db.message_add(sid, "assistant", out, sources=sources)
-            # dsh headless 非流式：一次事件返回全文，前端打字机渲染
-            yield f"data: {json.dumps({'delta': out}, ensure_ascii=False)}\n\n"
+            # dsh 输出契约：一条消息 = 一行（由小满自己决定拆几条，前端不再切文本）。
+            # 逐条落库（每条 assistant 消息 = 一个气泡），再逐条 SSE 下发；来源挂在最后一条上。
+            msgs = [ln.strip() for ln in out.splitlines() if ln.strip()]
+            last = len(msgs) - 1
+            for i, m in enumerate(msgs):
+                agent_db.message_add(
+                    sid, "assistant", m,
+                    sources=sources if i == last else [],
+                )
+            for m in msgs:
+                yield f"data: {json.dumps({'delta': m}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'done': True, 'sources': sources}, ensure_ascii=False)}\n\n"
         except Exception as e:
             err = str(e)

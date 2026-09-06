@@ -7,7 +7,7 @@
 """
 
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from agent import config, db as agent_db
 from agent.core import behavior, knowledge
@@ -30,7 +30,7 @@ _STATE_LABELS = {
     "daydream": "🌙 发呆",
     "sleep": "😴 睡觉",
     "emo": "🌧️ emo",
-    "writing": "📝 写日记",
+    "writing": "📝 写文章",
     "thinking": "💡 思考",
 }
 
@@ -131,6 +131,11 @@ def tick(now=None, db=None, llm_fn=None):
         except Exception as e:
             result["custom"] = {"error": str(e)}
 
+    # 2.5 遗留清理：阅读/写文章是动作事件，绝不该跨 tick 还"未结束"（老模型遗留行在此关闭）
+    _stale = db.activity_open()
+    if _stale and _stale["kind"] in ("reading", "writing"):
+        db.activity_close_open(now.strftime("%Y-%m-%d %H:%M:%S"))
+
     # 3. 状态机
     state_current = db.meta_get("xiaoman_current_state")
     state_until = db.meta_get("xiaoman_state_until")
@@ -144,15 +149,8 @@ def tick(now=None, db=None, llm_fn=None):
 
     if state_expired:
         decision = behavior.pick_random_state(db=db, now=now)
-        until_dt = datetime.fromisoformat(decision["until_iso"])
-        db.meta_set("xiaoman_current_state", decision["id"])
-        db.meta_set("xiaoman_state_until", until_dt.strftime("%Y-%m-%d %H:%M:%S"))
-
-        if decision["require_llm"] and decision["id"] == "reading":
-            try:
-                result["read"] = behavior.execute_reading(db=db, llm_fn=llm_fn)
-            except Exception as e:
-                result["read"] = {"error": str(e)}
+        # 统一流转：自动切换也会"关旧开新"记录进活动台账（做过的事）
+        behavior.switch_state(decision, now=now, db=db, source="auto")
 
         result["state"] = {
             "id": decision["id"],
@@ -167,7 +165,30 @@ def tick(now=None, db=None, llm_fn=None):
             "active": True,
         }
 
-    # 4. 每日发文
+    # 阅读执行（动作事件模型）：状态为"阅读"且本段尚未真实读过 → 执行一次；
+    # 完成后自动回到常驻随机状态（阅读是事件，不长期占状态）。
+    state_cur = db.meta_get("xiaoman_current_state")
+    seq = db.meta_get("xiaoman_state_seq") or ""
+    done_seq = db.meta_get("xiaoman_read_done_seq") or ""
+    if state_cur == "reading" and seq and seq != done_seq:
+        try:
+            result["read"] = behavior.execute_reading(db=db, llm_fn=llm_fn)
+            db.meta_set("xiaoman_read_done_seq", seq)
+        except Exception as e:
+            result["read"] = {"error": str(e)}
+        try:
+            behavior.switch_state(behavior.pick_random_state(db=db, now=now),
+                                  now=now, db=db, source="auto")
+        except Exception as e:
+            cur = result.get("read") or {}
+            result["read"] = {**cur, "after_read_state_error": str(e)}
+
+    # 4. 每日发文（写文章是动作事件：期间状态临时显示"正在写文章"，结束后恢复原常驻状态）
+    _prev_state = db.meta_get("xiaoman_current_state")
+    _prev_until = db.meta_get("xiaoman_state_until")
+    db.meta_set("xiaoman_current_state", "writing")
+    db.meta_set("xiaoman_state_until",
+                (now + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S"))
     try:
         result["publish"] = behavior.run_publish_pipeline(
             today, now=(now.hour, now.minute), llm_fn=llm_fn, db=db
@@ -178,6 +199,11 @@ def tick(now=None, db=None, llm_fn=None):
             "reason": f"error: {e}",
             "article_id": None,
         }
+    finally:
+        if _prev_state:
+            db.meta_set("xiaoman_current_state", _prev_state)
+        if _prev_until:
+            db.meta_set("xiaoman_state_until", _prev_until)
 
     # 5. cloud backup
     try:

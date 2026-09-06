@@ -23,11 +23,11 @@ DASH_JS = BASE / "dashboard" / "static" / "js" / "dashboard.js"
 
 PET_IDS = [
     "xm-pet", "xm-pet-canvas", "xm-pet-fallback", "xm-pet-scene",
-    "xm-pet-bubble", "xm-pet-zzz", "xm-pet-dot",
+    "xm-pet-bubble", "xm-pet-zzz", "xm-pet-modes",
     "xm-pet-btn-min", "xm-pet-btn-hide", "xm-pet-mini",
 ]
-STATES = ["offline", "leave", "slack", "working", "thinking"]  # unknown=初始默认态，无需专属规则
-POSTURES = ["type", "code", "data"]
+STATES = ["offline", "leave", "sleep", "slack", "working", "thinking"]  # unknown=初始默认态，无需专属规则
+POSTURES = ["type", "code", "data", "read"]  # read=阅读态：隐藏非 LIVE2D 场景动画
 
 
 def _text(p):
@@ -69,7 +69,7 @@ def test_pet_css_covers_states_and_postures():
     for st in STATES:
         assert f'data-state="{st}"' in css, f"pet.css 缺 data-state={st} 样式"
     for p in POSTURES:
-        assert f"posture-{p}" in css, f"pet.css 缺 posture-{p} 样式"
+        assert f'data-posture="{p}"' in css, f"pet.css 缺 data-posture={p} 样式"
     # 无障碍/响应式降级
     assert "@media (prefers-reduced-motion: reduce)" in css
     assert "@media (max-width: 899px)" in css

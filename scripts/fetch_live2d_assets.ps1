@@ -12,9 +12,9 @@
 #         先列出某仓库里所有 Cubism4 模型目录（供选型，不下载）：
 #         powershell -ExecutionPolicy Bypass -File scripts\fetch_live2d_assets.ps1 `
 #           -ListModels -AddRepo hacxy/l2d-models -Branch main
-#         拉取 live2d-widget 生态（Cubism2）npm 模型包 + 配套运行时（如 Pio）：
+#         拉取 live2d-widget 生态（Cubism2）npm 模型包 + 配套运行时（如 Koharu 小春）：
 #         powershell -ExecutionPolicy Bypass -File scripts\fetch_live2d_assets.ps1 `
-#           -AddNpm live2d-widget-model-pio
+#           -AddNpm live2d-widget-model-koharu
 # 产物：  etf-strategies/dashboard/static/live2d/
 #           ├── vendor/pixi.min.js                 # PixiJS v6.5.10（MIT；与 pixi-live2d-display 0.4 配对）
 #           ├── vendor/live2dcubismcore.min.js     # Live2D Cubism4 Core（官方分发）
@@ -44,7 +44,7 @@ function Get-FileWithFallback {
   param([string[]]$Urls, [string]$OutFile)
   foreach ($u in $Urls) {
     Write-Host "  GET $u"
-    & curl.exe -L --fail --silent --show-error --create-dirs -o $OutFile $u
+    & curl.exe -L --fail --silent --show-error --max-time 60 --create-dirs -o $OutFile $u
     if ($LASTEXITCODE -eq 0 -and (Test-Path $OutFile) -and (Get-Item $OutFile).Length -gt 0) {
       Write-Host "  OK  $(Get-Item $OutFile).Length bytes → $OutFile" -ForegroundColor Green
       return
@@ -68,9 +68,17 @@ function Get-GithubDir {
   foreach ($f in $files) {
     $rel  = $f.path.Substring($SubPath.Length).TrimStart('/')
     $out  = Join-Path $OutDir $rel
-    $url  = "https://raw.githubusercontent.com/$Repo/$Branch/$($f.path)"
-    & curl.exe -L --fail --silent --show-error --create-dirs -o $out $url
-    if ($LASTEXITCODE -ne 0) { throw "下载失败：$url" }
+    # jsdelivr CDN 优先（国内可达性好）；raw.githubusercontent.com 兜底（部分网络被墙）
+    $urls = @(
+      "https://cdn.jsdelivr.net/gh/$Repo@$Branch/$($f.path)",
+      "https://raw.githubusercontent.com/$Repo/$Branch/$($f.path)")
+    $ok = $false
+    foreach ($url in $urls) {
+      & curl.exe -L --fail --silent --show-error --max-time 60 --create-dirs -o $out $url
+      if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+      Remove-Item $out -ErrorAction SilentlyContinue
+    }
+    if (-not $ok) { throw "下载失败：$($urls -join ' | ')" }
   }
   Write-Host "  OK $($files.Count) 个文件 → $OutDir" -ForegroundColor Green
 }
@@ -97,13 +105,17 @@ New-Item -ItemType Directory -Force -Path $Vendor, $ModelDir | Out-Null
 
 # ── 1) 运行时（jsdelivr 优先 / unpkg 兜底；core 走官方 CDN）──
 Write-Host "`n[运行时]"
+# 注意：pixi.js v6 的浏览器 UMD 包在 dist/browser/ 下（dist/pixi.min.js 自 v6 起已移除）
 Get-FileWithFallback -OutFile (Join-Path $Vendor 'pixi.min.js') -Urls @(
-  'https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/pixi.min.js',
-  'https://unpkg.com/pixi.js@6.5.10/dist/pixi.min.js')
+  'https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js',
+  'https://unpkg.com/pixi.js@6.5.10/dist/browser/pixi.min.js')
 Get-FileWithFallback -OutFile (Join-Path $Vendor 'pixi-live2d-display.min.js') -Urls @(
   'https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js',
   'https://unpkg.com/pixi-live2d-display@0.4.0/dist/cubism4.min.js')
+# Cubism4 Core：官方站 cubism.live2d.com 国内常超时 → npm 再分发包优先，官方站兜底
 Get-FileWithFallback -OutFile (Join-Path $Vendor 'live2dcubismcore.min.js') -Urls @(
+  'https://cdn.jsdelivr.net/npm/live2dcubismcore@1.0.2/live2dcubismcore.min.js',
+  'https://unpkg.com/live2dcubismcore@1.0.2/live2dcubismcore.min.js',
   'https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js')
 
 # ── 2) 官方免费示例模型（Cubism4 少女系，保底候选；画风拍板用）──
@@ -112,6 +124,14 @@ Get-GithubDir -Repo 'Live2D/CubismWebSamples' -Branch 'develop' `
   -SubPath 'Samples/Resources/Haru'  -OutDir (Join-Path $ModelDir 'Haru')
 Get-GithubDir -Repo 'Live2D/CubismWebSamples' -Branch 'develop' `
   -SubPath 'Samples/Resources/Natori' -OutDir (Join-Path $ModelDir 'Natori')
+
+# ── 2b) 当前选用：Senko 仙狐（Q 版坐姿橘发狐娘，moc3 v2 → 兼容 Cubism Core 4.2）──
+#     社区配布（hacxy/l2d-models 收录），动作组 Idle/Tap/Taphead/Tick_5（含 Singing/Sleeping），
+#     无表情文件（pet.js 表情联动自动降级）。角色为《贤惠幼妻仙狐小姐》同人，仅限本地个人使用。
+#     注意：官方 Q 版 Mao 为 moc3 v5，需 Cubism5/6 Core；而 6.0 Core 与 pixi-live2d-display@0.4
+#     框架 ABI 不兼容（doDrawModel 崩溃），故**不要升级 live2dcubismcore**，Mao 不可用。
+Get-GithubDir -Repo 'hacxy/l2d-models' -Branch 'main' `
+  -SubPath 'models/Senko_Normals' -OutDir (Join-Path $ModelDir 'Senko')
 
 # ── 3) 增量拉取：任一 GitHub 仓库中的模型目录（须含 .model3.json / Cubism4）──
 if ($AddRepo) {
@@ -128,9 +148,11 @@ if ($AddNpm) {
   Get-FileWithFallback -OutFile (Join-Path $Vendor 'pixi-live2d-display-cubism2.min.js') -Urls @(
     'https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism2.min.js',
     'https://unpkg.com/pixi-live2d-display@0.4.0/dist/cubism2.min.js')
+  # Cubism2 Core：stevenjoezhang/live2d-widget 新版 master 已重构（根目录无 live2d.min.js），
+  # 旧 tag v0.9.2（插件时代）根目录保留官方 Cubism2 core
   Get-FileWithFallback -OutFile (Join-Path $Vendor 'live2d.min.js') -Urls @(
-    'https://cdn.jsdelivr.net/gh/stevenjoezhang/live2d-widget@master/live2d.min.js',
-    'https://raw.githubusercontent.com/stevenjoezhang/live2d-widget/master/live2d.min.js')
+    'https://cdn.jsdelivr.net/gh/stevenjoezhang/live2d-widget@v0.9.2/live2d.min.js',
+    'https://raw.githubusercontent.com/stevenjoezhang/live2d-widget/v0.9.2/live2d.min.js')
 
   # npm 模型包：registry → tarball → 解包到 model/<本地名>
   $localNpm = if ($As) { $As } else { $AddNpm }

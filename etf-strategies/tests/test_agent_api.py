@@ -102,6 +102,32 @@ def test_chat_sse_streams_and_persists(client):
     assert msgs[1]["content"] == "你好，我是小满。"
 
 
+def test_chat_multiline_reply_is_multi_messages(client, monkeypatch):
+    """dsh 输出契约：每条消息 = 一行 → 后端逐条落库 + 逐条 SSE 下发（不再由前端切句）。"""
+    def _multi(task, profile=None, cwd=None, timeout=None, run=None):
+        return "success", "第一句。\n第二句呀～\n\n第三句！"
+
+    monkeypatch.setattr(api_mod.dsh_runner, "run_task", _multi)
+    sid = client.post("/api/agent/sessions", json={}).json()["id"]
+    r = client.post(f"/api/agent/sessions/{sid}/messages",
+                    json={"content": "在吗"})
+    assert r.status_code == 200
+    deltas = []
+    for line in r.text.splitlines():
+        if line.startswith("data: "):
+            payload = json.loads(line[len("data: "):])
+            if "delta" in payload:
+                deltas.append(payload["delta"])
+    # 空行被跳过，每行 = 一条消息（SSE 每条 delta 一个气泡）
+    assert deltas == ["第一句。", "第二句呀～", "第三句！"]
+    # 落库：每条 assistant 消息独立一行记录
+    msgs = agent_db.messages_by_session(sid)
+    roles = [m["role"] for m in msgs]
+    assert roles == ["user", "assistant", "assistant", "assistant"]
+    contents = [m["content"] for m in msgs if m["role"] == "assistant"]
+    assert contents == ["第一句。", "第二句呀～", "第三句！"]
+
+
 def test_chat_empty_content_400(client):
     sid = client.post("/api/agent/sessions", json={}).json()["id"]
     r = client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "  "})
@@ -145,6 +171,58 @@ def test_articles_list_and_detail(client):
     assert detail.status_code == 200
     assert detail.json()["content"] == "正文内容"
     assert client.get("/api/agent/articles/9999").status_code == 404
+
+
+def test_profile_returns_basic_and_activity(client):
+    """认识页 v2：侧栏「关于我」=人设卡基本节；右侧「做过的事」=活动台账
+    （已结束的阅读事件显示结束时间；常驻状态进行中置顶；token 均未计量）。"""
+    # 造两条台账：昨天读完的阅读事件（已结束）+ 当前正在打游戏（未结束）
+    agent_db.activity_start("reading", "📖 阅读", "2026-09-05 17:35:00", source="auto")
+    rid = agent_db.activity_open()["id"]
+    agent_db.activity_set_note(rid, "读了 2 篇")
+    agent_db.activity_close_open("2026-09-05 17:42:00")
+    agent_db.activity_start("gaming", "🎮 打游戏", "2026-09-06 10:00:00", source="manual")
+
+    r = client.get("/api/agent/profile")
+    assert r.status_code == 200
+    p = r.json()
+
+    # 侧栏「关于我」：从 persona.md 基本节解析出"姓名"
+    basic = p.get("basic", [])
+    assert any(b["k"] == "姓名" and "小满" in b["v"] for b in basic)
+
+    acts = p.get("activity", [])
+    assert acts, "应至少有一条活动"
+    # 进行中（打游戏）排最前且 ended 为空
+    assert acts[0]["title"] == "打游戏" and acts[0]["ended"] is None
+    # 昨天结束的"阅读"绝不显示进行中：有结束时间、备注带"读了 N 篇"
+    read_row = next(a for a in acts if a["title"] == "阅读")
+    assert read_row["ended"] == "2026-09-05 17:42:00"
+    assert "读了 2 篇" in read_row["meta"]
+    assert all(a.get("tokens") is None for a in acts)
+
+
+def test_manual_state_records_activity(client):
+    """桌宠按钮 → POST /api/agent/state（动作事件模型）：
+    阅读=动作事件（只切 meta）；摸鱼=常驻状态段（落一条进行中记录）。"""
+    r = client.post("/api/agent/state", json={"action": "reading"})
+    assert r.status_code == 200
+    j = r.json()
+    assert j["state"]["id"] == "reading" and j["state"]["changed"] is True
+    assert j["state"]["event"] is True
+    assert client.get("/api/agent/status").json()["current_state"] == "reading"
+    assert agent_db.activity_open() is None          # 阅读不占常驻段（由真实执行器开事件）
+    assert agent_db.meta_get("xiaoman_state_seq") == "1"
+
+    r2 = client.post("/api/agent/state", json={"action": "slack"})
+    assert r2.status_code == 200
+    assert r2.json()["state"]["id"] not in ("reading", "writing")
+    open_act = agent_db.activity_open()
+    assert open_act["kind"] != "reading" and open_act["ended_at"] is None
+    assert open_act["source"] == "manual"
+    assert open_act["tokens"] is None               # 真实 usage 未接入 → 未计量
+
+    assert client.post("/api/agent/state", json={"action": "fly"}).status_code == 400
 
 
 def test_delete_session(client):
