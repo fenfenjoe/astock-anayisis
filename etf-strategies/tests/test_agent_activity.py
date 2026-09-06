@@ -82,6 +82,58 @@ def test_reading_event_open_close(tmp_db, monkeypatch):
     assert "读了 1 篇" in (reading["note"] or "")
 
 
+def test_reading_task_text_within_cmdline_limit(tmp_db, tmp_path, monkeypatch):
+    """回归：未读清单过长曾把任务文本撑到 >32K，触发 Windows [WinError 206]。
+
+    上下文外置为资料包文件后，任务文本只留骨架（与未读数量无关的恒定短文本），
+    100 条长摘要文章全部写入 unread.md 供 LLM 用文件工具读取。
+    """
+    monkeypatch.setattr(behavior, "_READING_CTX_DIR", tmp_path / "reading")
+    for i in range(100):
+        agent_db.knowledge_upsert(
+            "rss", f"文章标题比较长一些{i}", f"https://example.com/a/{i}",
+            summary="很长的摘要" * 40, published_at=f"2026-09-06 08:{i:02d}:00")
+    captured = {}
+
+    def _fake_llm(task):
+        captured["len"] = len(task)
+        captured["task"] = task
+        return '{}'
+
+    res = behavior.execute_reading(db=agent_db, llm_fn=_fake_llm)
+    # 骨架任务文本恒定短小，且指向资料包文件
+    assert captured["len"] < 5000
+    assert "unread.md" in captured["task"]
+    # 资料包：100 条全量写入，无预算截断
+    ctx_dirs = [d for d in (tmp_path / "reading").iterdir() if d.is_dir()]
+    assert len(ctx_dirs) == 1
+    body = (ctx_dirs[0] / "unread.md").read_text(encoding="utf-8")
+    assert "文章标题比较长一些0" in body and "文章标题比较长一些99" in body
+    assert (ctx_dirs[0] / "memories.md").read_text(encoding="utf-8")
+    assert res["error"] is None  # 正常解析，不产生异常备注
+
+
+def test_reading_ctx_fallback_to_inline(tmp_db, tmp_path, monkeypatch):
+    """资料包写失败（目录不可创建）→ 降级内联注入，任务文本仍受 32K 约束。"""
+    blocker = tmp_path / "blocker"
+    blocker.write_text("", encoding="utf-8")  # 占位文件，其下无法建目录
+    monkeypatch.setattr(behavior, "_READING_CTX_DIR", blocker / "sub")
+    for i in range(100):
+        agent_db.knowledge_upsert(
+            "rss", f"文章标题比较长一些{i}", f"https://example.com/a/{i}",
+            summary="很长的摘要" * 40, published_at=f"2026-09-06 08:{i:02d}:00")
+    captured = {}
+
+    def _fake_llm(task):
+        captured["task"] = task
+        return '{}'
+
+    res = behavior.execute_reading(db=agent_db, llm_fn=_fake_llm)
+    assert len(captured["task"]) < 32000
+    assert "1. [rss]" in captured["task"]  # 内联清单存在（预算内保新弃旧）
+    assert res["error"] is None
+
+
 def test_manual_slack_and_reading_pickers(tmp_db):
     r = behavior.pick_manual_reading(now=datetime(2026, 9, 6, 10, 0, 0))
     assert r["id"] == "reading" and r["label"] == "📖 阅读"

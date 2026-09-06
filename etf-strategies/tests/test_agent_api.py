@@ -53,25 +53,26 @@ def test_status_endpoint(client):
 
 def test_mood_demo():
     from dashboard import api_agent as api_mod
-    assert api_mod._mood("leave", None)["label"] == "请假中"
-    assert api_mod._mood("on", None)["label"] == "摸鱼中"
-    mobj = api_mod._mood("on", {"name": "早盘分析", "started_at": "09:07"})
+    assert api_mod._mood("leave", None, True)["label"] == "请假中"
+    assert api_mod._mood("on", None, True)["label"] == "摸鱼中"
+    mobj = api_mod._mood("on", {"name": "早盘分析", "started_at": "09:07"}, True)
     assert "正在做" in mobj["label"]
+    assert api_mod._mood("on", None, False)["label"] == "未上线"
 
 
 def test_state_derivation():
     """桌宠状态机四态推导：offline 优先 → leave → working → slack。"""
     from dashboard import api_agent as api_mod
-    # 进程未运行（无论出勤/任务）→ offline
-    assert api_mod._state(False, "on", {"task_id": "x", "name": "n"}) == "offline"
-    assert api_mod._state(False, "leave", None) == "offline"
-    # 请假（alive）→ leave
-    assert api_mod._state(True, "leave", None) == "leave"
+    # 未上线 / 进程未运行 → offline
+    assert api_mod._state(False, "on", {"task_id": "x", "name": "n"}, True) == "offline"
+    assert api_mod._state(True, "on", {"task_id": "x", "name": "n"}, False) == "offline"
+    # 请假（在线）→ leave
+    assert api_mod._state(True, "leave", None, True) == "leave"
     # 上班 + 有任务 → working
     assert api_mod._state(True, "on",
-                          {"task_id": "morning_analysis", "name": "早盘分析"}) == "working"
+                          {"task_id": "morning_analysis", "name": "早盘分析"}, True) == "working"
     # 上班 + 无任务 → slack
-    assert api_mod._state(True, "on", None) == "slack"
+    assert api_mod._state(True, "on", None, True) == "slack"
 
 
 def test_create_and_list_session(client):
@@ -100,6 +101,28 @@ def test_chat_sse_streams_and_persists(client):
     msgs = agent_db.messages_by_session(sid)
     assert [m["role"] for m in msgs] == ["user", "assistant"]
     assert msgs[1]["content"] == "你好，我是小满。"
+
+
+def test_agent_set_state(client):
+    """桌宠状态按钮契约：random/reading/slack 走 switch_state 落库并记台账；非法 action 400。
+
+    前端 manualState() 消费 {"state": {id, label, changed}} —— 此测试锁定该形状。
+    """
+    r = client.post("/api/agent/state", json={"action": "slack"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["state"]["changed"] is True
+    assert body["state"]["id"] and body["state"]["label"]
+    # 落库后端：状态机 meta 与活动台账（做过的事）同步写入
+    assert agent_db.meta_get("xiaoman_current_state") == body["state"]["id"]
+
+    r = client.post("/api/agent/state", json={"action": "reading"})
+    assert r.status_code == 200
+    assert r.json()["state"]["id"] == "reading"
+
+    r = client.post("/api/agent/state", json={"action": "bogus"})
+    assert r.status_code == 400
 
 
 def test_chat_multiline_reply_is_multi_messages(client, monkeypatch):

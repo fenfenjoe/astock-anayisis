@@ -69,6 +69,9 @@ def run_task(task, profile=DEFAULT_PROFILE, cwd=None, timeout=None,
     node_exe, bin_js = found
     cmd = [str(node_exe), str(bin_js), "--profile", profile, task]
     timeout = timeout or config.DSH_TIMEOUT_SECONDS
+    # Windows 命令行总长上限 32767，超限会报 [WinError 206]——提前给出可读原因
+    if len(task) > 32000:
+        return "failed", f"任务文本超长（{len(task)} 字符 > 32000 上限），请精简注入内容"
     proc_env = os.environ.copy()
     proc_env.update(env if env is not None else XIAOMAN_OV_ENV)
     try:

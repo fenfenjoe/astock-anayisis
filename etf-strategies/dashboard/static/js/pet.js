@@ -48,10 +48,6 @@
       '小满就位！盯盘、写笔记，随时喊我～',
       '我在哦，点"角色"页就能找我聊天～',
     ],
-    mode_auto: [
-      '好嘞，状态我自己安排～',
-      '收到，回到自动模式！',
-    ],
     slack: [
       '摸鱼中…今天又是谁在 ETF 里偷跑？',
       '收盘了才敢说的悄悄话：我也在盯大盘…',
@@ -106,7 +102,6 @@
     key: 'unknown',          // offline | leave | sleep | slack | working
     lastKey: null,           // 上一次 key（状态切换沿检测）
     posture: 'type',         // working 细分：type | code | data | read（read=阅读，不显示场景动画）
-    mode: 'auto',            // auto | working | slack | sleep（悬浮按钮手动覆盖，localStorage 持久化）
     thinking: false,
     renderer: 'idle',        // idle | loading | ready | failed
     model: null,             // Live2DModel（ready 后）
@@ -166,33 +161,22 @@
   }
 
   // ═══════════ 状态机：状态推导 + UI 应用 ═══════════
-  // 作息钟：22:00–次日 06:00 为睡眠时间（自动模式下强制 sleep；手动模式不干预）
+  // 作息钟：22:00–次日 06:00 为睡眠时间（强制 sleep；进程未跑的 offline 不遮蔽）
   function isSleepHour(d) {
     d = d || new Date();
     var h = d.getHours();
     return h >= 22 || h < 6;
   }
-  function loadMode() {
-    try {
-      var m = localStorage.getItem('xm-pet-mode');
-      return (m === 'working' || m === 'slack' || m === 'sleep') ? m : 'auto';
-    } catch (e) { return 'auto'; }
-  }
-  function saveMode(m) {
-    try { localStorage.setItem('xm-pet-mode', m); } catch (e) { /* ignore */ }
-  }
 
   function deriveKey(s) {
-    // 手动模式（桌宠悬浮按钮）：用户指定状态最优先，不被后端/作息钟覆盖
-    if (state.mode && state.mode !== 'auto') return state.mode;
-    // 后端 s.state 已综合：offline / leave / working（含调度任务 & 阅读/写作/思考）/ slack
+    // 状态来源唯一化：手动切换已落库后端（/api/agent/state），桌宠只跟随后端
     var k;
     if (!s || !s.alive || s.state === 'offline') k = 'offline';
     else if (s.state) k = s.state;
     else if (s.attendance === 'leave') k = 'leave';
     else if (s.current_task) k = 'working';
     else k = 'slack';
-    // 自动模式 + 睡眠时间：工作/摸鱼/请假都去睡（offline 保留——那是进程没跑，需提示）
+    // 睡眠时间：工作/摸鱼/请假都去睡（offline 保留——那是进程没跑，需提示）
     if (k !== 'offline' && isSleepHour()) k = 'sleep';
     return k;
   }
@@ -211,13 +195,11 @@
     return 'type';
   }
 
-  // 综合后端状态 + 手动模式 + 作息钟，推导当前 key/posture
+  // 综合后端状态 + 作息钟，推导当前 key/posture
   function recompute() {
     var s = state.status || {};
     state.key = deriveKey(s);
     if (state.key !== 'working') { state.posture = 'type'; return; }
-    // 手动"工作"：无后端任务上下文，用通用打字姿态（小桌场景照常显示）
-    if (state.mode !== 'auto') { state.posture = 'type'; return; }
     state.posture = s.current_task ? derivePosture(s) : deriveStatePosture(s.current_state);
   }
 
@@ -274,8 +256,7 @@
         showBubble('切换失败：' + ((j && j.detail) || ('HTTP ' + resp.status)));
         return;
       }
-      state.mode = 'auto';               // 手动切换也落库后端 → 桌宠永远跟随后端状态
-      saveMode('auto');
+      // 手动切换已落库后端 → 桌宠永远跟随后端状态（下次轮询即校准）
       paintModeButtons();
       var lbl = (j.state && j.state.label) || '';
       showBubble(lbl + (j.state && j.state.changed === false ? '（本来就是）' : '，已切换'));
@@ -285,22 +266,16 @@
     tick();
   }
 
-  // ── 手动模式切换（悬浮按钮，旧 cosmetic 逻辑保留兜底）──
-  function setMode(m) {
-    state.mode = (m === 'working' || m === 'slack' || m === 'sleep') ? m : 'auto';
-    saveMode(state.mode);
-    var prevKey = state.key;
-    recompute();
-    if (state.mode === 'auto') announce(pick(LINES.mode_auto), 4200);
-    else if (prevKey === state.key) announce(stateLine(), 4600);  // 同态重复点击也给句反馈
-    paint();
-    if (prevKey && prevKey !== state.key) onKeyChange(prevKey, state.key);
-  }
+  // 按钮高亮跟随后端真实状态：阅读=正处于阅读态；摸鱼=当前在非工作池；随机是瞬时动作不常亮
   function paintModeButtons() {
     if (!el.modes) return;
+    var cur = (state.status && state.status.current_state) || '';
     var btns = el.modes.querySelectorAll('.xm-pet-mode');
     for (var i = 0; i < btns.length; i++) {
-      btns[i].classList.toggle('is-active', btns[i].getAttribute('data-mode') === state.mode);
+      var m = btns[i].getAttribute('data-mode');
+      var on = (m === 'reading' && cur === 'reading') ||
+               (m === 'slack' && state.key === 'slack');
+      btns[i].classList.toggle('is-active', on);
     }
   }
 
@@ -742,7 +717,7 @@
     $('xm-pet-btn-min').addEventListener('click', function () { minimize(); });
     $('xm-pet-btn-hide').addEventListener('click', function () { hidePet(); });
     el.mini.addEventListener('click', function () { summon(); });
-    // 状态手动切换：自动 / 工作 / 摸鱼 / 睡觉（localStorage 持久化）
+    // 状态手动切换：随机 / 阅读 / 摸鱼（走 /api/agent/state，落库后端并记入"做过的事"）
     if (el.modes) {
       el.modes.addEventListener('click', function (e) {
         var btn = e.target.closest('.xm-pet-mode');
@@ -806,7 +781,6 @@
     }
     if (state.mounted) return;
     state.mounted = true;
-    state.mode = 'auto';   // 后端为准：旧 localStorage 手动模式(working/slack/sleep)不再使用
     cacheEls();
     if (!el.pet) {
       state.mounted = false;

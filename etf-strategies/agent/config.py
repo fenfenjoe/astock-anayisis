@@ -13,7 +13,7 @@ PERSONAS_DIR = AGENT_DIR / "personas"
 
 # dsh 任务执行：仓库根（dsh cwd，可被 DASHBOARD_REPO_ROOT 覆盖）+ 超时
 REPO_ROOT = Path(os.environ.get("DASHBOARD_REPO_ROOT") or AGENT_DIR.parent.parent)
-DSH_TIMEOUT_SECONDS = 120
+DSH_TIMEOUT_SECONDS = 240  # 阅读要读资料包文件 + web 读多篇全文，120 太紧
 
 PERSONA_ID = "xiaoman"
 

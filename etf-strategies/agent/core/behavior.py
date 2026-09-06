@@ -8,6 +8,7 @@ LLM 生成统一走 dsh（dsh --profile xiaoman），凭据由 dsh 管理。
 
 import json as _json
 import random
+import shutil
 from datetime import datetime, timedelta
 
 from agent import config, db as agent_db, dsh_runner
@@ -353,11 +354,85 @@ def switch_state(target, now=None, db=None, source="auto"):
     }
 
 
+# Windows CreateProcess 命令行总长上限 32767 字符，dsh headless 只收 positional
+# 参数、无 stdin 通道 → 任务文本必须控长，否则 [WinError 206]。
+# 阅读上下文（未读清单/记忆）体积随知识库增长不可控，外置为"资料包"临时文件，
+# 由 LLM 用读文件工具打开（xiaoman profile 已实测可读仓库内文件）；任务文本
+# 只留骨架（~1K）。资料包写失败时降级回内联注入，并按 18K 预算保新弃旧。
+_READING_INLINE_BUDGET = 18000
+_READING_SUMMARY_MAX = 200
+_READING_CTX_DIR = config.DATA_DIR / "tmp" / "reading"
+_READING_CTX_KEEP = 5  # 保留最近 N 次资料包，便于回看"她为什么挑这几篇"
+_READING_CTX_MAX_AGE_DAYS = 7
+
+
+def _fmt_unread_md(unread, budget=None):
+    """未读清单 Markdown 文本；budget 给定时按字符预算保新弃旧（内联降级用）。"""
+    lines, total = [], 0
+    for i, item in enumerate(unread or []):
+        summary = (item.get("summary") or "(无)")[:_READING_SUMMARY_MAX]
+        line = (
+            f"{i + 1}. [{item['source']}] {item['title']}\n"
+            f"   链接: {item['url']}\n"
+            f"   摘要: {summary}"
+        )
+        if budget is not None and total + len(line) > budget:
+            break  # 清单按 fetched_at 倒序，装不下的旧文留待下轮
+        lines.append(line)
+        total += len(line) + 1
+    return "\n".join(lines) if lines else "（今天没有未读文章）"
+
+
+def _fmt_memories_md(past):
+    """过往阅读记忆 Markdown 文本。"""
+    if not past:
+        return "（还没有过往记忆）"
+    return "\n".join(
+        f"- [{p['id']}] {p['title']} | 观点: {p.get('viewpoint') or ''} | 你的感受: {p.get('memory') or ''}"
+        for p in past
+    )
+
+
+def _prune_reading_ctx():
+    """清理旧资料包：删 7 天前残留，再只保留最近 _READING_CTX_KEEP 份。"""
+    try:
+        if not _READING_CTX_DIR.is_dir():
+            return
+        dirs = sorted(d for d in _READING_CTX_DIR.iterdir() if d.is_dir())
+        cutoff = datetime.now() - timedelta(days=_READING_CTX_MAX_AGE_DAYS)
+        for d in dirs:
+            try:
+                expired = datetime.fromtimestamp(d.stat().st_mtime) < cutoff
+            except OSError:
+                continue
+            if expired:
+                shutil.rmtree(d, ignore_errors=True)
+        for d in dirs[:-_READING_CTX_KEEP]:
+            shutil.rmtree(d, ignore_errors=True)
+    except OSError:
+        pass
+
+
+def _write_reading_ctx(unread, past_memories):
+    """把未读清单 + 过往记忆写成资料包，返回目录 Path；失败返回 None。"""
+    try:
+        ctx_dir = _READING_CTX_DIR / datetime.now().strftime("%Y%m%d_%H%M%S")
+        ctx_dir.mkdir(parents=True, exist_ok=True)
+        (ctx_dir / "unread.md").write_text(
+            _fmt_unread_md(unread), encoding="utf-8")
+        (ctx_dir / "memories.md").write_text(
+            _fmt_memories_md(past_memories), encoding="utf-8")
+        return ctx_dir
+    except OSError:
+        return None
+
+
 def execute_reading(db=None, llm_fn=None):
     """执行阅读行为（进入"阅读"时调用一次）。
 
-    加载 reading.md → 注入未读文章 + 过往记忆 → dsh 调用 →
-    LLM 自己挑选想读的文章、用 web 读全文、记录感受、决定发几条动态。
+    加载 reading.md → 未读文章 + 过往记忆外置为资料包文件（任务文本留骨架，
+    LLM 用读文件工具打开）→ dsh 调用 → LLM 自己挑选想读的文章、用 web 读全文、
+    记录感受、决定发几条动态。资料包写失败时降级为内联注入。
 
     返回 {"read_count", "posted_count", "error": str|None}。
     """
@@ -380,32 +455,29 @@ def execute_reading(db=None, llm_fn=None):
     template = load_reading_prompt()
     unread = db.knowledge_unread(limit=100)
     past_memories = db.knowledge_with_memory(limit=10)
+    _prune_reading_ctx()
 
-    unread_text = ""
-    if unread:
-        unread_lines = []
-        for i, item in enumerate(unread):
-            unread_lines.append(
-                f"{i + 1}. [{item['source']}] {item['title']}\n"
-                f"   链接: {item['url']}\n"
-                f"   摘要: {item.get('summary') or '(无)'}"
-            )
-        unread_text = "\n".join(unread_lines)
-    else:
-        unread_text = "（今天没有未读文章）"
-
-    past_text = ""
-    if past_memories:
-        past_text = "\n".join(
-            f"- [{p['id']}] {p['title']} | 观点: {p.get('viewpoint') or ''} | 你的感受: {p.get('memory') or ''}"
-            for p in past_memories
+    # 上下文外置：未读/记忆写成资料包文件，任务文本只留骨架；
+    # 写失败（磁盘异常/路径不可用）降级回内联注入（18K 预算保新弃旧）
+    ctx_dir = _write_reading_ctx(unread, past_memories)
+    if ctx_dir is not None:
+        try:
+            shown = ctx_dir.relative_to(config.REPO_ROOT).as_posix()
+        except ValueError:
+            shown = ctx_dir.as_posix()
+        task = template.replace(
+            "<!-- UNREAD_ARTICLES -->",
+            f"未读清单文件：`{shown}/unread.md`（最新在前）。"
+            "请先用读文件工具打开它，浏览全部未读文章后再从中挑选。",
+        ).replace(
+            "<!-- PAST_MEMORIES -->",
+            f"过往记忆文件：`{shown}/memories.md`。请用读文件工具打开它。",
         )
     else:
-        past_text = "（还没有过往记忆）"
-
-    task = template.replace("<!-- UNREAD_ARTICLES -->", unread_text).replace(
-        "<!-- PAST_MEMORIES -->", past_text
-    )
+        task = template.replace(
+            "<!-- UNREAD_ARTICLES -->",
+            _fmt_unread_md(unread, _READING_INLINE_BUDGET),
+        ).replace("<!-- PAST_MEMORIES -->", _fmt_memories_md(past_memories))
     try:
         text = llm_fn(task)
     except Exception as e:
