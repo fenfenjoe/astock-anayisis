@@ -473,7 +473,8 @@ def get_daily_signals(date: str | None = None):
     if date:
         report = db.report_get(date, "每日信号")
         if report is None:
-            raise HTTPException(404, f"未找到 {date_str} 的每日信号")
+            # BUG-FIX(2026-09-07)：原引用不存在的 date_str → NameError 500，应为 404
+            raise HTTPException(404, f"未找到 {date} 的每日信号")
     else:
         # 取最近一个有每日信号的日期
         dates = db.report_get_dates()
@@ -587,8 +588,12 @@ def get_scheduler_tasks():
         }
 
     tasks = []
-    for t in scheduler.scoped_tasks():
-        latest = db.scheduler_latest(t["task_id"])
+    # BUG-FIX(2026-09-07)：原对每个 task 调一次 scheduler_latest（N+1 云往返，
+    # 拖慢后台页刷新）→ 改批量一次取全部 task 的最近运行。
+    scoped = scheduler.scoped_tasks()
+    latest_map = db.scheduler_latest_map([t["task_id"] for t in scoped])
+    for t in scoped:
+        latest = latest_map.get(t["task_id"])
         tasks.append(
             {
                 "task_id": t["task_id"],

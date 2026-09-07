@@ -20,6 +20,10 @@ from dashboard.db import (
     kb_upsert,
     nav_upsert_batch, nav_has_data,
 )
+try:
+    from cloud_db import select as _cd_select
+except Exception:  # 云未配置时保持可导入（非云模式不触发）
+    _cd_select = None
 
 import threading
 
@@ -481,29 +485,34 @@ def sync_daily_signals(progress_callback=None) -> dict:
                         pass
 
                 # Batch insert: delete old + insert new in one transaction
-                with get_conn() as conn:
-                    conn.execute("DELETE FROM daily_signals WHERE strategy_id=?", (sid,))
-                    for etf in strat.assets:
-                        tw = float(today_w.get(etf, 0.0))
-                        pw = float(prev_w.get(etf, 0.0))
-                        diff = tw - pw
-                        if diff > 0.001:
-                            action = "BUY"
-                        elif diff < -0.001:
-                            action = "SELL"
-                        else:
-                            action = "HOLD"
-                        conn.execute("""
-                            INSERT OR REPLACE INTO daily_signals
-                            (strategy_id, signal_date, asset_code, asset_name,
-                             target_weight, prev_weight, weight_change, action, updated_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
-                        """, (sid, signal_date, etf, get_etf_name(etf),
-                              tw, pw, tw - pw, action))
-                    count = conn.execute(
-                        "SELECT COUNT(*) FROM daily_signals WHERE strategy_id=? AND signal_date=?",
-                        (sid, signal_date)
-                    ).fetchone()[0]
+                # BUG-FIX(2026-09-07)：云模式走云 signals_upsert/signals_delete_by_strategy
+                # （本地无 daily_signals 表，直写会 500 / 绕过云，违背云权威原则）。
+                from dashboard.db import USE_CLOUD, signals_delete_by_strategy
+                signals_delete_by_strategy(sid)
+                for etf in strat.assets:
+                    tw = float(today_w.get(etf, 0.0))
+                    pw = float(prev_w.get(etf, 0.0))
+                    diff = tw - pw
+                    if diff > 0.001:
+                        action = "BUY"
+                    elif diff < -0.001:
+                        action = "SELL"
+                    else:
+                        action = "HOLD"
+                    signals_upsert(sid, signal_date, etf, get_etf_name(etf),
+                                   tw, pw, action)
+                if USE_CLOUD:
+                    cnt_rows = _cd_select("daily_signals",
+                                          columns="id",
+                                          filters=[("strategy_id", "eq", sid),
+                                                   ("signal_date", "eq", signal_date)])
+                    count = len(cnt_rows)
+                else:
+                    with get_conn() as conn:
+                        count = conn.execute(
+                            "SELECT COUNT(*) FROM daily_signals WHERE strategy_id=? AND signal_date=?",
+                            (sid, signal_date)
+                        ).fetchone()[0]
 
                 results[sid] = count
             except Exception as e:

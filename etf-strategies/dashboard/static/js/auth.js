@@ -148,6 +148,22 @@ const Auth = (function () {
     return resp;
   }
 
+  // BUG-FIX(2026-09-07)：新增 DELETE 包装，统一 401 → 清 token + 跳登录
+  // （原先 agent.js 等处的裸 fetch DELETE 在 token 过期时静默失败，不跳登录）
+  async function fetchDelete(url) {
+    const headers = getHeaders();
+    const resp = await fetch(url, {
+      method: 'DELETE',
+      headers: headers,
+    });
+    if (resp.status === 401) {
+      _clearToken();
+      showLoginPage();
+      throw new Error('认证已过期，请重新登录');
+    }
+    return resp;
+  }
+
   // ── Expose ──
   return {
     init: init,
@@ -159,5 +175,6 @@ const Auth = (function () {
     changePassword: changePassword,
     fetchGet: fetchGet,
     fetchPost: fetchPost,
+    fetchDelete: fetchDelete,
   };
 })();

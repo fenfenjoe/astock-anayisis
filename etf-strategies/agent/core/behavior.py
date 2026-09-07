@@ -225,6 +225,18 @@ def pick_random_state(now=None, db=None):
         if b["id"] == unread_bonus.get("target"):
             unread_count = len(db.knowledge_unread(limit=200))
             w += unread_bonus.get("per_article_weight", 0) * unread_count
+            # BUG-FIX(2026-09-07)：阅读冷却 —— 刚读完（READING_COOLDOWN_SECONDS 内）
+            # 就不再选阅读，防"未读多 → 权重爆表 → 每 tick 都 reading → 反复 spawn dsh"
+            # 的垄断/刷屏循环（也与用户观察到的 dsh 反复执行有关）。
+            last_read_raw = db.meta_get("xiaoman_last_read_at")
+            if last_read_raw:
+                try:
+                    last_read = datetime.strptime(
+                        last_read_raw, "%Y-%m-%d %H:%M:%S")
+                    if (now - last_read).total_seconds() < config.READING_COOLDOWN_SECONDS:
+                        w = 0
+                except ValueError:
+                    pass
 
         if b["id"] == "sleep" and w == 0 and now.hour < 23:
             w = 0
@@ -445,6 +457,10 @@ def execute_reading(db=None, llm_fn=None):
 
     def _finish_reading(result, err=None):
         db.activity_close_open(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        # BUG-FIX(2026-09-07)：记录阅读完成时间，供 pick_random_state 的
+        # READING_COOLDOWN 判定使用（防阅读权重垄断 → 高频反复 spawn dsh）。
+        db.meta_set("xiaoman_last_read_at",
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         note = f"读了 {result.get('read_count', 0)} 篇"
         if err:
             note += f"（异常：{err}）"

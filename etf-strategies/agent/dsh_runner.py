@@ -10,6 +10,7 @@ Windows 直接调 node + @deepseek-ai/dsh/lib/bin.js（规避 dsh.ps1 wrapper）
 import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from agent import config
@@ -61,6 +62,12 @@ def run_task(task, profile=DEFAULT_PROFILE, cwd=None, timeout=None,
     task: directive 文本（人设由 profile 注入，task 只含业务内容）。
     env: 子进程环境变量覆盖；None 时默认注入小满的 OpenViking 隔离变量。
     run: 依赖注入 subprocess.run（测试 mock 用）。
+
+    BUG-FIX(2026-09-07)：不再用 capture_output=True —— 那是 Windows 管道 EOF 挂死
+    的已知雷区（dsh 会派生子进程继承管道写端，父进程退出后管道不 EOF → 等死），
+    也是读取"为什么总是 1-2 秒就结束"时吞掉 stderr、看不到真实错误的原因。
+    改为与 scheduler._run_dsh_once 同构：stdout/stderr 重定向临时文件 + 隐藏控制台，
+    进程退出即返回；失败时回读文件把真实 stderr 放进 output 供上层记录/诊断。
     """
     run = run or subprocess.run
     found = find_dsh_bin()
@@ -74,14 +81,55 @@ def run_task(task, profile=DEFAULT_PROFILE, cwd=None, timeout=None,
         return "failed", f"任务文本超长（{len(task)} 字符 > 32000 上限），请精简注入内容"
     proc_env = os.environ.copy()
     proc_env.update(env if env is not None else XIAOMAN_OV_ENV)
+
+    out_path = err_path = None
     try:
-        proc = run(cmd, cwd=str(cwd or config.REPO_ROOT),
-                   capture_output=True, text=True, encoding="utf-8",
-                   errors="replace", timeout=timeout, env=proc_env)
-    except subprocess.TimeoutExpired:
-        return "timeout", f"dsh 执行超时（>{timeout}s）"
-    except OSError as e:
-        return "failed", f"dsh 启动失败: {e}"
-    if proc.returncode != 0:
-        return "failed", (proc.stderr or proc.stdout or "").strip()
-    return "success", (proc.stdout or "").strip()
+        fd_out, out_path = tempfile.mkstemp(prefix="xm_dsh_out_", suffix=".txt")
+        fd_err, err_path = tempfile.mkstemp(prefix="xm_dsh_err_", suffix=".txt")
+        try:
+            with (
+                os.fdopen(fd_out, "w", encoding="utf-8") as fo,
+                os.fdopen(fd_err, "w", encoding="utf-8") as fe,
+            ):
+                flags = 0
+                startupinfo = None
+                if os.name == "nt":
+                    # 隐藏控制台（非禁用）：后代取数子进程继承隐藏控制台 → 全程静默
+                    flags = subprocess.CREATE_NEW_PROCESS_GROUP
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = subprocess.SW_HIDE
+                proc = run(
+                    cmd, cwd=str(cwd or config.REPO_ROOT),
+                    stdin=subprocess.DEVNULL, stdout=fo, stderr=fe,
+                    text=True, encoding="utf-8", errors="replace",
+                    timeout=timeout, env=proc_env,
+                    creationflags=flags, startupinfo=startupinfo,
+                )
+            status = "success" if proc.returncode == 0 else "failed"
+        except subprocess.TimeoutExpired:
+            return "timeout", f"dsh 执行超时（>{timeout}s）"
+        except OSError as e:
+            return "failed", f"dsh 启动失败: {e}"
+        out = _read_file(out_path)
+        err = _read_file(err_path)
+        if status != "success":
+            return "failed", (err or out or "").strip()
+        return "success", (out or "").strip()
+    finally:
+        for p in (out_path, err_path):
+            if p:
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
+
+
+def _read_file(path: str | None) -> str:
+    """读取临时输出文件；不存在/读取失败返回空串。"""
+    if not path:
+        return ""
+    try:
+        return Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""

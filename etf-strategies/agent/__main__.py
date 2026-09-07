@@ -21,26 +21,11 @@ from agent.core import lifecycle
 
 def main():
     print("[agent] 小满常驻进程启动（tick 间隔见 config）")
-    # ── 初始化 agent.db：file 模式建表/迁移；memory 模式在此从 TOS 载入最新快照，
-    #    保证台账/会话在每次启动后都能看到云端最新数据（含上次登录产生的内容）──
+    # ── 初始化 agent.db：file 模式建表/迁移；cloud 模式直接连云（见 agent/db.py USE_CLOUD）──
     try:
         agent_db.init_db()
     except Exception as e:
         print(f"[agent]   WARNING: agent.db init failed: {e}")
-    # ── 云恢复：CLOUD_RESTORE_ON_START=1 时先拉取 TOS 最新数据 ──
-    import os
-    import subprocess
-    if os.environ.get("CLOUD_RESTORE_ON_START", "").lower() in ("1", "true"):
-        print("[agent] Restoring data from cloud (TOS)...")
-        try:
-            repo = Path(__file__).resolve().parent.parent.parent
-            r = subprocess.run(
-                [sys.executable, "scripts/cloud_sync.py", "--download"],
-                cwd=str(repo), capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=600)
-            print(f"[agent]   restore exit={r.returncode}: {(r.stdout or '')[-200:]}")
-        except Exception as e:
-            print(f"[agent]   WARNING: cloud restore failed: {e}")
     loop = lifecycle.AgentLoop()
     try:
         loop.run()

@@ -23,6 +23,11 @@ import pytest
 # setdefault 无法覆盖继承值，会重新触发 2026-08-31 事故（BUG-009/BUG-010）。
 os.environ["DB_MODE"] = "file"                           # 强制文件模式，禁用 memory 快照回传
 os.environ["CLOUD_RESTORE_ON_START"] = "0"               # 强制禁用启动云下载（file 模式下 cloud_restore 本就 no-op）
+# 云端权威库隔离（2026-09-07 云端迁移后新增）：普通测试强制走本地 file 后端，
+# 避免 DASHBOARD_DB_BACKEND/AGENT_DB_BACKEND=cloud（.env 已开启）把测试数据写进真实云库。
+# 云端集成测试（test_*_cloud.py）自行在 fixture 里 monkeypatch 把 USE_CLOUD 置 True。
+os.environ["DASHBOARD_DB_BACKEND"] = "file"
+os.environ["AGENT_DB_BACKEND"] = "file"
 os.environ.setdefault("DSH_TEST", "1")                   # app.lifespan 测试免疫标记
 
 

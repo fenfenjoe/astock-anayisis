@@ -29,6 +29,12 @@ _DB_PATH = config.DB_PATH
 #    启动从 TOS 载入最新快照（cloud_restore），定时/退出快照回传（cloud_backup）。
 #    默认 file 模式（测试/降级）。
 USE_MEMORY = os.environ.get("DB_MODE", "").lower() == "memory"
+
+# ── 云端权威数据库后端（AGENT_DB_BACKEND=cloud 时启用）：
+#    所有 CRUD 直接读写火山 Supabase Postgres（PostgREST Data API），
+#    替代本地 SQLite 权威存储 → 跨机器/多进程天然一致。
+USE_CLOUD = os.environ.get("AGENT_DB_BACKEND", "").lower() == "cloud"
+
 _mem_lock = threading.RLock()
 _mem_conn: sqlite3.Connection | None = None
 _SNAPSHOT_KEY = "agent.db"  # TOS 内 sqlite/<ts>/agent.db
@@ -41,6 +47,37 @@ try:
     )
 except ImportError:
     _cs_get = _cs_put = _cs_list = None
+
+if USE_CLOUD:
+    try:
+        from cloud_db import (
+            delete as _cd_delete,
+            enabled as _cd_enabled,
+            insert as _cd_insert,
+            q as _cd_q,
+            select as _cd_select,
+            select_one as _cd_select_one,
+            update as _cd_update,
+            upsert as _cd_upsert,
+        )
+    except ImportError:
+        USE_CLOUD = False
+else:
+    # 测试可动态把 USE_CLOUD 置 True；此处总是尝试导入，供测试 fixture 使用
+    try:
+        from cloud_db import (
+            delete as _cd_delete,
+            enabled as _cd_enabled,
+            insert as _cd_insert,
+            q as _cd_q,
+            select as _cd_select,
+            select_one as _cd_select_one,
+            update as _cd_update,
+            upsert as _cd_upsert,
+        )
+    except ImportError:  # pragma: no cover
+        _cd_delete = _cd_enabled = _cd_insert = _cd_q = None
+        _cd_select = _cd_select_one = _cd_update = _cd_upsert = None
 
 
 def _memory_conn() -> sqlite3.Connection:
@@ -196,10 +233,13 @@ _JSON_FIELDS = ("sources", "topics")
 def init_db(db_path=None):
     """设置数据库路径并建表（幂等）。db_path=None 复位为默认路径。
 
+    cloud 模式：仅校验云连接（不落本地文件）。
     memory 模式：忽略 db_path，从 TOS 载入最新快照；无快照建空 schema。
     """
     global _DB_PATH
     _DB_PATH = Path(db_path) if db_path else config.DB_PATH
+    if USE_CLOUD:
+        return  # 云表已由 schema 建好；连接由 cloud_db 惰性建立
     if USE_MEMORY:
         if not cloud_restore():
             _memory_conn().executescript(SCHEMA)
@@ -266,12 +306,23 @@ def _row_dict(row):
     return d
 
 
+def _now_str():
+    """本地时间字符串（与 SQLite datetime('now','localtime') 同形）。"""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
 # ═══════════════════════════════════════════
 # Schema 检查（测试用）
 # ═══════════════════════════════════════════
 
 
 def list_tables():
+    if USE_CLOUD:
+        return [
+            "agent_sessions", "agent_messages", "agent_articles",
+            "agent_opinions", "agent_knowledge", "agent_metadata",
+            "agent_sources", "agent_activities",
+        ]
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
@@ -285,6 +336,9 @@ def list_tables():
 
 
 def session_create(title="新会话", persona=config.PERSONA_ID):
+    if USE_CLOUD:
+        row = _cd_insert("agent_sessions", {"persona": persona, "title": title})
+        return row["id"] if row else None
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO agent_sessions(persona, title) VALUES (?, ?)", (persona, title)
@@ -293,6 +347,8 @@ def session_create(title="新会话", persona=config.PERSONA_ID):
 
 
 def session_list():
+    if USE_CLOUD:
+        return _cd_select("agent_sessions", order="updated_at.desc")
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM agent_sessions ORDER BY updated_at DESC"
@@ -301,6 +357,8 @@ def session_list():
 
 
 def session_get(session_id):
+    if USE_CLOUD:
+        return _cd_select_one("agent_sessions", filters=[("id", "eq", session_id)])
     with get_conn() as conn:
         r = conn.execute(
             "SELECT * FROM agent_sessions WHERE id=?", (session_id,)
@@ -309,6 +367,10 @@ def session_get(session_id):
 
 
 def session_rename(session_id, title):
+    if USE_CLOUD:
+        _cd_update("agent_sessions", {"title": title, "updated_at": _now_str()},
+                   filters=[("id", "eq", session_id)])
+        return
     with get_conn() as conn:
         conn.execute(
             "UPDATE agent_sessions SET title=?, updated_at=datetime('now','localtime') "
@@ -318,11 +380,23 @@ def session_rename(session_id, title):
 
 
 def session_delete(session_id):
+    if USE_CLOUD:
+        # 级联删消息由数据库外键 ON DELETE CASCADE 处理
+        _cd_delete("agent_sessions", filters=[("id", "eq", session_id)])
+        return
     with get_conn() as conn:
         conn.execute("DELETE FROM agent_sessions WHERE id=?", (session_id,))
 
 
 def message_add(session_id, role, content, sources=None):
+    if USE_CLOUD:
+        row = _cd_insert("agent_messages", {
+            "session_id": session_id, "role": role, "content": content,
+            "sources": sources or [],
+        })
+        _cd_update("agent_sessions", {"updated_at": _now_str()},
+                   filters=[("id", "eq", session_id)])
+        return row["id"] if row else None
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO agent_messages(session_id, role, content, sources) "
@@ -338,6 +412,9 @@ def message_add(session_id, role, content, sources=None):
 
 
 def messages_by_session(session_id):
+    if USE_CLOUD:
+        return _cd_select("agent_messages", filters=[("session_id", "eq", session_id)],
+                          order="id.asc")
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM agent_messages WHERE session_id=? ORDER BY id", (session_id,)
@@ -346,6 +423,8 @@ def messages_by_session(session_id):
 
 
 def messages_all():
+    if USE_CLOUD:
+        return _cd_select("agent_messages", order="id.asc")
     with get_conn() as conn:
         rows = conn.execute("SELECT * FROM agent_messages ORDER BY id").fetchall()
         return [_row_dict(r) for r in rows]
@@ -365,6 +444,13 @@ def article_create(
     status="published",
     kind="article",
 ):
+    if USE_CLOUD:
+        row = _cd_insert("agent_articles", {
+            "title": title, "summary": summary, "content": content,
+            "topics": topics or [], "sources": sources or [],
+            "status": status, "kind": kind,
+        })
+        return row["id"] if row else None
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO agent_articles(title, summary, content, topics, sources, status, kind) "
@@ -383,6 +469,10 @@ def article_create(
 
 
 def article_list(limit=50, kind=None):
+    if USE_CLOUD:
+        filters = [("kind", "eq", kind)] if kind else None
+        return _cd_select("agent_articles", filters=filters,
+                          order="published_at.desc,id.desc", limit=limit)
     with get_conn() as conn:
         if kind:
             rows = conn.execute(
@@ -400,6 +490,8 @@ def article_list(limit=50, kind=None):
 
 
 def article_get(article_id):
+    if USE_CLOUD:
+        return _cd_select_one("agent_articles", filters=[("id", "eq", article_id)])
     with get_conn() as conn:
         r = conn.execute(
             "SELECT * FROM agent_articles WHERE id=?", (article_id,)
@@ -413,6 +505,11 @@ def article_get(article_id):
 
 
 def opinion_add(topic, opinion, article_id=None):
+    if USE_CLOUD:
+        row = _cd_insert("agent_opinions", {
+            "topic": topic, "opinion": opinion, "article_id": article_id,
+        })
+        return row["id"] if row else None
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO agent_opinions(topic, opinion, article_id) VALUES (?,?,?)",
@@ -422,6 +519,9 @@ def opinion_add(topic, opinion, article_id=None):
 
 
 def opinions_by_topic(topic):
+    if USE_CLOUD:
+        return _cd_select("agent_opinions", filters=[("topic", "eq", topic)],
+                          order="id.asc")
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM agent_opinions WHERE topic=? ORDER BY id", (topic,)
@@ -430,6 +530,8 @@ def opinions_by_topic(topic):
 
 
 def opinions_all():
+    if USE_CLOUD:
+        return _cd_select("agent_opinions", order="id.asc")
     with get_conn() as conn:
         rows = conn.execute("SELECT * FROM agent_opinions ORDER BY id").fetchall()
         return [_row_dict(r) for r in rows]
@@ -442,6 +544,16 @@ def opinions_all():
 
 def knowledge_upsert(source, title, url, summary=None, content=None, published_at=None):
     """按 url 去重入库。返回 True=新增；False=已存在（不更新，保序）。"""
+    if USE_CLOUD:
+        exists = _cd_select_one("agent_knowledge", filters=[("url", "eq", url)],
+                                columns="id")
+        if exists:
+            return False
+        _cd_insert("agent_knowledge", {
+            "source": source, "title": title, "url": url,
+            "summary": summary, "content": content, "published_at": published_at,
+        })
+        return True
     with get_conn() as conn:
         exists = conn.execute(
             "SELECT 1 FROM agent_knowledge WHERE url=?", (url,)
@@ -458,6 +570,15 @@ def knowledge_upsert(source, title, url, summary=None, content=None, published_a
 
 def knowledge_set_memory(kid, viewpoint=None, emotion=None, memory=None, read_at=None):
     """将阅读后的观点/情绪/记忆写回知识条目（阅读完成回调）。"""
+    if USE_CLOUD:
+        patch = {}
+        for k, v in (("viewpoint", viewpoint), ("emotion", emotion),
+                     ("memory", memory), ("read_at", read_at)):
+            if v is not None:
+                patch[k] = v
+        if patch:
+            _cd_update("agent_knowledge", patch, filters=[("id", "eq", kid)])
+        return
     with get_conn() as conn:
         conn.execute(
             "UPDATE agent_knowledge SET "
@@ -472,6 +593,12 @@ def knowledge_set_memory(kid, viewpoint=None, emotion=None, memory=None, read_at
 
 def knowledge_with_memory(limit=20):
     """检索已有阅读记忆的条目（可供下次阅读时做上下文联想）。"""
+    if USE_CLOUD:
+        # BUG-FIX(2026-09-07)：过滤方向反了 —— 应返回 memory 非空的条目
+        # （SQLite 分支 IS NOT NULL），原写 is.null 返回的是"无记忆"条目。
+        return _cd_select("agent_knowledge",
+                          filters=[("memory", "not.is", None)], order="read_at.desc,id.desc",
+                          limit=limit)
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM agent_knowledge WHERE memory IS NOT NULL "
@@ -483,6 +610,10 @@ def knowledge_with_memory(limit=20):
 
 def knowledge_unread(limit=10):
     """获取尚未被小满阅读过的条目（read_at IS NULL）。"""
+    if USE_CLOUD:
+        return _cd_select("agent_knowledge",
+                          filters=[("read_at", "is", None), ("consumed", "eq", 0)],
+                          order="fetched_at.desc,id.desc", limit=limit)
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM agent_knowledge WHERE read_at IS NULL AND consumed=0 "
@@ -493,6 +624,9 @@ def knowledge_unread(limit=10):
 
 
 def knowledge_unconsumed(limit=20):
+    if USE_CLOUD:
+        return _cd_select("agent_knowledge", filters=[("consumed", "eq", 0)],
+                          order="fetched_at.desc,id.desc", limit=limit)
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM agent_knowledge WHERE consumed=0 "
@@ -503,11 +637,16 @@ def knowledge_unconsumed(limit=20):
 
 
 def knowledge_mark_consumed(kid):
+    if USE_CLOUD:
+        _cd_update("agent_knowledge", {"consumed": True}, filters=[("id", "eq", kid)])
+        return
     with get_conn() as conn:
         conn.execute("UPDATE agent_knowledge SET consumed=1 WHERE id=?", (kid,))
 
 
 def knowledge_all(limit=200):
+    if USE_CLOUD:
+        return _cd_select("agent_knowledge", order="id.desc", limit=limit)
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM agent_knowledge ORDER BY id DESC LIMIT ?", (limit,)
@@ -521,6 +660,9 @@ def knowledge_all(limit=200):
 
 
 def meta_get(key):
+    if USE_CLOUD:
+        row = _cd_select_one("agent_metadata", filters=[("key", "eq", key)])
+        return row["value"] if row else None
     with get_conn() as conn:
         r = conn.execute(
             "SELECT value FROM agent_metadata WHERE key=?", (key,)
@@ -529,6 +671,9 @@ def meta_get(key):
 
 
 def meta_set(key, value):
+    if USE_CLOUD:
+        _cd_upsert("agent_metadata", {"key": key, "value": value}, on_conflict="key")
+        return
     with get_conn() as conn:
         conn.execute(
             "INSERT INTO agent_metadata(key, value) VALUES (?,?) "
@@ -544,6 +689,11 @@ def meta_set(key, value):
 
 def activity_start(kind, label, started_at, source="auto"):
     """开启一条新的活动记录（= 状态切换进来时调用）。返回新记录 id。"""
+    if USE_CLOUD:
+        row = _cd_insert("agent_activities", {
+            "kind": kind, "label": label, "started_at": started_at, "source": source,
+        })
+        return row["id"] if row else None
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO agent_activities(kind, label, started_at, source) "
@@ -555,6 +705,9 @@ def activity_start(kind, label, started_at, source="auto"):
 
 def activity_open():
     """当前未结束（正在做）的活动；没有返回 None。"""
+    if USE_CLOUD:
+        return _cd_select_one("agent_activities", filters=[("ended_at", "is", None)],
+                              order="id.desc")
     with get_conn() as conn:
         r = conn.execute(
             "SELECT * FROM agent_activities WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1"
@@ -567,6 +720,14 @@ def activity_close_open(ended_at, tokens=None):
 
     返回被结束的记录 dict（无则 None）。tokens 参数为将来真实 usage 接入时的入口。
     """
+    if USE_CLOUD:
+        open_row = _cd_select_one("agent_activities",
+                                  filters=[("ended_at", "is", None)], order="id.desc")
+        if open_row is None:
+            return None
+        _cd_update("agent_activities", {"ended_at": ended_at, "tokens": tokens},
+                   filters=[("id", "eq", open_row["id"])])
+        return open_row
     with get_conn() as conn:
         row = conn.execute(
             "SELECT * FROM agent_activities WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1"
@@ -582,6 +743,9 @@ def activity_close_open(ended_at, tokens=None):
 
 def activity_set_note(activity_id, note):
     """给活动补备注（如阅读会话：读了哪几篇）。"""
+    if USE_CLOUD:
+        _cd_update("agent_activities", {"note": note}, filters=[("id", "eq", activity_id)])
+        return
     with get_conn() as conn:
         conn.execute(
             "UPDATE agent_activities SET note=? WHERE id=?", (note, activity_id)
@@ -590,6 +754,13 @@ def activity_set_note(activity_id, note):
 
 def activity_list(limit=50):
     """最近活动（进行中排最前，其余按开始时间倒序）。"""
+    if USE_CLOUD:
+        # 进行中(ended_at IS NULL)排前：PostgREST order 用 ended_at.asc（nulls first 需 Postgres 参数）
+        rows = _cd_select("agent_activities", order="ended_at.asc,started_at.desc,id.desc",
+                          limit=limit)
+        # 简单重排：无 ended_at 在前
+        rows.sort(key=lambda r: (r.get("ended_at") is not None, ))
+        return rows
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM agent_activities "
@@ -605,6 +776,13 @@ def activity_list(limit=50):
 
 
 def source_add(name, url, kind="website", note=None):
+    if USE_CLOUD:
+        # BUG-FIX(2026-09-07)：agent_sources.name 已加唯一约束，改用 on_conflict upsert
+        # （防双进程并发重复插入 409，且重复名返回已有 id 幂等）。
+        row = _cd_upsert("agent_sources", {
+            "name": name, "url": url, "kind": kind, "note": note,
+        }, on_conflict="name")
+        return row["id"] if row else None
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO agent_sources(name, url, kind, note) VALUES (?,?,?,?)",
@@ -614,6 +792,9 @@ def source_add(name, url, kind="website", note=None):
 
 
 def source_list(enabled_only=True):
+    if USE_CLOUD:
+        filters = [("enabled", "eq", True)] if enabled_only else None
+        return _cd_select("agent_sources", filters=filters, order="id.asc")
     with get_conn() as conn:
         if enabled_only:
             rows = conn.execute(
@@ -625,6 +806,8 @@ def source_list(enabled_only=True):
 
 
 def source_get(source_id):
+    if USE_CLOUD:
+        return _cd_select_one("agent_sources", filters=[("id", "eq", source_id)])
     with get_conn() as conn:
         r = conn.execute(
             "SELECT * FROM agent_sources WHERE id=?", (source_id,)
@@ -633,6 +816,10 @@ def source_get(source_id):
 
 
 def source_set_enabled(source_id, enabled):
+    if USE_CLOUD:
+        _cd_update("agent_sources", {"enabled": bool(enabled)},
+                   filters=[("id", "eq", source_id)])
+        return
     with get_conn() as conn:
         conn.execute(
             "UPDATE agent_sources SET enabled=? WHERE id=?",
@@ -641,5 +828,8 @@ def source_set_enabled(source_id, enabled):
 
 
 def source_delete(source_id):
+    if USE_CLOUD:
+        _cd_delete("agent_sources", filters=[("id", "eq", source_id)])
+        return
     with get_conn() as conn:
         conn.execute("DELETE FROM agent_sources WHERE id=?", (source_id,))

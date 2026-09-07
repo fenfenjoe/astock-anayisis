@@ -114,51 +114,6 @@ def test_run_publish_pipeline_material_insufficient(tmp_path):
         agent_db.init_db(None)
 
 
-POST_TEXT = "今天学到：央行 MLF 操作稳中偏松，流动性预期改善，我觉得值得继续跟踪～"
-
-
-def test_run_post_pipeline_outside_active_hours(tmp_path):
-    from datetime import datetime
-    agent_db.init_db(tmp_path / "agent.db")
-    try:
-        now = datetime(2026, 8, 27, 10, 0)  # 10:00 不在活跃时段
-        res = behavior.run_post_pipeline(now=now, llm_fn=lambda t: POST_TEXT)
-        assert res["posted"] is False
-        assert res["reason"] == "not_active_hours"
-    finally:
-        agent_db.init_db(None)
-
-
-def test_run_post_pipeline_first_post(tmp_path):
-    from datetime import datetime
-    agent_db.init_db(tmp_path / "agent.db")
-    try:
-        now = datetime(2026, 8, 27, 20, 0)
-        res = behavior.run_post_pipeline(now=now, llm_fn=lambda t: POST_TEXT)
-        assert res["posted"] is True
-        assert res["post_id"] > 0
-        assert agent_db.meta_get("last_post_at") == "2026-08-27 20:00:00"
-        posts = agent_db.article_list(kind="post")
-        assert len(posts) == 1
-        assert posts[0]["content"].startswith(POST_TEXT)
-        assert "不构成投资建议" in posts[0]["content"]
-    finally:
-        agent_db.init_db(None)
-
-
-def test_run_post_pipeline_throttled(tmp_path):
-    from datetime import datetime
-    agent_db.init_db(tmp_path / "agent.db")
-    try:
-        now = datetime(2026, 8, 27, 20, 0)
-        behavior.run_post_pipeline(now=now, llm_fn=lambda t: POST_TEXT)
-        # 紧接着再发 → 节流
-        res2 = behavior.run_post_pipeline(now=now, llm_fn=lambda t: POST_TEXT)
-        assert res2["posted"] is False
-        assert res2["reason"] == "too_soon"
-        # 6 小时后可再发（次日 18:00，间隔 22h > 6h 且在活跃时段）
-        later = datetime(2026, 8, 28, 18, 0)
-        res3 = behavior.run_post_pipeline(now=later, llm_fn=lambda t: POST_TEXT)
-        assert res3["posted"] is True
-    finally:
-        agent_db.init_db(None)
+# BUG-023 (2026-09-07) 修复: 3 个 test_run_post_pipeline_* 引用已删除函数
+# `run_post_pipeline`（5c6fc61 重构移除，发动态已并入 execute_reading 的 kind="post" 路径）。
+# 删除过时测试；新路径由 test_agent_activity.py 的 execute_reading 测试覆盖。

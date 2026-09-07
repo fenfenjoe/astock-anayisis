@@ -6,368 +6,445 @@
 [app]   daily_signal loaded (19 strategies)
 [app] Background: warming signal cache...
 [app] Startup complete — server ready at http://localhost:8000
+[scheduler] engine started (auto=True)
 [app] Importing 每日复盘 data (reports/holdings/trades)...
 [app]   reports uploaded: 0, imported: 0
+[scheduler] auto dispatch harness_bug_auto_fix → run#834
+[scheduler] run#834 cloud→local holdings synced: ['holdings/每日调仓.md', 'holdings/持仓.md']
+INFO:     127.0.0.1:55127 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55127 - "GET /static/css/dashboard.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55128 - "GET /static/css/pet.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55129 - "GET /static/css/agent.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55127 - "GET /static/js/agent.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55128 - "GET /static/js/pet.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55128 - "HEAD /static/live2d/vendor/live2dcubismcore.min.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55134 - "HEAD /static/live2d/model/Senko/senko.model3.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55127 - "HEAD /static/live2d/vendor/pixi.min.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55129 - "HEAD /static/live2d/vendor/pixi-live2d-display.min.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55128 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:55134 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55129 - "GET /static/live2d/vendor/pixi.min.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55129 - "GET /static/live2d/vendor/live2dcubismcore.min.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55129 - "GET /static/live2d/vendor/pixi-live2d-display.min.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55129 - "GET /static/live2d/model/Senko/senko.model3.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55129 - "GET /static/live2d/model/Senko/senko_normal.moc3 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55134 - "GET /static/live2d/model/Senko/senko_normal.4096/texture_00.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55134 - "GET /static/live2d/model/Senko/motions/Idle.motion3.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55134 - "GET /static/live2d/model/Senko/senko.physics3.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:55129 - "GET /api/strategies/S11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55134 - "GET /api/strategies/S1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55128 - "GET /api/strategies/S13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55127 - "GET /api/strategies/S12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55143 - "GET /api/strategies/S10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55135 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55135 - "GET /api/strategies/S15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55143 - "GET /api/strategies/S14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55127 - "GET /api/strategies/S16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55128 - "GET /api/strategies/S17 HTTP/1.1" 200 OK
 [app]   trades imported from 每日调仓.md
-[scheduler] engine started (auto=True)
 [notify] watcher started
-INFO:     127.0.0.1:7520 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7520 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7520 - "GET /static/css/agent.css HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:5181 - "GET /static/css/pet.css HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:7520 - "GET /static/js/agent.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5181 - "GET /static/js/pet.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:1652 - "HEAD /static/live2d/vendor/pixi-live2d-display.min.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5181 - "HEAD /static/live2d/vendor/pixi.min.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7520 - "HEAD /static/live2d/vendor/live2dcubismcore.min.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5181 - "GET /api/strategies HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1652 - "HEAD /static/live2d/model/Senko/senko.model3.json HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11054 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11054 - "GET /static/live2d/model/Senko/senko.model3.json HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:11054 - "GET /static/live2d/model/Senko/motions/Idle.motion3.json HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:11054 - "GET /static/live2d/model/Senko/senko.physics3.json HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:11054 - "GET /api/strategies/S1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1652 - "GET /api/strategies/S3 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5181 - "GET /api/strategies/S2 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7520 - "GET /api/strategies/S4 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6962 - "GET /api/strategies/S5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6962 - "GET /api/strategies/S6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7520 - "GET /api/strategies/S7 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5181 - "GET /api/strategies/S8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1652 - "GET /api/strategies/S9 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11054 - "GET /api/strategies/S10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11054 - "GET /api/strategies/S11 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1652 - "GET /api/strategies/S12 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5181 - "GET /api/strategies/S13 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7520 - "GET /api/strategies/S14 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6962 - "GET /api/strategies/S15 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1652 - "GET /api/strategies/S19 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6962 - "GET /api/strategies/S16 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5181 - "GET /api/strategies/S17 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7520 - "GET /api/strategies/S18 HTTP/1.1" 200 OK
-[sync] K-line fetch returned empty for 159915 (2026-09-05~2026-09-06), API may not have recent data available
-INFO:     127.0.0.1:5181 - "GET /api/agent/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1652 - "GET /api/agent/sources HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6962 - "GET /api/agent/articles HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7520 - "GET /api/agent/profile HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6962 - "GET /api/agent/sessions/5/messages HTTP/1.1" 200 OK
-[sync] K-line fetch returned empty for 510180 (2026-09-05~2026-09-06), API may not have recent data available
-[sync] K-line fetch returned empty for 510300 (2026-09-05~2026-09-06), API may not have recent data available
-[sync] K-line fetch returned empty for 510500 (2026-09-05~2026-09-06), API may not have recent data available
-INFO:     127.0.0.1:6390 - "GET /api/agent/status HTTP/1.1" 200 OK
-[sync] K-line fetch returned empty for 511260 (2026-09-05~2026-09-06), API may not have recent data available
-[sync] K-line fetch returned empty for 511880 (2026-09-05~2026-09-06), API may not have recent data available
-[sync] K-line fetch returned empty for 512010 (2026-08-14~2026-09-06), API may not have recent data available
-INFO:     127.0.0.1:10148 - "GET /api/agent/status HTTP/1.1" 200 OK
-[sync] K-line fetch returned empty for 512480 (2026-09-05~2026-09-06), API may not have recent data available
-[sync] K-line fetch returned empty for 512660 (2026-08-14~2026-09-06), API may not have recent data available
-[sync] K-line fetch returned empty for 512800 (2026-08-14~2026-09-06), API may not have recent data available
-[sync] K-line fetch returned empty for 512880 (2026-08-14~2026-09-06), API may not have recent data available
-INFO:     127.0.0.1:7127 - "GET /api/agent/status HTTP/1.1" 200 OK
-[sync] K-line fetch returned empty for 513100 (2026-08-13~2026-09-06), API may not have recent data available
-[sync] K-line fetch returned empty for 518880 (2026-08-14~2026-09-06), API may not have recent data available
+INFO:     127.0.0.1:55199 - "GET /api/strategies/S18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55199 - "GET /api/strategies/S2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55200 - "GET /api/reports?type=%E6%AF%8F%E6%97%A5%E4%BF%A1%E5%8F%B7&limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55143 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55127 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55128 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55199 - "GET /api/strategies/S19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55135 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55200 - "GET /api/strategies/S3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55143 - "GET /api/strategies/S4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55127 - "GET /api/strategies/S5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55127 - "GET /api/strategies/S6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55143 - "GET /api/strategies/S7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55200 - "GET /api/strategies/S8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55199 - "GET /api/strategies/S9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55128 - "GET /api/daily-signals?date=20260907 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55135 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55199 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55143 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55200 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55374 - "GET /api/agent/status HTTP/1.1" 200 OK
 [app]   Signal cache ready: 19/19 strategies
-INFO:     127.0.0.1:10424 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2018 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7359 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6920 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6785 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14584 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2582 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2632 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11767 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3982 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7130 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13484 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7839 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8264 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7699 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8925 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6695 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13801 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8452 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:4243 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11641 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14756 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3329 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13536 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3377 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:4915 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6066 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12827 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3440 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8941 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13972 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13040 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13040 - "GET /static/css/dashboard.css HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:5153 - "GET /static/css/agent.css HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:13040 - "GET /static/css/pet.css HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:5153 - "GET /static/js/agent.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:13040 - "GET /static/js/pet.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:13040 - "HEAD /static/live2d/vendor/pixi.min.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13938 - "HEAD /static/live2d/vendor/live2dcubismcore.min.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13040 - "HEAD /static/live2d/vendor/pixi-live2d-display.min.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13938 - "HEAD /static/live2d/model/Senko/senko.model3.json HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13040 - "GET /api/strategies HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5153 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13040 - "GET /api/strategies/S2 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5153 - "GET /api/strategies/S1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13938 - "GET /api/strategies/S3 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10541 - "GET /api/strategies/S5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3230 - "GET /api/strategies/S4 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5153 - "GET /api/strategies/S9 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3230 - "GET /api/strategies/S6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13938 - "GET /api/strategies/S8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13040 - "GET /api/strategies/S10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10541 - "GET /api/strategies/S7 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5153 - "GET /api/strategies/S14 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13938 - "GET /api/strategies/S13 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10541 - "GET /api/strategies/S12 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3230 - "GET /api/strategies/S15 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13040 - "GET /api/strategies/S11 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13938 - "GET /api/strategies/S19 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13040 - "GET /api/strategies/S17 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10541 - "GET /api/strategies/S18 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3230 - "GET /api/strategies/S16 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10541 - "GET /api/agent/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13938 - "GET /api/agent/sources HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13040 - "GET /api/agent/articles HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13938 - "GET /api/agent/sessions/5/messages HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3230 - "GET /api/agent/profile HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10037 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13076 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11706 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14745 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7691 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:9564 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6095 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10186 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5991 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8281 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13126 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6149 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1507 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5051 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2500 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8903 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6194 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7014 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7899 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3378 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11862 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:9617 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10302 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2714 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3643 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1305 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14045 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3905 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12819 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6731 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5058 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14224 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11284 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12018 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11420 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12441 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6966 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3534 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13749 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3334 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14533 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10812 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10475 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8987 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7550 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8512 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5447 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7527 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5061 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13839 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:4717 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2033 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13288 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11779 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3849 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:4404 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14941 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1409 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8241 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10353 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6617 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:4350 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3051 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10133 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6636 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7649 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12525 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12625 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7884 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2402 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10666 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10666 - "GET /static/css/agent.css HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:7633 - "GET /static/css/pet.css HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:7633 - "GET /static/vendor/marked.min.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:10666 - "GET /static/vendor/echarts.min.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:7633 - "GET /static/js/dashboard.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:10666 - "GET /static/js/daily.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:7633 - "GET /static/js/agent.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:10666 - "GET /static/js/pet.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:10666 - "HEAD /static/live2d/vendor/pixi.min.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7633 - "HEAD /static/live2d/vendor/live2dcubismcore.min.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7633 - "HEAD /static/live2d/model/Senko/senko.model3.json HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10666 - "HEAD /static/live2d/vendor/pixi-live2d-display.min.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10666 - "GET /api/strategies HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7633 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7633 - "GET /api/strategies/S1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10666 - "GET /api/strategies/S2 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5085 - "GET /api/strategies/S3 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12881 - "GET /api/strategies/S4 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7513 - "GET /api/strategies/S5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7513 - "GET /api/strategies/S6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5085 - "GET /api/strategies/S8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12881 - "GET /api/strategies/S7 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10666 - "GET /api/strategies/S9 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7633 - "GET /api/strategies/S10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10666 - "GET /api/strategies/S12 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7633 - "GET /api/strategies/S11 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12881 - "GET /api/strategies/S13 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5085 - "GET /api/strategies/S14 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7513 - "GET /api/strategies/S15 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7633 - "GET /api/strategies/S19 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12881 - "GET /api/strategies/S18 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7513 - "GET /api/strategies/S16 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5085 - "GET /api/strategies/S17 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7633 - "GET /api/agent/sources HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7513 - "GET /api/agent/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12881 - "GET /api/agent/articles HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5085 - "GET /api/agent/profile HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12881 - "GET /api/agent/sessions/5/messages HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14731 - "GET /static/live2d/model/Senko/motions/Singing.motion3.json HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12264 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7681 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1974 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13209 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13699 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:4260 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:9484 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3257 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:9150 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1093 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11726 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7582 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5159 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2366 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11934 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10461 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8355 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6874 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7232 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5739 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:4891 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13014 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6669 - "GET /api/agent/sources HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2941 - "GET /api/agent/articles HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2941 - "GET /api/agent/profile HTTP/1.1" 200 OK
-INFO:     127.0.0.1:9001 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8310 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12748 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:9088 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3657 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2909 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1378 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6758 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11299 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14146 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7626 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10517 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:4484 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:11967 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10455 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8046 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1680 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7922 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3916 - "GET /api/agent/status HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:10476 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "GET /api/strategies HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10476 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10476 - "GET /api/strategies/S3 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "GET /api/strategies/S1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "GET /api/strategies/S2 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "GET /api/strategies/S4 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10476 - "GET /api/strategies/S5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10476 - "GET /api/strategies/S6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "GET /api/strategies/S7 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "GET /api/strategies/S8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "GET /api/strategies/S10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10476 - "GET /api/strategies/S9 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "GET /api/strategies/S12 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "GET /api/strategies/S13 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10476 - "GET /api/strategies/S11 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "GET /api/strategies/S15 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "GET /api/strategies/S14 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "GET /api/strategies/S16 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10476 - "GET /api/strategies/S18 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "GET /api/strategies/S17 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "GET /api/strategies/S19 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "GET /static/css/agent.css HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:10476 - "GET /static/js/agent.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:13031 - "GET /static/css/pet.css HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:6214 - "GET /static/js/pet.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:7988 - "GET /api/strategies HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "HEAD /static/live2d/vendor/pixi.min.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10476 - "HEAD /static/live2d/vendor/live2dcubismcore.min.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "HEAD /static/live2d/vendor/pixi-live2d-display.min.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3441 - "HEAD /static/live2d/model/Senko/senko.model3.json HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7223 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7223 - "GET /static/live2d/vendor/pixi.min.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:7223 - "GET /static/live2d/vendor/live2dcubismcore.min.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:7223 - "GET /static/live2d/vendor/pixi-live2d-display.min.js HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:7223 - "GET /static/live2d/model/Senko/senko_normal.4096/texture_00.png HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:3441 - "GET /static/live2d/model/Senko/senko_normal.moc3 HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:7223 - "GET /api/strategies/S1 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3441 - "GET /api/strategies/S2 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "GET /api/strategies/S3 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10476 - "GET /api/strategies/S4 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "GET /api/strategies/S5 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10476 - "GET /api/strategies/S7 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "GET /api/strategies/S8 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "GET /api/strategies/S6 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3441 - "GET /api/strategies/S9 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7223 - "GET /api/strategies/S10 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10476 - "GET /api/strategies/S15 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7223 - "GET /api/strategies/S11 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "GET /api/strategies/S13 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "GET /api/strategies/S14 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3441 - "GET /api/strategies/S12 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7223 - "GET /api/strategies/S19 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3441 - "GET /api/strategies/S16 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "GET /api/strategies/S18 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "GET /api/strategies/S17 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6214 - "GET /api/agent/sessions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7223 - "GET /api/agent/sources HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3441 - "GET /api/agent/articles HTTP/1.1" 200 OK
-INFO:     127.0.0.1:7223 - "GET /api/agent/sessions/5/messages HTTP/1.1" 200 OK
-INFO:     127.0.0.1:13031 - "GET /api/agent/profile HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2410 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1515 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:6287 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8364 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:2763 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:4940 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10476 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8037 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8513 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10642 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:8403 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5780 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:4818 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14742 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:5577 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3902 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:3637 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:10128 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:4446 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:14323 - "GET /api/agent/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:12033 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55377 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55659 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55661 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55854 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56223 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "GET /static/js/agent.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56284 - "HEAD /static/live2d/vendor/pixi.min.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "HEAD /static/live2d/vendor/live2dcubismcore.min.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56301 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56299 - "HEAD /static/live2d/vendor/pixi-live2d-display.min.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56300 - "HEAD /static/live2d/model/Senko/senko.model3.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56300 - "GET /api/strategies/S1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56299 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56301 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56304 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56300 - "GET /api/strategies/S10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56303 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56304 - "GET /api/strategies/S13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56301 - "GET /api/strategies/S12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56299 - "GET /api/strategies/S11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "GET /api/strategies/S14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56301 - "GET /api/strategies/S15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56304 - "GET /api/strategies/S16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56356 - "GET /api/strategies/S17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56357 - "GET /api/strategies/S18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56299 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56299 - "GET /api/strategies/S19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56356 - "GET /api/strategies/S3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56357 - "GET /api/strategies/S2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56304 - "GET /api/strategies/S4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56416 - "GET /api/strategies/S5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56357 - "GET /api/strategies/S8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56304 - "GET /api/strategies/S7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56356 - "GET /api/strategies/S9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56416 - "GET /api/strategies/S6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56284 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56512 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56592 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56593 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56514 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56593 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56592 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56626 - "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56626 - "GET /static/live2d/vendor/pixi.min.js.map HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56514 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56678 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56677 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56682 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56676 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56788 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56787 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56791 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56848 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56848 - "GET /api/reports?type=%E6%AF%8F%E6%97%A5%E4%BF%A1%E5%8F%B7&limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56848 - "GET /api/daily-signals?date=20260907 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56856 - "GET /api/reports?date=20260907 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56685 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56685 - "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56685 - "GET /static/live2d/vendor/pixi.min.js.map HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:56856 - "GET /api/reports/20260907/%E6%97%A9%E7%9B%98%E6%8A%A5%E5%91%8A HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56859 - "GET /api/reports?type=%E6%AF%8F%E6%97%A5%E4%BF%A1%E5%8F%B7&limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56859 - "GET /api/daily-signals?date=20260907 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56903 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56962 - "GET /api/reports?type=%E6%AF%8F%E6%97%A5%E4%BF%A1%E5%8F%B7&limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56962 - "GET /api/daily-signals?date=20260907 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56963 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56966 - "GET /api/reports?type=%E6%AF%8F%E6%97%A5%E4%BF%A1%E5%8F%B7&limit=200 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56966 - "GET /api/daily-signals?date=20260907 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57018 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57018 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57054 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57052 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57053 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57018 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57053 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57106 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57108 - "GET /api/agent/status HTTP/1.1" 200 OK
+[scheduler] auto dispatch intraday_1430 → run#835
+[scheduler] run#835 cloud→local holdings synced: ['holdings/每日调仓.md', 'holdings/持仓.md']
+INFO:     127.0.0.1:57290 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57294 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57497 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57693 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57696 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57854 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57977 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57981 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58093 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58097 - "GET /api/agent/status HTTP/1.1" 200 OK
+[scheduler] report rescan imported 1 new/changed
+INFO:     127.0.0.1:58219 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58223 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58328 - "GET /api/agent/status HTTP/1.1" 200 OK
+[scheduler] report rescan imported 1 new/changed
+INFO:     127.0.0.1:58330 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58414 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58417 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58504 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58507 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58605 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58790 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58792 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59072 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59074 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59139 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59142 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59222 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59321 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59323 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59453 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59456 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59476 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59477 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59477 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59476 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59453 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59453 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59510 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59519 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59510 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59519 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59511 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /static/js/agent.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59511 - "HEAD /static/live2d/vendor/pixi.min.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59511 - "HEAD /static/live2d/vendor/live2dcubismcore.min.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59511 - "HEAD /static/live2d/vendor/pixi-live2d-display.min.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59511 - "HEAD /static/live2d/model/Senko/senko.model3.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59511 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59511 - "GET /api/strategies/S1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59570 - "GET /api/strategies/S10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59569 - "GET /api/strategies/S11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/strategies/S12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59572 - "GET /api/strategies/S13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59572 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/strategies/S14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/strategies/S15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/strategies/S16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59643 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /api/strategies/S17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/strategies/S18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59572 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59643 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59643 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59572 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59642 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59642 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59642 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59642 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59642 - "GET /api/strategies/S19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/strategies/S2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59642 - "GET /api/strategies/S3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59643 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/strategies/S4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/strategies/S5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59642 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59643 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59642 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59643 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59643 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /api/strategies/S6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59643 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "GET /api/strategies/S7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/strategies/S8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59643 - "GET /api/strategies/S9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59572 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59642 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59642 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59983 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59572 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59643 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59643 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59643 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60063 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60063 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59518 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60064 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59571 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60056 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60064 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59643 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60163 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60212 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60215 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60313 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60312 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60313 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60312 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60328 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60215 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60333 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60434 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60435 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60438 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60333 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60549 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60548 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60550 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60547 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60661 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60660 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60662 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60555 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60785 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60784 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60787 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60783 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60927 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60926 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60928 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60795 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61052 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61051 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61053 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61050 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61212 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61211 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61213 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61061 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61354 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61353 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61355 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61352 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61463 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61462 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61464 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61360 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61602 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61601 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61603 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61600 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61752 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61751 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61753 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61608 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61886 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61885 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61891 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61893 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61891 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61935 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61883 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62039 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62038 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61935 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62041 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62038 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62141 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62140 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62142 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62038 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62703 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62700 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62704 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62699 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+[scheduler] auto dispatch bug_auto_fix → run#836
+[scheduler] run#836 cloud→local holdings synced: ['holdings/每日调仓.md', 'holdings/持仓.md']
+INFO:     127.0.0.1:63045 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63044 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63046 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62708 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63243 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63242 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63244 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63241 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63491 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63490 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63492 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63249 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63635 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63634 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63636 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63633 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63783 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63782 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63784 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63642 - "GET /api/scheduler/tasks HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63893 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63892 - "GET /api/scheduler/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63899 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63911 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63892 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63899 - "GET /api/scheduler/runs?limit=15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63892 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63892 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63939 - "GET /static/css/dashboard.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63941 - "GET /static/css/agent.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63942 - "GET /static/css/pet.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63943 - "GET /static/js/agent.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63944 - "GET /static/js/pet.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63944 - "HEAD /static/live2d/vendor/pixi.min.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63943 - "HEAD /static/live2d/vendor/live2dcubismcore.min.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63942 - "HEAD /static/live2d/vendor/pixi-live2d-display.min.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63941 - "HEAD /static/live2d/model/Senko/senko.model3.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63944 - "GET /api/strategies HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63941 - "GET /static/live2d/vendor/pixi.min.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63941 - "GET /api/strategies/S1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63943 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63950 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63944 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63941 - "GET /api/strategies/S10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63942 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63950 - "GET /api/strategies/S11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63943 - "GET /api/strategies/S12 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63944 - "GET /api/strategies/S13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63939 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63943 - "GET /api/strategies/S15 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63939 - "GET /api/strategies/S14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63942 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63941 - "GET /api/agent/articles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63950 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63943 - "GET /api/strategies/S16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63939 - "GET /api/strategies/S17 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63942 - "GET /api/strategies/S18 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63941 - "GET /static/live2d/vendor/live2dcubismcore.min.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63944 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63941 - "GET /api/strategies/S19 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63942 - "GET /api/strategies/S2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63944 - "GET /api/strategies/S3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63939 - "GET /api/strategies/S4 HTTP/1.1" 200 OK
+[scheduler] auto dispatch pending_remind → run#837
+[scheduler] run#837 cloud→local holdings synced: ['holdings/每日调仓.md', 'holdings/持仓.md']
+INFO:     127.0.0.1:63943 - "GET /api/strategies/S5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63950 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63941 - "GET /static/live2d/vendor/pixi-live2d-display.min.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63941 - "GET /api/strategies/S6 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63950 - "GET /api/strategies/S7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63943 - "GET /api/strategies/S8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63939 - "GET /api/strategies/S9 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63944 - "GET /static/live2d/model/Senko/senko.model3.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63944 - "GET /static/live2d/model/Senko/senko_normal.moc3 HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63939 - "GET /static/live2d/model/Senko/senko_normal.4096/texture_00.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63939 - "GET /static/live2d/model/Senko/motions/Idle.motion3.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63939 - "GET /static/live2d/model/Senko/senko.physics3.json HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:63942 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64181 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64185 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64330 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64333 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64465 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64467 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64579 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64581 - "GET /api/agent/status HTTP/1.1" 200 OK
+[scheduler] auto dispatch harness_bug_auto_fix → run#838
+[scheduler] run#838 cloud→local holdings synced: ['holdings/每日调仓.md', 'holdings/持仓.md']
+INFO:     127.0.0.1:64686 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64782 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64785 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64999 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65001 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65136 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65138 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65263 - "GET /api/agent/status HTTP/1.1" 200 OK

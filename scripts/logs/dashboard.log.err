@@ -1,4 +1,10 @@
-INFO:     Started server process [6616]
+INFO:     Started server process [2924]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8010 (Press CTRL+C to quit)
+[scheduler] start: 回收 1 条中断遗留的 running 记录 → failed
+[scheduler] run#834 harness_bug_auto_fix → success (284.1s, engine=dsh)
+[scheduler] run#835 intraday_1430 → success (560.2s, engine=dsh)
+[scheduler] run#836 bug_auto_fix → success (84.8s, engine=dsh)
+[scheduler] run#837 pending_remind → success (64.2s, engine=dsh)
+[scheduler] run#838 harness_bug_auto_fix → success (109.3s, engine=dsh)

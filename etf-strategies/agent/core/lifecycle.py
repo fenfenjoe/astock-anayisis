@@ -119,7 +119,14 @@ def tick(now=None, db=None, llm_fn=None):
         try:
             rss_result = knowledge.fetch_and_store(db=db)
             result["rss"] = rss_result
-            db.meta_set("last_rss_fetch_at", now.strftime("%Y-%m-%d %H:%M:%S"))
+            # BUG-FIX(2026-09-07)：仅当"配置了源且全部拉取失败"才不推进 last_rss_fetch_at ——
+            # 原先所有源失败时 fetch_and_store 返回 errors 列表而不抛异常，这里仍无条件
+            # 更新时间戳 → RSSHub 长期挂掉时看板显示"健康"实则零新素材（假健康盲区）。
+            # feeds==0（未配置源）不属于"全部失败"，照常推进以保持节流语义。
+            n_feeds = (rss_result or {}).get("feeds", 0)
+            n_errors = len((rss_result or {}).get("errors") or [])
+            if not (n_feeds > 0 and n_errors >= n_feeds):
+                db.meta_set("last_rss_fetch_at", now.strftime("%Y-%m-%d %H:%M:%S"))
         except Exception as e:
             result["rss"] = {"error": str(e)}
 

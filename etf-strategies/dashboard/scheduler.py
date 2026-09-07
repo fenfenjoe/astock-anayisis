@@ -145,6 +145,24 @@ def next_trading_day(from_date: date | None = None) -> date | None:
         return None
 
 
+def agent_online() -> bool:
+    """小满是否上线（上班状态）— 读 agent db 的 xiaoman_online。
+
+    BUG-FIX(2026-09-07)：dashboard db（portfolio_meta）里从未写入过
+    xiaoman_online 这个 key —— api_agent /online、/offline 只写 agent db
+    （agent_metadata）。旧代码在 _tick 闸门从 dashboard db 读该 key，永远
+    返回 None → auto 调度被永久短路（早盘/盘中/复盘不自动执行，仅手动可跑）。
+    改为与 UI（api_daily /scheduler/tasks 的 online 字段）同源：读 agent db。
+    读不到/异常按"未上线"处理（fail-safe：宁可不自动调度，不误触发）。
+    """
+    try:
+        from agent import db as agent_db
+
+        return agent_db.meta_get("xiaoman_online") == "1"
+    except Exception:
+        return False
+
+
 # ───────────────────────────────────────────────────────────────────
 # 调度定义与窗口语义（照抄 task_scheduler.py）
 # ───────────────────────────────────────────────────────────────────
@@ -1011,9 +1029,10 @@ class SchedulerEngine:
             except Exception as e:
                 self.last_error = f"report rescan: {e}"
 
-        # 上线/下线闸门：下线时 auto 任务调度跳过
-        online = db.meta_get("xiaoman_online")
-        if online != "1":
+        # 上线/下线闸门：下线时 auto 任务调度跳过。
+        # BUG-FIX(2026-09-07)：改读 agent db 的 xiaoman_online（agent_online），
+        # 与「小满上班/下线」开关和 UI online 状态同源（详见 agent_online 注释）。
+        if not agent_online():
             return
 
         if not self.auto_enabled():

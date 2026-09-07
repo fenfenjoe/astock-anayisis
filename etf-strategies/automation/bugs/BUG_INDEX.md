@@ -11,10 +11,10 @@
 |------|------|
 | OPEN | 0 |
 | IN_PROGRESS | 0 |
-| FIXED | 12 |
+| FIXED | 16 |
 | VERIFIED | 1 |
 | WONT_FIX | 1 |
-| MANUAL_REVIEW | 6 |
+| MANUAL_REVIEW | 7 |
 
 ---
 
@@ -31,6 +31,7 @@
 | BUG-013 | S12 KB"放量下跌自动切货币"未实现：仅0.3分惩罚 | 避险信号策略行为设计决策，auto_fix_eligible=false |
 | BUG-014 | S12/S13 KB因子口径与实现不符（年化收益/成交量因子） | 因子口径决策，auto_fix_eligible=false |
 | BUG-015 | S9/S13 KB资产池数量标注不符（6只 vs 实列5只） | KB 文档口径修订，auto_fix_eligible=false |
+| BUG-025 | 云端集成测试 skipif 只查 env 不查 backend：cloud_db._ENABLED 模块级常量导入时序 + 门控不严，全量 11 项 FAILED/ERROR | 需设计决策（懒加载 enabled()/skipif 增强），云端迁移 WIP 未提交，auto_fix_eligible=false |
 
 ---
 
@@ -59,6 +60,11 @@
 | BUG-018 | CLI帮助文本/文档字符串仍写「S1-S11」,实际已支持S1-S19(S12-S19遗漏提示) | registration | LOW | FIXED | 2026-09-02 |
 | BUG-019 | 11/13活跃ETF缓存09-02日K为盘中快照:缓存mtime落在09-02交易时段,收盘后未重拉覆盖(513100偏差+0.501%) | data | HIGH | FIXED | 2026-09-03 |
 | BUG-020 | 5个非活跃cache缓存过期(002142/159227/159326/512100/601398, mtime=09-01, 缺09-01/09-02数据) | data | MEDIUM | FIXED | 2026-09-03 |
+| BUG-021 | 5个活跃策略ETF缓存mtime>24h(511880/512010/512480/512660/512800, mtime=09-04未收09-07刷新)+513100刷新未写入今日bar,刷新覆盖不一致 | data | MEDIUM | FIXED | 2026-09-07 |
+| BUG-022 | 5个非活跃cache缓存过期复发(002142/159227/159326/512100/601398, mtime=09-03, 缺09-03/09-04数据, BUG-020同集合第3次复发) | data | MEDIUM | FIXED | 2026-09-07 |
+| BUG-023 | test_agent_behavior 3个run_post_pipeline测试引用已删除函数(5c6fc61重构移除,execute_reading承接发动态),AttributeError | tests | HIGH | FIXED | 2026-09-07 |
+| BUG-024 | test_agent_lifecycle tick测试未适配3bcc9d0上线/下线闸门(未设xiaoman_online=1, Rss断言失败) | tests | HIGH | FIXED | 2026-09-07 |
+| BUG-025 | 云端集成测试skipif只查env不查backend:cloud_db._ENABLED模块级常量在.env加载前导入时永久False,全量测试11项FAILED/ERROR | tests | MEDIUM | MANUAL_REVIEW | 2026-09-07 |
 <!-- BUG_TABLE_END -->
 
 ---
@@ -95,6 +101,10 @@
 | 2026-09-03 | 数据巡检 | 2 | 0 | 2 |
 | 2026-09-03 | 代码巡检 | 0 | 0 | 8 |
 | 2026-09-03 | 自动修复 | 0 | 2 | 0 |
+| 2026-09-07 | 数据巡检 | 2 | 0 | 2 |
+| 2026-09-07 | 逻辑巡检 | 0 | 0 | 8 |
+| 2026-09-07 | 代码巡检 | 3 | 0 | 11 |
+| 2026-09-07 | 自动修复 | 0 | 4 | 0 |
 
 ---
 

@@ -30,11 +30,15 @@ if str(_PARENT) not in sys.path:
 # ═══════════════════════════════════════════════════════════════
 
 def test_conftest_sets_safe_env():
-    """测试进程必须运行在安全环境：DB 文件模式 + 禁用启动云恢复。"""
+    """测试进程必须运行在安全环境：DB 文件模式 + 禁用启动云恢复 + 禁用云权威库。"""
     assert os.environ.get("DB_MODE", "").lower() != "memory", \
         "测试进程 DB_MODE 必须不是 memory（防止 memory 快照回传污染 TOS）"
     assert os.environ.get("CLOUD_RESTORE_ON_START", "").lower() in ("", "0", "false"), \
         "测试进程必须禁用 CLOUD_RESTORE_ON_START（防止启动时云下载覆盖本地）"
+    assert os.environ.get("DASHBOARD_DB_BACKEND", "file").lower() != "cloud", \
+        "测试进程必须禁用 DASHBOARD_DB_BACKEND=cloud（防止测试数据写入真实云库）"
+    assert os.environ.get("AGENT_DB_BACKEND", "file").lower() != "cloud", \
+        "测试进程必须禁用 AGENT_DB_BACKEND=cloud（防止测试数据写入真实云库）"
 
 
 def test_load_env_does_not_override_existing():
@@ -42,10 +46,14 @@ def test_load_env_does_not_override_existing():
     from load_env import load_env_file
     os.environ["DB_MODE"] = "file"
     os.environ["CLOUD_RESTORE_ON_START"] = "0"
-    # 模拟 load_env_file 读 .env（含 DB_MODE=memory）
+    os.environ["DASHBOARD_DB_BACKEND"] = "file"
+    os.environ["AGENT_DB_BACKEND"] = "file"
+    # 模拟 load_env_file 读 .env（含 DB_MODE=memory / 云后端开关）
     load_env_file()
     assert os.environ["DB_MODE"] == "file"  # 未被 .env 覆盖
     assert os.environ["CLOUD_RESTORE_ON_START"] == "0"
+    assert os.environ["DASHBOARD_DB_BACKEND"] == "file"
+    assert os.environ["AGENT_DB_BACKEND"] == "file"
 
 
 def test_db_not_in_memory_mode_under_pytest():
@@ -53,6 +61,8 @@ def test_db_not_in_memory_mode_under_pytest():
     import dashboard.db as db_mod
     assert db_mod.USE_MEMORY is False, \
         "测试进程 USE_MEMORY 必须为 False，否则 memory 回传会污染 TOS"
+    assert db_mod.USE_CLOUD is False, \
+        "测试进程 USE_CLOUD 必须为 False，否则测试数据写入真实云库"
 
 
 # ═══════════════════════════════════════════════════════════════

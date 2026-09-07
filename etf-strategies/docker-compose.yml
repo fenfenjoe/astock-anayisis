@@ -55,9 +55,11 @@ services:
       - CLAUDE_CODE_SUBAGENT_MODEL=${CLAUDE_CODE_SUBAGENT_MODEL:-deepseek-v4-flash[1m]}
       # dsh 调度引擎凭据（容器内 dsh 读环境变量；本地跑则用 ~/.dsh/.credentials.yaml）
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-      # 严格零本地（可选）：DB_MODE=memory + CLOUD_RESTORE_ON_START=1
-      - DB_MODE=${DB_MODE:-}
-      - CLOUD_RESTORE_ON_START=${CLOUD_RESTORE_ON_START:-}
+      # 云端权威数据库（火山 Supabase 版 Postgres / PostgREST Data API）
+      - DASHBOARD_DB_BACKEND=${DASHBOARD_DB_BACKEND:-cloud}
+      - AGENT_DB_BACKEND=${AGENT_DB_BACKEND:-cloud}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-}
       # 首次启动时预设 admin 密码（不设则自动生成，查看日志获取）
       # - DASHBOARD_ADMIN_PASSWORD=your-secure-password
       # JWT 签名密钥（不设则自动生成并持久化到 data/.secret_key）
@@ -114,9 +116,10 @@ services:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       # dsh 工作目录（与 dashboard 一致；dsh_runner 的 REPO_ROOT）
       - DASHBOARD_REPO_ROOT=/repo
-      # 严格零本地（可选）：SQLite 内存化 + 启动从 TOS 恢复
-      - DB_MODE=${DB_MODE:-}
-      - CLOUD_RESTORE_ON_START=${CLOUD_RESTORE_ON_START:-}
+      # 云端权威数据库（火山 Supabase 版 Postgres / PostgREST Data API）
+      - AGENT_DB_BACKEND=${AGENT_DB_BACKEND:-cloud}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-}
 
     volumes:
       - dashboard_agent:/app/agent/data      # agent.db（与 dashboard 服务共享）

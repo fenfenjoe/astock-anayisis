@@ -23,6 +23,13 @@ DB_PATH = Path(__file__).resolve().parent / "data" / "cache.db"
 #    启动从 TOS 载入最新快照（cloud_restore），定时/退出快照回传（cloud_backup）。
 #    默认 file 模式（向后兼容 + 测试/降级）。
 USE_MEMORY = os.environ.get("DB_MODE", "").lower() == "memory"
+
+# ── 云端权威数据库后端（DASHBOARD_DB_BACKEND=cloud 时启用）：
+#    权威表（users/portfolio/daily_reports/scheduler_runs/metadata/strategy_kb/
+#    strategy_metrics/daily_signals）直接读写火山 Supabase Postgres（PostgREST），
+#    跨机器一致；kline_daily / backtest_nav（可重建缓存）仍走本地 SQLite。
+USE_CLOUD = os.environ.get("DASHBOARD_DB_BACKEND", "").lower() == "cloud"
+
 _mem_lock = threading.RLock()
 _mem_conn: sqlite3.Connection | None = None
 
@@ -32,6 +39,24 @@ try:
                              list_objects as _cs_list)
 except ImportError:
     _cs_get = _cs_put = _cs_list = None
+
+# cloud_db helpers（总是导入，测试可动态把 USE_CLOUD 置 True）
+try:
+    from cloud_db import (delete as _cd_delete, insert as _cd_insert,
+                          select as _cd_select, select_one as _cd_select_one,
+                          update as _cd_update, upsert as _cd_upsert)
+except ImportError:  # pragma: no cover
+    _cd_delete = _cd_insert = _cd_select = None
+    _cd_select_one = _cd_update = _cd_upsert = None
+
+
+def _now_str():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _cd_json_fields(row):
+    """云行 JSONB 字段已是对象，无需转换；此函数保留以兼容形状。"""
+    return row
 
 
 def _memory_conn() -> sqlite3.Connection:
@@ -137,6 +162,30 @@ def get_conn():
 
 
 # ── Schema ──
+
+# cloud 模式本地仅保留"可重建缓存"表（kline_daily / backtest_nav），
+# 权威表全部在云 Postgres（见 scripts/cloud_schema*.sql）。
+_CACHE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS kline_daily (
+    code        TEXT NOT NULL,
+    date        TEXT NOT NULL,
+    open        REAL,
+    high        REAL,
+    low         REAL,
+    close       REAL NOT NULL,
+    volume      REAL,
+    updated_at  TEXT DEFAULT (datetime('now','localtime')),
+    PRIMARY KEY (code, date)
+);
+CREATE TABLE IF NOT EXISTS backtest_nav (
+    strategy_name TEXT NOT NULL,
+    date          TEXT NOT NULL,
+    nav           REAL,
+    drawdown      REAL,
+    PRIMARY KEY (strategy_name, date)
+);
+"""
+
 SCHEMA = """
 -- ═══════════════════════════════════════════════════════════════════
 -- Table: kline_daily — ETF K线日数据缓存
@@ -482,7 +531,13 @@ def init_db():
     """Create all tables and indexes if they don't exist.
 
     memory 模式：先从 TOS 载入最新快照（空连接 deserialize），无快照才建空 schema。
+    cloud 模式：云表已由 schema 建好；本地仅保留 kline/nav 缓存表。
     """
+    if USE_CLOUD:
+        with get_conn() as conn:
+            conn.executescript(_CACHE_SCHEMA)
+            _migrate(conn)
+        return
     if USE_MEMORY:
         if not cloud_restore():
             _memory_conn().executescript(SCHEMA)
@@ -508,12 +563,18 @@ def _migrate(conn):
 
 def is_seeded():
     """Check whether the DB has been seeded with initial strategy data."""
+    if USE_CLOUD:
+        row = _cd_select_one("portfolio_meta", filters=[("key", "eq", "seeded")])
+        return row is not None and row.get("value") == "1"
     with get_conn() as conn:
         row = conn.execute("SELECT value FROM metadata WHERE key='seeded'").fetchone()
         return row is not None and row["value"] == "1"
 
 
 def mark_seeded():
+    if USE_CLOUD:
+        _cd_upsert("portfolio_meta", {"key": "seeded", "value": "1"}, on_conflict="key")
+        return
     with get_conn() as conn:
         conn.execute("INSERT OR REPLACE INTO metadata(key, value) VALUES('seeded', '1')")
 
@@ -592,6 +653,17 @@ def metrics_upsert(strategy_id: str, name: str, category: str, category_cn: str,
                    win_rate: float | None, turnover: float | None,
                    excess_return: float | None,
                    assets: list[str], description: str, backtest_window: str):
+    if USE_CLOUD:
+        row = {
+            "strategy_id": strategy_id, "name": name, "category": category,
+            "category_cn": category_cn, "annual_return": annual_return,
+            "sharpe": sharpe, "max_drawdown": max_drawdown, "calmar": calmar,
+            "win_rate": win_rate, "turnover": turnover,
+            "excess_return": excess_return, "assets_json": assets,
+            "description": description, "backtest_window": backtest_window,
+        }
+        _cd_upsert("strategy_metrics", row, on_conflict="strategy_id")
+        return
     with get_conn() as conn:
         conn.execute("""
             INSERT OR REPLACE INTO strategy_metrics
@@ -609,17 +681,24 @@ def metrics_get_all(sort_by: str = "strategy_id", order: str = "asc") -> list[di
     valid_cols = {"strategy_id", "annual_return", "sharpe", "max_drawdown", "calmar"}
     col = sort_by if sort_by in valid_cols else "strategy_id"
     direction = "ASC" if order == "asc" else "DESC"
-    # Natural sort for strategy_id (S1, S2, ..., S10, ...)
-    if col == "strategy_id":
-        order_clause = f"CAST(substr(strategy_id, 2) AS INTEGER) {direction}"
+    if USE_CLOUD:
+        # PostgREST 无 CAST(substr) 自然序；云上 strategy_id 已是 S1..S16 递增，
+        # 用数字排序需 RPC，这里退化为字母序（S1..S16 前缀 S 相同，数字位排序正确）
+        order_clause = f"{col}.{direction.lower()}"
+        if col == "strategy_id":
+            order_clause = "strategy_id.asc"
+        rows = _cd_select("strategy_metrics", order=order_clause)
     else:
-        nulls = "NULLS LAST"
-        order_clause = f"{col} {direction} {nulls}"
-
-    with get_conn() as conn:
-        rows = conn.execute(f"""
-            SELECT * FROM strategy_metrics ORDER BY {order_clause}
-        """).fetchall()
+        # Natural sort for strategy_id (S1, S2, ..., S10, ...)
+        if col == "strategy_id":
+            order_clause = f"CAST(substr(strategy_id, 2) AS INTEGER) {direction}"
+        else:
+            nulls = "NULLS LAST"
+            order_clause = f"{col} {direction} {nulls}"
+        with get_conn() as conn:
+            rows = conn.execute(f"""
+                SELECT * FROM strategy_metrics ORDER BY {order_clause}
+            """).fetchall()
 
     result = []
     for r in rows:
@@ -627,7 +706,7 @@ def metrics_get_all(sort_by: str = "strategy_id", order: str = "asc") -> list[di
         d["id"] = d.pop("strategy_id")
         assets_raw = d.pop("assets_json", "[]")
         try:
-            d["assets"] = json.loads(assets_raw)
+            d["assets"] = json.loads(assets_raw) if isinstance(assets_raw, str) else assets_raw
         except (json.JSONDecodeError, TypeError):
             d["assets"] = []
 
@@ -653,6 +732,18 @@ def metrics_get_all(sort_by: str = "strategy_id", order: str = "asc") -> list[di
 
 def metrics_get_one(strategy_id: str) -> dict | None:
     """Get a single strategy's metrics."""
+    if USE_CLOUD:
+        r = _cd_select_one("strategy_metrics",
+                           filters=[("strategy_id", "eq", strategy_id)])
+        if not r:
+            return None
+        d = dict(r)
+        d["id"] = d.pop("strategy_id")
+        d["assets"] = json.loads(d.get("assets_json", "[]")) if isinstance(d.get("assets_json"), str) else (d.get("assets_json") or [])
+        d["ann_val"] = d.get("annual_return")
+        d["dd_val"] = d.get("max_drawdown")
+        d["desc"] = d.get("description", "")
+        return d
     with get_conn() as conn:
         r = conn.execute(
             "SELECT * FROM strategy_metrics WHERE strategy_id=?", (strategy_id,)
@@ -675,6 +766,17 @@ def metrics_get_one(strategy_id: str) -> dict | None:
 def signals_upsert(strategy_id: str, signal_date: str, asset_code: str,
                    asset_name: str, target_weight: float, prev_weight: float,
                    action: str):
+    if USE_CLOUD:
+        # BUG-FIX(2026-09-07)：改用 on_conflict upsert（唯一约束 uq_daily_signals_strat_date_asset）
+        # 取代 select-then-insert —— 后者在双进程并发写同一信号时会产生重复行。
+        _cd_upsert("daily_signals", {
+            "strategy_id": strategy_id, "signal_date": signal_date,
+            "asset_code": asset_code, "asset_name": asset_name,
+            "target_weight": target_weight, "prev_weight": prev_weight,
+            "weight_change": target_weight - prev_weight, "action": action,
+            "updated_at": _now_str(),
+        }, on_conflict="strategy_id,signal_date,asset_code")
+        return
     with get_conn() as conn:
         conn.execute("""
             INSERT OR REPLACE INTO daily_signals
@@ -685,8 +787,27 @@ def signals_upsert(strategy_id: str, signal_date: str, asset_code: str,
               target_weight, prev_weight, target_weight - prev_weight, action))
 
 
+def signals_delete_by_strategy(strategy_id: str):
+    """删除某策略的全部信号（刷新信号前的清空步骤）。云模式走云删除。"""
+    if USE_CLOUD:
+        _cd_delete("daily_signals", filters=[("strategy_id", "eq", strategy_id)])
+        return
+    with get_conn() as conn:
+        conn.execute("DELETE FROM daily_signals WHERE strategy_id=?", (strategy_id,))
+
+
 def signals_get_latest(strategy_id: str) -> list[dict] | None:
     """Get latest signal for a strategy. Returns list of asset entries."""
+    if USE_CLOUD:
+        rows = _cd_select("daily_signals", filters=[("strategy_id", "eq", strategy_id)],
+                          order="signal_date.desc,id.desc", limit=1)
+        if not rows:
+            return None
+        latest_date = rows[0]["signal_date"]
+        return _cd_select("daily_signals",
+                          filters=[("strategy_id", "eq", strategy_id),
+                                   ("signal_date", "eq", latest_date)],
+                          order="id.asc")
     with get_conn() as conn:
         # Find latest signal_date for this strategy
         date_row = conn.execute(
@@ -706,6 +827,9 @@ def signals_get_latest(strategy_id: str) -> list[dict] | None:
 def signals_delete_old(days: int = 30):
     """Delete signals older than `days` to keep the table lean."""
     cutoff = (date.today() - timedelta(days=days)).strftime("%Y-%m-%d")
+    if USE_CLOUD:
+        _cd_delete("daily_signals", filters=[("signal_date", "lt", cutoff)])
+        return
     with get_conn() as conn:
         conn.execute("DELETE FROM daily_signals WHERE signal_date < ?", (cutoff,))
 
@@ -719,6 +843,17 @@ def kb_upsert(strategy_id: str, name: str, class_name: str, category: str,
               factors: str, rebalance: str, strengths: str, weaknesses: str,
               backtest_params: dict, source_url: str = "",
               process_desc: str = ""):
+    if USE_CLOUD:
+        row = {
+            "strategy_id": strategy_id, "name": name, "class_name": class_name,
+            "category": category, "intro": intro, "stock_selection": stock_selection,
+            "market_timing": market_timing, "factors": factors,
+            "rebalance": rebalance, "strengths": strengths, "weaknesses": weaknesses,
+            "backtest_params": backtest_params, "source_url": source_url,
+            "process_desc": process_desc,
+        }
+        _cd_upsert("strategy_kb", row, on_conflict="strategy_id")
+        return
     with get_conn() as conn:
         conn.execute("""
             INSERT OR REPLACE INTO strategy_kb
@@ -733,6 +868,23 @@ def kb_upsert(strategy_id: str, name: str, class_name: str, category: str,
 
 
 def kb_get(strategy_id: str) -> dict | None:
+    if USE_CLOUD:
+        r = _cd_select_one("strategy_kb", filters=[("strategy_id", "eq", strategy_id)])
+        if not r:
+            return None
+        d = dict(r)
+        d["id"] = d.pop("strategy_id")
+        d["source_url"] = d.get("source_url", "") or ""
+        d["process_desc"] = d.get("process_desc", "") or ""
+        bp = d.pop("backtest_params", {})
+        if isinstance(bp, str):
+            try:
+                d["backtest"] = json.loads(bp)
+            except (json.JSONDecodeError, TypeError):
+                d["backtest"] = {}
+        else:
+            d["backtest"] = bp or {}
+        return d
     with get_conn() as conn:
         r = conn.execute(
             "SELECT * FROM strategy_kb WHERE strategy_id=?", (strategy_id,)
@@ -834,6 +986,8 @@ def nav_has_data() -> bool:
 def user_get_by_username(username: str) -> dict | None:
     """Lookup a user by username. Returns dict with keys: id, username,
     password_hash, display_name, role, is_active, created_at, last_login."""
+    if USE_CLOUD:
+        return _cd_select_one("users", filters=[("username", "eq", username)])
     with get_conn() as conn:
         r = conn.execute(
             "SELECT * FROM users WHERE username=?", (username,)
@@ -844,6 +998,16 @@ def user_get_by_username(username: str) -> dict | None:
 def user_create(username: str, password_hash: str, display_name: str = "",
                 role: str = "admin"):
     """Create a new user. Raises ValueError on duplicate username."""
+    if USE_CLOUD:
+        exists = _cd_select_one("users", filters=[("username", "eq", username)],
+                                columns="id")
+        if exists:
+            raise ValueError(f"User '{username}' already exists")
+        _cd_insert("users", {
+            "username": username, "password_hash": password_hash,
+            "display_name": display_name, "role": role, "is_active": True,
+        })
+        return
     import sqlite3
     with get_conn() as conn:
         try:
@@ -857,6 +1021,10 @@ def user_create(username: str, password_hash: str, display_name: str = "",
 
 def user_update_last_login(username: str):
     """Stamp last_login for a user."""
+    if USE_CLOUD:
+        _cd_update("users", {"last_login": _now_str()},
+                   filters=[("username", "eq", username)])
+        return
     with get_conn() as conn:
         conn.execute(
             "UPDATE users SET last_login=datetime('now','localtime') WHERE username=?",
@@ -866,6 +1034,10 @@ def user_update_last_login(username: str):
 
 def user_change_password(username: str, new_hash: str):
     """Change a user's password hash."""
+    if USE_CLOUD:
+        _cd_update("users", {"password_hash": new_hash},
+                   filters=[("username", "eq", username)])
+        return
     with get_conn() as conn:
         conn.execute(
             "UPDATE users SET password_hash=? WHERE username=?",
@@ -875,6 +1047,9 @@ def user_change_password(username: str, new_hash: str):
 
 def user_list_all() -> list[dict]:
     """Return all users (without password hashes)."""
+    if USE_CLOUD:
+        return _cd_select("users", columns="id,username,display_name,role,is_active,created_at,last_login",
+                          order="id.asc")
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT id, username, display_name, role, is_active, created_at, last_login FROM users ORDER BY id"
@@ -884,6 +1059,9 @@ def user_list_all() -> list[dict]:
 
 def user_count() -> int:
     """Return total number of users."""
+    if USE_CLOUD:
+        rows = _cd_select("users", columns="id")
+        return len(rows)
     with get_conn() as conn:
         r = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()
         return r["c"] if r else 0
@@ -898,6 +1076,15 @@ def portfolio_holdings_replace(rows: list[dict]):
 
     rows: [{code, name, shares, cost_price}, ...]
     """
+    if USE_CLOUD:
+        _cd_delete("portfolio_holdings", filters=[("id", "gt", 0)])
+        for r in rows:
+            _cd_insert("portfolio_holdings", {
+                "code": r.get("code"), "name": r.get("name"),
+                "shares": r.get("shares"), "cost_price": r.get("cost_price"),
+                "updated_at": _now_str(),
+            })
+        return
     with get_conn() as conn:
         conn.execute("DELETE FROM portfolio_holdings")
         conn.executemany("""
@@ -907,6 +1094,8 @@ def portfolio_holdings_replace(rows: list[dict]):
 
 
 def portfolio_holdings_get_all() -> list[dict]:
+    if USE_CLOUD:
+        return _cd_select("portfolio_holdings", order="code.asc")
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM portfolio_holdings ORDER BY code"
@@ -915,6 +1104,8 @@ def portfolio_holdings_get_all() -> list[dict]:
 
 
 def portfolio_holdings_count() -> int:
+    if USE_CLOUD:
+        return len(_cd_select("portfolio_holdings", columns="id"))
     with get_conn() as conn:
         r = conn.execute("SELECT COUNT(*) as c FROM portfolio_holdings").fetchone()
         return r["c"] if r else 0
@@ -926,6 +1117,16 @@ def portfolio_holdings_count() -> int:
 
 def portfolio_trades_replace_all(rows: list[dict]):
     """Replace all trades (import from 每日调仓.md). rows: [{trade_date, name, code, quantity, price, side, remark}]"""
+    if USE_CLOUD:
+        _cd_delete("portfolio_trades", filters=[("id", "gt", 0)])
+        for r in rows:
+            _cd_insert("portfolio_trades", {
+                "trade_date": r.get("trade_date"), "name": r.get("name"),
+                "code": r.get("code"), "quantity": r.get("quantity"),
+                "price": r.get("price"), "side": r.get("side"),
+                "remark": r.get("remark"), "created_at": _now_str(),
+            })
+        return
     with get_conn() as conn:
         conn.execute("DELETE FROM portfolio_trades")
         conn.executemany("""
@@ -936,6 +1137,8 @@ def portfolio_trades_replace_all(rows: list[dict]):
 
 
 def portfolio_trades_get_all() -> list[dict]:
+    if USE_CLOUD:
+        return _cd_select("portfolio_trades", order="trade_date.desc,id.desc")
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM portfolio_trades ORDER BY trade_date DESC, id DESC"
@@ -948,12 +1151,18 @@ def portfolio_trades_get_all() -> list[dict]:
 # ═══════════════════════════════════════════════════════════════
 
 def meta_get(key: str, default=None):
+    if USE_CLOUD:
+        row = _cd_select_one("portfolio_meta", filters=[("key", "eq", key)])
+        return row["value"] if row and row.get("value") is not None else default
     with get_conn() as conn:
         r = conn.execute("SELECT value FROM portfolio_meta WHERE key=?", (key,)).fetchone()
         return r["value"] if r and r["value"] is not None else default
 
 
 def meta_set(key: str, value):
+    if USE_CLOUD:
+        _cd_upsert("portfolio_meta", {"key": key, "value": value}, on_conflict="key")
+        return
     with get_conn() as conn:
         conn.execute(
             "INSERT OR REPLACE INTO portfolio_meta(key, value) VALUES(?, ?)",
@@ -962,6 +1171,9 @@ def meta_set(key: str, value):
 
 
 def meta_get_prefix(prefix: str) -> dict:
+    if USE_CLOUD:
+        rows = _cd_select("portfolio_meta", filters=[("key", "like", prefix + "%")])
+        return {r["key"]: r["value"] for r in rows}
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT key, value FROM portfolio_meta WHERE key LIKE ?", (prefix + "%",)
@@ -975,6 +1187,15 @@ def meta_get_prefix(prefix: str) -> dict:
 
 def report_upsert(report_date: str, report_type: str, markdown: str,
                   source_file: str = "", status: str = "ready"):
+    if USE_CLOUD:
+        # BUG-FIX(2026-09-07)：改用 on_conflict upsert（唯一约束 uq_daily_reports_date_type）
+        # 取代 select-then-insert —— 后者在双进程并发写同一报告时会产生重复行。
+        _cd_upsert("daily_reports", {
+            "report_date": report_date, "report_type": report_type,
+            "markdown": markdown, "status": status,
+            "generated_at": _now_str(), "source_file": source_file,
+        }, on_conflict="report_date,report_type")
+        return
     with get_conn() as conn:
         conn.execute("""
             INSERT OR REPLACE INTO daily_reports
@@ -984,6 +1205,10 @@ def report_upsert(report_date: str, report_type: str, markdown: str,
 
 
 def report_get(report_date: str, report_type: str) -> dict | None:
+    if USE_CLOUD:
+        return _cd_select_one("daily_reports",
+                              filters=[("report_date", "eq", report_date),
+                                       ("report_type", "eq", report_type)])
     with get_conn() as conn:
         r = conn.execute(
             "SELECT * FROM daily_reports WHERE report_date=? AND report_type=?",
@@ -994,6 +1219,12 @@ def report_get(report_date: str, report_type: str) -> dict | None:
 
 def report_list(limit: int = 50, report_type: str | None = None) -> list[dict]:
     """Return report metadata (no markdown) sorted by date desc."""
+    if USE_CLOUD:
+        filters = [("report_type", "eq", report_type)] if report_type else None
+        return _cd_select("daily_reports",
+                          columns="id,report_date,report_type,status,generated_at,source_file",
+                          filters=filters, order="report_date.desc,report_type.asc",
+                          limit=limit)
     sql = "SELECT id, report_date, report_type, status, generated_at, source_file FROM daily_reports"
     params: list = []
     if report_type:
@@ -1009,6 +1240,14 @@ def report_list(limit: int = 50, report_type: str | None = None) -> list[dict]:
 
 
 def report_get_dates() -> list[str]:
+    if USE_CLOUD:
+        rows = _cd_select("daily_reports", columns="report_date",
+                          order="report_date.desc")
+        seen = []
+        for r in rows:
+            if r["report_date"] not in seen:
+                seen.append(r["report_date"])
+        return seen
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT DISTINCT report_date FROM daily_reports ORDER BY report_date DESC"
@@ -1017,6 +1256,11 @@ def report_get_dates() -> list[str]:
 
 
 def report_types_for_date(report_date: str) -> list[str]:
+    if USE_CLOUD:
+        rows = _cd_select("daily_reports", columns="report_type",
+                          filters=[("report_date", "eq", report_date)],
+                          order="report_type.asc")
+        return [r["report_type"] for r in rows]
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT report_type FROM daily_reports WHERE report_date=? ORDER BY report_type",
@@ -1031,6 +1275,12 @@ def report_types_for_date(report_date: str) -> list[str]:
 
 def scheduler_run_insert(task_id: str, window_key: str, trigger: str,
                          run_time: str, status: str = "running") -> int:
+    if USE_CLOUD:
+        row = _cd_insert("scheduler_runs", {
+            "task_id": task_id, "window_key": window_key, "trigger": trigger,
+            "run_time": run_time, "status": status,
+        })
+        return row["id"] if row else 0
     with get_conn() as conn:
         cur = conn.execute("""
             INSERT INTO scheduler_runs (task_id, window_key, trigger, run_time, status)
@@ -1045,6 +1295,10 @@ def scheduler_run_update(run_id: int, **fields):
     sets = [k for k in fields if k in allowed]
     if not sets:
         return
+    if USE_CLOUD:
+        patch = {k: fields[k] for k in sets}
+        _cd_update("scheduler_runs", patch, filters=[("id", "eq", run_id)])
+        return
     assignments = ", ".join(f"{k}=?" for k in sets)
     params = [fields[k] for k in sets] + [run_id]
     with get_conn() as conn:
@@ -1052,7 +1306,14 @@ def scheduler_run_update(run_id: int, **fields):
 
 
 def scheduler_runs_list(task_id: str | None = None, limit: int = 50) -> list[dict]:
-    sql = "SELECT * FROM scheduler_runs"
+    if USE_CLOUD:
+        # BUG-FIX(2026-09-07)：列表只取轻量元数据列，不拉完整 output（可能几千字符，
+        # 每刷一次后台页下载 15+ 份 → 慢）。完整 output 由 /scheduler/runs/{id}/log 按需返回。
+        cols = "id,task_id,trigger,status,window_key,run_time,duration_sec,started_at,finished_at"
+        filters = [("task_id", "eq", task_id)] if task_id else None
+        return _cd_select("scheduler_runs", columns=cols, filters=filters,
+                          order="id.desc", limit=limit)
+    sql = "SELECT id,task_id,trigger,status,window_key,run_time,duration_sec,started_at,finished_at FROM scheduler_runs"
     params: list = []
     if task_id:
         sql += " WHERE task_id=?"
@@ -1065,6 +1326,8 @@ def scheduler_runs_list(task_id: str | None = None, limit: int = 50) -> list[dic
 
 
 def scheduler_run_get(run_id: int) -> dict | None:
+    if USE_CLOUD:
+        return _cd_select_one("scheduler_runs", filters=[("id", "eq", run_id)])
     with get_conn() as conn:
         r = conn.execute("SELECT * FROM scheduler_runs WHERE id=?", (run_id,)).fetchone()
         return dict(r) if r else None
@@ -1080,6 +1343,23 @@ def scheduler_window_done(task_id: str, window_key: str,
       阻止同一窗口内无限制重试（2026-08-31 重试风暴修复）
     - 否则 False（可重试）
     """
+    if USE_CLOUD:
+        done = _cd_select_one(
+            "scheduler_runs", columns="id",
+            filters=[("task_id", "eq", task_id), ("window_key", "eq", window_key),
+                     ("status", "in", "(success,timeout)")],
+        )
+        if done:
+            return True
+        if max_failures is not None:
+            failed = _cd_select(
+                "scheduler_runs", columns="id",
+                filters=[("task_id", "eq", task_id), ("window_key", "eq", window_key),
+                         ("status", "eq", "failed")],
+            )
+            if len(failed) >= max_failures:
+                return True
+        return False
     with get_conn() as conn:
         r = conn.execute(
             "SELECT 1 FROM scheduler_runs WHERE task_id=? AND window_key=? AND status IN ('success','timeout') LIMIT 1",
@@ -1099,15 +1379,59 @@ def scheduler_window_done(task_id: str, window_key: str,
 
 
 def scheduler_latest(task_id: str) -> dict | None:
+    if USE_CLOUD:
+        # BUG-FIX(2026-09-07)：latest 供任务表"最近运行"状态展示，同样不拉 output。
+        cols = "id,task_id,trigger,status,window_key,run_time,duration_sec,started_at,finished_at"
+        return _cd_select_one("scheduler_runs", columns=cols,
+                              filters=[("task_id", "eq", task_id)], order="id.desc")
     with get_conn() as conn:
         r = conn.execute(
-            "SELECT * FROM scheduler_runs WHERE task_id=? ORDER BY id DESC LIMIT 1",
+            "SELECT id,task_id,trigger,status,window_key,run_time,duration_sec,started_at,finished_at "
+            "FROM scheduler_runs WHERE task_id=? ORDER BY id DESC LIMIT 1",
             (task_id,),
         ).fetchone()
         return dict(r) if r else None
 
 
+def scheduler_latest_map(task_ids: list[str]) -> dict[str, dict]:
+    """批量取多个任务各自的最近一次运行（每组 task_id 取 id 最大一条）。
+
+    BUG-FIX(2026-09-07)：任务表端点原对每个 task_id 单独查一次云（N+1，~19 次
+    往返拖慢后台页）。改为一次查询：拉最近 N 条元数据（id desc 最新在前），
+    每个 task_id 保留第一条即其最近运行。N 取 task 数 * 每任务可能运行数，
+    兜底取 500（scheduler_runs 行数量级小，够用且只取元数据列）。
+    """
+    if not task_ids:
+        return {}
+    if USE_CLOUD:
+        cols = "id,task_id,trigger,status,window_key,run_time,duration_sec,started_at,finished_at"
+        rows = _cd_select("scheduler_runs", columns=cols, order="id.desc", limit=500)
+    else:
+        qmarks = ",".join("?" for _ in task_ids)
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT id,task_id,trigger,status,window_key,run_time,duration_sec,started_at,finished_at "
+                f"FROM scheduler_runs WHERE task_id IN ({qmarks}) ORDER BY id DESC LIMIT 500",
+                task_ids,
+            ).fetchall()
+            rows = [dict(r) for r in rows]
+    result: dict[str, dict] = {}
+    for r in rows:  # id desc → 每个 task_id 第一次出现即最新
+        tid = r.get("task_id")
+        if tid in task_ids and tid not in result:
+            result[tid] = r
+    return result
+
+
 def scheduler_running_tasks() -> list[str]:
+    if USE_CLOUD:
+        rows = _cd_select("scheduler_runs", columns="task_id",
+                          filters=[("status", "eq", "running")])
+        seen = []
+        for r in rows:
+            if r["task_id"] not in seen:
+                seen.append(r["task_id"])
+        return seen
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT DISTINCT task_id FROM scheduler_runs WHERE status='running'"
@@ -1125,6 +1449,17 @@ def scheduler_mark_zombies_running() -> int:
     返回被清理的记录数。
     """
     note = "\n\n[interrupted] 进程重启，任务被中断（未收到终态，标记为 failed）。"
+    if USE_CLOUD:
+        ids = _cd_select("scheduler_runs", columns="id",
+                         filters=[("status", "eq", "running")])
+        if not ids:
+            return 0
+        now = datetime.now().isoformat()
+        for r in ids:
+            _cd_update("scheduler_runs",
+                       {"status": "failed", "completed_at": now},
+                       filters=[("id", "eq", r["id"])])
+        return len(ids)
     with get_conn() as conn:
         cur = conn.execute(
             "SELECT id FROM scheduler_runs WHERE status='running'"

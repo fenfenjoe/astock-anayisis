@@ -156,10 +156,8 @@
   async function deleteSession(id) {
     if (!confirm('确定删除这个会话？聊天记录会一起删掉，且不可恢复。')) return;
     try {
-      const resp = await fetch('/api/agent/sessions/' + id, {
-        method: 'DELETE',
-        headers: Auth.getHeaders(),
-      });
+      // BUG-FIX(2026-09-07)：改用 Auth.fetchDelete，token 过期时统一跳登录（原裸 fetch 静默失败）
+      const resp = await Auth.fetchDelete('/api/agent/sessions/' + id);
       if (!resp.ok) { alert('删除失败'); return; }
       if (state.sessionId === id) {
         state.sessionId = null;
@@ -298,11 +296,9 @@
     const msgParts = [];      // dsh 拆好的消息：一条消息 = 一个气泡
 
     try {
-      const resp = await fetch('/api/agent/sessions/' + state.sessionId + '/messages', {
-        method: 'POST',
-        headers: Auth.getHeaders(),
-        body: JSON.stringify({ content: text }),
-      });
+      // BUG-FIX(2026-09-07)：改用 Auth.fetchPost，token 过期统一跳登录（原裸 fetch 静默 401）
+      const resp = await Auth.fetchPost('/api/agent/sessions/' + state.sessionId + '/messages',
+                                        { content: text });
       if (!resp.ok) {
         const err = await resp.json().catch(function () { return { detail: 'HTTP ' + resp.status }; });
         thinkBubble.innerHTML = '<span class="agent-error">' + esc(err.detail || '请求失败') + '</span>';
@@ -313,6 +309,7 @@
       const decoder = new TextDecoder();
       let buf = '';
       let doneSources = null;
+      let hadError = false;   // BUG-FIX(2026-09-07)：SSE 错误曾被 thinkBubble.remove() 静默删掉
       for (;;) {
         const chunk = await reader.read();
         if (chunk.done) break;
@@ -327,6 +324,7 @@
             if (evt.delta) {
               msgParts.push(evt.delta); // 每条 delta = 一条消息（后端已按行拆好）
             } else if (evt.error) {
+              hadError = true;
               thinkBubble.innerHTML = '<span class="agent-error">' + esc(evt.error) + '</span>';
             } else if (evt.done) {
               doneSources = evt.sources || [];
@@ -335,6 +333,12 @@
         });
       }
       // 收集完毕 → 去掉"思考中"占位，逐条消息打字出现（每条 = 一个气泡）
+      // BUG-FIX：发生 SSE 错误时保留错误气泡可见，不再 remove()
+      if (hadError && thinkBubble.parentNode) {
+        dispatchThinking(false);
+        loadSessions();
+        return;
+      }
       if (thinkBubble.parentNode) thinkBubble.remove();
       if (!msgParts.length) {
         dispatchThinking(false);
@@ -422,12 +426,11 @@
 
   async function deleteSource(id) {
     try {
-      await fetch('/api/agent/sources/' + id, {
-        method: 'DELETE',
-        headers: Auth.getHeaders(),
-      });
+      // BUG-FIX(2026-09-07)：改用 Auth.fetchDelete，token 过期统一跳登录；且检查 resp.ok
+      const resp = await Auth.fetchDelete('/api/agent/sources/' + id);
+      if (!resp.ok) { alert('删除失败'); return; }
       loadSources();
-    } catch (e) { /* ignore */ }
+    } catch (e) { alert('删除失败：' + (e.message || e)); }
   }
 
   // ── 动态（③ 时间线：动态短条 + 文章卡混合）──

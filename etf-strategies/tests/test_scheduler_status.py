@@ -60,3 +60,31 @@ def test_engine_status_attendance_leave(monkeypatch):
                         lambda key: "0" if key == "scheduler_auto_enabled" else None)
     st = sched.engine.status()
     assert st["attendance"] == "leave"
+
+
+# ═══════════════════════════════════════════════════════════════
+# BUG-FIX(2026-09-07): agent_online() 读 agent db 的 xiaoman_online
+# （此前 _tick 从 dashboard db 读该 key 永远为空 → auto 调度被永久短路）
+# ═══════════════════════════════════════════════════════════════
+
+def test_agent_online_true_when_agent_db_says_1(monkeypatch):
+    import agent.db as agent_db_mod
+    monkeypatch.setattr(agent_db_mod, "meta_get",
+                        lambda key: "1" if key == "xiaoman_online" else None)
+    assert sched.agent_online() is True
+
+
+def test_agent_online_false_when_agent_db_says_0(monkeypatch):
+    import agent.db as agent_db_mod
+    monkeypatch.setattr(agent_db_mod, "meta_get",
+                        lambda key: "0" if key == "xiaoman_online" else None)
+    assert sched.agent_online() is False
+
+
+def test_agent_online_false_when_agent_db_unavailable(monkeypatch):
+    # agent db 读取抛异常 → fail-safe 返回 False（宁可不调度，不误触发）
+    import agent.db as agent_db_mod
+    def _boom(key):
+        raise RuntimeError("agent.db unavailable")
+    monkeypatch.setattr(agent_db_mod, "meta_get", _boom)
+    assert sched.agent_online() is False

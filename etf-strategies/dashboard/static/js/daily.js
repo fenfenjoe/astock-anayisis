@@ -424,7 +424,10 @@ async function sigLoad(force) {
       sel.innerHTML = dates.map((d) => `<option value="${d}">${d}</option>`).join('');
       if (dates.length) sel.value = dates[0];
     }
-    if (dates.length) sigRender(dates[0]);
+    // BUG-FIX(2026-09-07)：切换日期必须渲染用户选中的日期（sel.value），
+    // 原先硬编码 dates[0] 导致历史信号永远显示最新一天，日期选择器形同虚设。
+    const chosen = (sel && sel.options.length) ? sel.value : (dates[0] || null);
+    if (chosen) sigRender(chosen);
   } catch (e) {
     safeSetHTML('sig-content', '<p class="muted">加载信号失败: ' + escapeHtml(e.message) + '</p>');
   }
@@ -448,7 +451,9 @@ async function sigRender(date) {
     if (!box) return;
     if (sigView === 'table' && d.parsed && d.parsed.length) {
       // 列与 每日信号.md v2.0 信号总表（12 列）对齐
-      const cols = ['优先级', '标的', '操作类型', '状态', '方向', '紧急度', '预期触发率', '目标/止损', '仓位', '有效时段', '信号ID'];
+      // BUG-FIX(2026-09-07)：补回"触发条件"列（原先 11 列，触发条件被静默丢弃），
+      // 顺序与 _SIGNAL_COLUMNS 保持一致
+      const cols = ['优先级', '标的', '触发条件', '操作类型', '状态', '方向', '紧急度', '预期触发率', '目标/止损', '有效时段', '仓位', '信号ID'];
       box.innerHTML = '<div class="table-wrap"><table class="data-table sig-table"><thead><tr>' +
         cols.map((c) => '<th>' + escapeHtml(c) + '</th>').join('') +
         '</tr></thead><tbody>' +

@@ -1,0 +1,13 @@
+[2026-09-07T12:58:10+08:00] REQ_IMPLEMENT 开始
+[2026-09-07T12:58:15+08:00] 扫描: 每日复盘=2 OPEN(REQ-005 P1/REQ-006 P2), ETF=1 OPEN(REQ-001 P1)
+[2026-09-07T12:58:20+08:00] 选择: REQ-005 (P1) — 投资经验.md 压缩合并 + 重复章节/条目去重 + 北向数据断供标注 (每日复盘优先 + P1优先 + 文件状态 IN_PROGRESS 优先)
+[2026-09-07T12:58:25+08:00] 幂等检查: task_state.json last_req_id=REQ-003 (2026-09-01)，REQ-005 今日未尝试，可实施
+[2026-09-07T12:59:00+08:00] 状态确认: REQ-005 处理记录已有 brainstorming/writing-plans/TDD(2026-09-02)，lib/experience_health.py + tests/test_experience_health.py + tests/test_REQ_005.py 已建，投资经验.md 已压缩至 424 行 → 续作 executing-plans
+[2026-09-07T12:59:30+08:00] TDD门禁首轮(3.5): test_REQ_005.py EXISTS；运行 74 条中 2 条集成测试失败 — 信号设计 11 条/全市场异动扫描 14 条 >10
+[2026-09-07T13:00:00+08:00] executing-plans(续): 信号设计 合并规则1+规则2→10；全市场异动扫描 合并 ETF判定/个股异动/真普跌vs结构分化 + 防御线候选入备份→10；短线机会经验 止盈执行改一行引用
+[2026-09-07T13:05:00+08:00] TDD门禁重跑: test_REQ_005 74/74 PASS → 通过
+[2026-09-07T13:06:00+08:00] 全量回归: pytest tests/ 385/385 PASS
+[2026-09-07T13:07:00+08:00] code-review: 自查7项通过; 投资经验.md 407行≤500 / 无重复头 / 必需章节齐全 / 北向依赖全标注 / 每章节≤10条 → PASS
+[2026-09-07T13:09:00+08:00] 收尾: REQ-005 IN_PROGRESS→IMPLEMENTED; REQ_INDEX.md 同步(OPEN 2→1, IMPLEMENTED 1→2); task_state.json req_implement=REQ-005 implemented
+[2026-09-07T13:09:23+08:00] Git提交: 6c43f75 (5 files changed)
+[2026-09-07T13:09:30+08:00] REQ_IMPLEMENT 结束 — REQ REQ-005 → IMPLEMENTED

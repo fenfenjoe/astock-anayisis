@@ -69,39 +69,12 @@ async def lifespan(app: FastAPI):
 
     # ── 初始化 agent.db（会话/文章/知识库）：dashboard 也要读它，
     #    否则 /api/agent/* （如 status 的 heartbeat）会因表不存在而报错。
-    #    file 模式建表；memory 模式从 TOS 载入/建空。 ──
+    #    file 模式建表；cloud 模式直接连云（见 agent/db.py USE_CLOUD）。 ──
     try:
         from agent import db as agent_db
         agent_db.init_db()
     except Exception as e:
         print(f"[app]   WARNING: agent.db init failed: {e}")
-
-    # ── 严格零本地：memory 模式起后台快照回传线程 ──
-    try:
-        if db_mod.USE_MEMORY:
-            threading.Thread(target=db_mod.cloud_backup_loop,
-                             kwargs={"interval_seconds": 900},
-                             daemon=True).start()
-            print("[app] DB in memory mode — cloud backup loop started (15min)")
-    except Exception as e:
-        print(f"[app]   WARNING: backup loop start failed: {e}")
-    # agent.db 同样可能处于 memory 模式（DB_MODE=memory 全局生效）：dashboard 侧写入的
-    # 聊天/手动状态/活动台账也要定时回传 TOS，否则只在 agent 进程侧回传会丢 dashboard 写入。
-    try:
-        from agent import db as _agent_db
-        if _agent_db.USE_MEMORY:
-            def _agent_backup_loop():
-                import time as _t
-                while True:
-                    try:
-                        _agent_db.cloud_backup()
-                    except Exception:
-                        pass
-                    _t.sleep(60)
-            threading.Thread(target=_agent_backup_loop, daemon=True).start()
-            print("[app] agent.db in memory mode — agent snapshot backup loop started (60s)")
-    except Exception as e:
-        print(f"[app]   WARNING: agent.db backup loop start failed: {e}")
 
     # ── Seed default admin user if no users exist ──
     if not _in_test and user_count() == 0:
@@ -156,24 +129,19 @@ async def lifespan(app: FastAPI):
 
     threading.Thread(target=_warm_cache, daemon=True).start()
 
-    # ── 后台：云恢复(CLOUD_RESTORE_ON_START) + 每日复盘导入 + 调度器/通知 ──
+    # ── 后台：调度器引擎最先启动 + 每日复盘导入 ──
     #    全部移入 daemon 线程，不阻塞端口绑定。测试环境整体跳过。
+    #    BUG-FIX(2026-09-07)：引擎必须先于报告导入启动——导入是云调用可能耗时数分钟，
+    #    若后启动引擎会错过导入期间的调度窗口（如 13:30 intraday_1330 窗口在
+    #    13:34 重启后未被捕获）。引擎 start() 幂等，先启动不丢窗口。
     def _bg_restore_and_import():
-        # 云恢复：CLOUD_RESTORE_ON_START=1 时先拉取 TOS 最新数据到本地工作副本
-        if os.environ.get("CLOUD_RESTORE_ON_START", "").lower() in ("1", "true"):
-            import subprocess as _sp
-            _repo = Path(__file__).resolve().parent.parent.parent
-            print("[app] Background: restoring data from cloud (TOS)...")
-            try:
-                _r = _sp.run(
-                    [sys.executable, "scripts/cloud_sync.py", "--download"],
-                    cwd=str(_repo), capture_output=True, text=True,
-                    encoding="utf-8", errors="replace", timeout=900)
-                print(f"[app]   restore exit={_r.returncode}: {(_r.stdout or '')[-200:]}")
-            except Exception as e:
-                print(f"[app]   WARNING: cloud restore failed: {e}")
+        # ── 1. 调度引擎最先启动（幂等，立即开始 tick，绝不因导入慢而错过窗口）──
+        try:
+            daily_scheduler.start()
+        except Exception as e:
+            print(f"[app]   WARNING: scheduler start failed: {e}")
 
-        # ── 每日复盘集成：导入历史 + 启动调度器引擎（幂等，可重复跑）──
+        # ── 2. 每日复盘集成：导入历史报告/持仓/交易（可与引擎并行）──
         print("[app] Importing 每日复盘 data (reports/holdings/trades)...")
         try:
             up = daily_scheduler.upload_reports_to_cloud()
@@ -190,12 +158,7 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             print(f"[app]   WARNING: holdings/trades import failed: {e}")
 
-        try:
-            daily_scheduler.start()
-        except Exception as e:
-            print(f"[app]   WARNING: scheduler start failed: {e}")
-
-        # ── 企业微信信号触发通知 watcher（未配置则静默空转）──
+        # ── 3. 企业微信信号触发通知 watcher（未配置则静默空转）──
         try:
             from dashboard import notify as notify_mod
             notify_mod.start()
@@ -601,18 +564,14 @@ def _generate_and_store_signal(sid: str) -> dict | None:
                           "change_pct": round(abs(diff) * 100, 1)})
 
     # Store in DB — single transaction: DELETE old + INSERT new
-    from dashboard.db import get_conn
-    with get_conn() as conn:
-        conn.execute("DELETE FROM daily_signals WHERE strategy_id=?", (sid,))
-        for a in assets_data:
-            conn.execute("""
-                INSERT OR REPLACE INTO daily_signals
-                (strategy_id, signal_date, asset_code, asset_name,
-                 target_weight, prev_weight, weight_change, action, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
-            """, (sid, signal_date, a["code"], a["name"],
-                  a["target_weight"], a["prev_weight"],
-                  a["target_weight"] - a["prev_weight"], a["action"]))
+    # BUG-FIX(2026-09-07)：云模式必须走云 signals_upsert/signals_delete_by_strategy，
+    # 原先直接 get_conn() 写本地 daily_signals 在云模式下本地无此表（只有 kline/backtest_nav 缓存表），
+    # 全新机器直接 500，迁移机器写本地读云端 → 信号不跨机共享，违背云权威原则。
+    from dashboard.db import signals_delete_by_strategy, signals_upsert
+    signals_delete_by_strategy(sid)
+    for a in assets_data:
+        signals_upsert(sid, signal_date, a["code"], a["name"],
+                       a["target_weight"], a["prev_weight"], a["action"])
 
     holdings = sorted(
         [{"code": etf, "name": get_etf_name(etf),
