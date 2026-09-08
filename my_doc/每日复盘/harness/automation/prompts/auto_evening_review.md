@@ -21,28 +21,26 @@
 
 ---
 
-## 第零步：同步云端持仓/调仓到本地（🚨 必须先执行，防止读到过期数据）
+## 第零步：确认本地持仓/调仓是最新（🚨 必须先执行）
 
-> **为什么必须有这一步（2026-08-31 BUG）**：Dashboard「持仓/资产」页面在 TOS 云端模式
-> （`etf-strategies/scripts/config/cloud.json` 已配置）下，录入的调仓**只写云端**
-> `holdings/每日调仓.md`/`holdings/持仓.md`，本地 `my_doc/每日复盘/每日调仓.md` 等文件
-> 不会更新。若不先同步，本复盘会读到过期持仓/调仓（曾导致"今日调仓：无"、信号执行缺失）。
+> **2026-09-07 变更**：TOS 云端同步已下线（云权威库迁移 Supabase）。Dashboard「持仓/资产」
+> 页面录入的调仓现**直接写本地** `my_doc/每日复盘/每日调仓.md` + `harness/config/持仓.md`，
+> 与复盘读取同源，无需再执行 `sync_holdings_cloud.py`。此步退化为校验本地文件存在。
 
 **必须通过 bash 实际执行以下命令并读取输出，禁止凭推理模拟：**
 
 ```bash
 
-python etf-strategies/scripts/sync_holdings_cloud.py
+test -s my_doc/每日复盘/每日调仓.md && echo "调仓文件存在" || echo "⚠️ 调仓文件缺失"
+test -s my_doc/每日复盘/harness/config/持仓.md && echo "持仓文件存在" || echo "⚠️ 持仓文件缺失"
 ```
 
 根据输出判断：
-- 看到 `PULLED` → 云端持仓/调仓已同步到本地，**继续执行后续步骤**（后续所有对
-  `每日调仓.md`/`config/持仓.md` 的读取都基于同步后的最新数据）
-- 看到 `SKIP`（未配置云端）→ 本地模式，无需同步，继续
-- 命令报错或退出码非 0 → **中止复盘**，并在复盘报告中标注"⚠️ 持仓数据同步失败，可能过期"
+- 两文件都存在且非空 → **继续执行后续步骤**（后续所有对 `每日调仓.md`/`config/持仓.md` 的读取基于最新数据）
+- 任一缺失或为空 → **中止复盘**，并在复盘报告中标注"⚠️ 持仓数据缺失，可能过期"
 
-> 该步保证本复盘与 dashboard「持仓/资产」页面同源。同步后若 `每日调仓.md` 出现
-> dashboard 录入的当日调仓（含手续费备注），第十步 10.1 的"今日调仓记录"统计会自动计入。
+> 该步保证本复盘与 dashboard「持仓/资产」页面同源。dashboard 录入的当日调仓（含手续费备注）
+> 直接落在本地 `每日调仓.md`，第十步 10.1 的"今日调仓记录"统计会自动计入。
 
 ---
 
@@ -387,6 +385,9 @@ def board_scan(fs: str = "m:90+t:2", pz: int = 200) -> list:
 - D: 应该执行但未执行
 - F: 不应该执行但执行了
 
+> 🚨 **P0 零容忍规则（REQ-007）**：P0 信号触发但未执行（且未显式放弃）→ **执行质量强制 D**，复盘必须问责，
+> 不做结果论豁免（即便事后看未执行反而"躲过损失"，也不改变执行纪律缺陷的定性）。P0 显式放弃（用户操作=放弃）→ 不问责。P0 执行率见 7.6.5。
+
 ### 8.3 信号遗漏与机会盲区检测（五个必答问题，答案必须写入复盘报告）
 
 > ⚠️ 以下五问是复盘最核心的"补盲"环节。不仅思考，**必须将答案作为独立章节写入复盘报告**（格式见复盘分析-模板.md 2c 节）。
@@ -395,7 +396,7 @@ def board_scan(fs: str = "m:90+t:2", pz: int = 200) -> list:
 2. **信号遗漏**：是否存在早盘未生成但实际应生成的信号？（如某个标的盘中出现了清仓条件但早盘未生成清仓信号）→ 是否有信号方向正确却被错误取消？
 3. **盘中信号优先级**：是否有盘中新发现的信号（Tier 1/Tier 2）优于早盘 P0 信号？→ 如有，早盘为什么没发现？是否需要调整早盘信号生成的优先级逻辑？
 4. **触发条件校准**：是否有信号触发条件设置不合理（太敏感→误触发 / 太迟钝→漏触发）？P0 信号的阈值是否需要调整？
-5. **执行完整性**：信号触发记录是否完整？是否存在触发条件满足但未记录的情况？是否存在信号"已过期未执行"但实际盘中应执行的情况？
+5. **执行完整性**：信号触发记录是否完整？是否存在触发条件满足但未记录的情况？是否存在信号"已过期未执行"但实际盘中应执行的情况？**P0 执行追踪（REQ-007）**：`## P0 执行追踪` 节是否完整记录每个已触发 P0 的逐检查点响应？最终结果是否已收尾？
 
 ### 8.4 更新 `## 当日信号统计`
 
@@ -409,7 +410,7 @@ def board_scan(fs: str = "m:90+t:2", pz: int = 200) -> list:
 | 已过期 | 信号总表中状态="已过期"的数量 |
 | 已执行 | 从信号触发记录的"用户操作"列统计"已执行"数 |
 | 已废弃 | 信号总表中状态="已废弃"或"已取消"的数量 |
-| P0执行率 | 已执行的P0信号数 / 已触发的P0信号数 |
+| P0执行率 | 已执行的P0信号数 / 已触发的P0信号数（**REQ-007：调用 lib/p0_tracking.py calc_p0_execution_rate 计算，并纳入仪表盘硬指标 + 连续 2 日 <100% → P1 告警**，见 7.6.5） |
 | 遗漏信号数 | 7.3 中识别到的遗漏信号（如有） |
 | 高紧急度触发率 | 高紧急度信号中已触发数 / 高紧急度信号总数 |
 | 低紧急度触发率 | 低紧急度信号中已触发数 / 低紧急度信号总数 |
@@ -626,6 +627,72 @@ print(json.dumps(generate_quality_dashboard(db['signals'], settled), ensure_asci
 | 升级准确率 | {XX}%（盈利/已升级） |
 ```
 
+### 7.6.5 P0 执行追踪收尾（REQ-007，新增）
+
+> 🚨 **P0 执行保障收尾**：收盘复盘对当日 P0 信号做**零容忍问责**（触发必须执行或显式放弃，不做结果论豁免），
+> 计算 P0 执行率（已执行 P0 / 已触发 P0）纳入信号质量仪表盘硬指标，连续 2 日 <100% 触发 P1 级告警。
+
+**步骤 A：调用 lib/p0_tracking.py 收尾 P0 执行追踪**
+
+```bash
+python -X utf8 -c "
+import sys, json
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.p0_tracking import parse_p0_signals, calc_p0_execution_rate, merge_p0_daily, check_p0_alert
+from datetime import date
+
+today = date.today().strftime('%Y%m%d')  # ⚠️ 文件路径用 yyyyMMdd（同 §7.6.1）
+today_iso = date.today().isoformat()     # 跨日库 date 键用 ISO 格式（YYYY-MM-DD）
+signal_file = f'my_doc/每日复盘/reports/{today}/每日信号.md'
+p0_file = 'my_doc/每日复盘/harness/automation/config/p0_tracking.json'
+
+with open(signal_file, encoding='utf-8') as f:
+    md = f.read()
+
+records = parse_p0_signals(md, today_iso)
+summary = calc_p0_execution_rate(records)
+print(f'P0 触发={summary[\"triggered\"]} 已执行={summary[\"executed\"]} 执行率={summary[\"rate\"]}')
+if summary['unexecuted_ids']:
+    print('未执行 P0:', ', '.join(summary['unexecuted_ids']))
+
+# 跨日库合并（幂等）
+with open(p0_file, encoding='utf-8') as f:
+    store = json.load(f)
+store = merge_p0_daily(store, today_iso, summary)
+with open(p0_file, 'w', encoding='utf-8') as f:
+    json.dump(store, f, indent=2, ensure_ascii=False)
+
+# 连续 2 日 <100% → P1 告警
+alert = check_p0_alert(store)
+print(json.dumps(alert, ensure_ascii=False))
+"
+```
+
+**步骤 B：更新 `每日信号.md` 的 `## P0 执行追踪` 节最终结果**
+
+- 对每条 P0 信号，按 lib `finalize_p0_result` 的判定规则将最终结果填入该信号全部行的 `最终结果` 列：
+  - 用户操作 ∈ {已执行, 部分执行} → `已执行`
+  - 用户操作 = 放弃 → `未执行（放弃）`（合法终态，不问责）
+  - 其余（含全程 待填 / 错过 / 14:45 截止未响应）→ `未执行（错过）` → **零容忍问责**（执行质量 D）
+- 盘中已标 `已过期（14:45截止未执行）` 的保持原状
+
+**步骤 C：P0 执行率渲染入信号质量仪表盘（REQ-007 硬指标）**
+
+在 §7.6.4 信号质量仪表盘表格中**追加一行**：
+
+| 维度 | 指标 | 数值 | 阈值/目标 | 状态 |
+|------|------|------|----------|:---:|
+| 执行 | P0 执行率（当日） | {rate}%（{executed}/{triggered}） | 100%（零容忍） | ✅/🚨 |
+
+- 当日无 P0 触发 → 数值填"—（无触发）"，状态 ✅（不构成告警）
+- 状态判定：rate == 100.0 → ✅；rate < 100.0 → 🚨（并结合步骤 A 的连续天数告警）
+
+**步骤 D：P1 级告警（连续 2 日 <100%）**
+
+- 步骤 A 输出 `alert.alert == true` → 在复盘报告中输出：
+  > 🚨 **P1 级告警（REQ-007）**：P0 执行率连续 {streak} 日 <100%（{alert.message}）
+- 同时将告警写入 `PENDING_CONFIRMATION.md`（用户必须确认执行缺失根因与整改措施）
+
 ### 8.7 写入验证（‼️ 硬性门禁，禁止跳过）
 
 > 🚨 确认信号评价和统计已正确写入 `每日信号.md` 后，必须运行以下验证脚本。验证失败 = 复盘未完成，必须回补。
@@ -673,6 +740,26 @@ if len(signal_table) >= 2:
     executed_count = table_text.count('已执行')
     expired_count = table_text.count('已过期')
     print(f'信号总表状态: 待执行={pending_count} 已触发={triggered_count} 已执行={executed_count} 已过期={expired_count}')
+
+# 检查4 (REQ-007): 有已触发 P0 时，`## P0 执行追踪` 节必须存在且最终结果已填（零容忍）
+import re
+if '## P0 执行追踪' not in content:
+    if triggered_count + executed_count > 0:
+        # 需判断是否有 P0 触发：从信号总表提取 P0 行状态
+        p0_lines = [l for l in table_text.split('\n') if l.strip().startswith('| P0') and '信号ID' not in l]
+        p0_triggered = any(('已触发' in l or '已执行' in l) for l in p0_lines)
+        if p0_triggered:
+            errors.append('有已触发 P0 信号但缺少 ## P0 执行追踪 节（REQ-007 执行保障缺失）')
+else:
+    p0_track_text = content.split('## P0 执行追踪')[1].split('## ')[0] if '## ' in content.split('## P0 执行追踪')[1] else content.split('## P0 执行追踪')[1]
+    p0_track_rows = [l for l in p0_track_text.split('\n') if l.strip().startswith('| SIG-')]
+    if p0_track_rows:
+        # 最终结果列（最后一列）不应全为占位 '—'（收盘复盘必须收尾）
+        finals = [l.split('|')[-2].strip() for l in p0_track_rows]  # 最后一列前的单元格
+        if all(f == '—' or f == '' for f in finals):
+            errors.append('## P0 执行追踪 节存在 P0 记录但最终结果未填写（REQ-007 收尾缺失）')
+        else:
+            print(f'P0 执行追踪: {len(p0_track_rows)} 行, 最终结果已收尾')
 
 if errors:
     print(f'[FAIL] 每日信号.md 写入验证失败 ({len(errors)} errors):')
