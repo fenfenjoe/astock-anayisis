@@ -12,8 +12,13 @@ from dashboard import scheduler as sched
 @pytest.fixture(autouse=True)
 def _clean_running(monkeypatch):
     sched._running_tasks = {}
+    # 重置 agent_online() 的 5s 短缓存，避免跨用例缓存污染（BUG-031）
+    sched._online_cache.ts = 0.0
+    sched._online_cache.val = False
     yield
     sched._running_tasks = {}
+    sched._online_cache.ts = 0.0
+    sched._online_cache.val = False
 
 
 def test_current_task_none_when_idle():

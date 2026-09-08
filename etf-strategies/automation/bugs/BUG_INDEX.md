@@ -11,10 +11,10 @@
 |------|------|
 | OPEN | 0 |
 | IN_PROGRESS | 0 |
-| FIXED | 16 |
+| FIXED | 18 |
 | VERIFIED | 1 |
 | WONT_FIX | 1 |
-| MANUAL_REVIEW | 7 |
+| MANUAL_REVIEW | 9 |
 
 ---
 
@@ -32,6 +32,8 @@
 | BUG-014 | S12/S13 KB因子口径与实现不符（年化收益/成交量因子） | 因子口径决策，auto_fix_eligible=false |
 | BUG-015 | S9/S13 KB资产池数量标注不符（6只 vs 实列5只） | KB 文档口径修订，auto_fix_eligible=false |
 | BUG-025 | 云端集成测试 skipif 只查 env 不查 backend：cloud_db._ENABLED 模块级常量导入时序 + 门控不严，全量 11 项 FAILED/ERROR | 需设计决策（懒加载 enabled()/skipif 增强），云端迁移 WIP 未提交，auto_fix_eligible=false |
+| BUG-029 | pet.js 引用已移除的场景层挂载点 xm-pet-scene，dashboard.html 无该元素（前端契约断裂） | 前端契约决策（移除死引用 vs 恢复挂载点），auto_fix_eligible=false |
+| BUG-030 | pet.css 桌宠状态/姿态样式覆盖不完整：缺 data-state="working" 与全部 data-posture 规则 | 视觉设计决策 + posture 机制去留，auto_fix_eligible=false |
 
 ---
 
@@ -65,6 +67,10 @@
 | BUG-023 | test_agent_behavior 3个run_post_pipeline测试引用已删除函数(5c6fc61重构移除,execute_reading承接发动态),AttributeError | tests | HIGH | FIXED | 2026-09-07 |
 | BUG-024 | test_agent_lifecycle tick测试未适配3bcc9d0上线/下线闸门(未设xiaoman_online=1, Rss断言失败) | tests | HIGH | FIXED | 2026-09-07 |
 | BUG-025 | 云端集成测试skipif只查env不查backend:cloud_db._ENABLED模块级常量在.env加载前导入时永久False,全量测试11项FAILED/ERROR | tests | MEDIUM | MANUAL_REVIEW | 2026-09-07 |
+| BUG-026 | 9/13活跃ETF缓存09-07 bar为盘中partial快照(非官方收盘),跨源偏差最高+1.17%(159915),BUG-021盘中重拉引入 | data | HIGH | FIXED | 2026-09-08 |
+| BUG-029 | pet.js引用已移除场景层挂载点xm-pet-scene,dashboard.html无该元素(前端契约断裂,2测试FAILED) | dashboard | MEDIUM | MANUAL_REVIEW | 2026-09-08 |
+| BUG-030 | pet.css桌宠状态/姿态样式覆盖不完整:缺data-state=working与全部data-posture规则(1测试FAILED) | dashboard | MEDIUM | MANUAL_REVIEW | 2026-09-08 |
+| BUG-031 | test_scheduler_status fixture未重置agent_online()的_online_cache:测试跨用例缓存污染(顺序相关,2测试FAILED) | tests | MEDIUM | FIXED | 2026-09-08 |
 <!-- BUG_TABLE_END -->
 
 ---
@@ -105,6 +111,9 @@
 | 2026-09-07 | 逻辑巡检 | 0 | 0 | 8 |
 | 2026-09-07 | 代码巡检 | 3 | 0 | 11 |
 | 2026-09-07 | 自动修复 | 0 | 4 | 0 |
+| 2026-09-08 | 数据巡检 | 1 | 1 | 0 |
+| 2026-09-08 | 代码巡检 | 3 | 0 | 10 |
+| 2026-09-08 | 自动修复 | 0 | 1 | 9 |
 
 ---
 
