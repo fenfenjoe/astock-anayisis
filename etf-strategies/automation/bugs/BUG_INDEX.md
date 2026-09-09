@@ -11,7 +11,7 @@
 |------|------|
 | OPEN | 0 |
 | IN_PROGRESS | 0 |
-| FIXED | 18 |
+| FIXED | 20 |
 | VERIFIED | 1 |
 | WONT_FIX | 1 |
 | MANUAL_REVIEW | 9 |
@@ -71,6 +71,8 @@
 | BUG-029 | pet.js引用已移除场景层挂载点xm-pet-scene,dashboard.html无该元素(前端契约断裂,2测试FAILED) | dashboard | MEDIUM | MANUAL_REVIEW | 2026-09-08 |
 | BUG-030 | pet.css桌宠状态/姿态样式覆盖不完整:缺data-state=working与全部data-posture规则(1测试FAILED) | dashboard | MEDIUM | MANUAL_REVIEW | 2026-09-08 |
 | BUG-031 | test_scheduler_status fixture未重置agent_online()的_online_cache:测试跨用例缓存污染(顺序相关,2测试FAILED) | tests | MEDIUM | FIXED | 2026-09-08 |
+| BUG-032 | 5个非活跃cache缓存过期复发(002142/159227/159326/512100/601398, mtime=09-07, 数据只到09-04, BUG-022同集合第2次复发) | data | MEDIUM | FIXED | 2026-09-09 |
+| BUG-033 | 活跃ETF 513100缺09-09 bar(13活跃ETF唯一无当日数据,腾讯源09-09 bar异常OHLC全同+未收盘,收盘后补拉,同BUG-021模式) | data | MEDIUM | FIXED | 2026-09-09 |
 <!-- BUG_TABLE_END -->
 
 ---
@@ -114,6 +116,9 @@
 | 2026-09-08 | 数据巡检 | 1 | 1 | 0 |
 | 2026-09-08 | 代码巡检 | 3 | 0 | 10 |
 | 2026-09-08 | 自动修复 | 0 | 1 | 9 |
+| 2026-09-09 | 数据巡检 | 2 | 1 | 1 |
+| 2026-09-09 | 代码巡检 | 0 | 0 | 10 |
+| 2026-09-09 | 自动修复 | 0 | 1 | 0 |
 
 ---
 

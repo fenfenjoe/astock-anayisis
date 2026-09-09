@@ -1,0 +1,28 @@
+[2026-09-09T09:08:42+08:00] AUTO_FIX 开始 — OPEN: 0, AUTO_FIX: 0, MANUAL_REVIEW: 0
+[2026-09-09T09:08:42+08:00] 无待处理 BUG，跳过（未生成报告）；BUG_INDEX OPEN=0，bugs/open 下 9 项（BUG-005/007/012/013/014/015/025/029/030）均为 MANUAL_REVIEW 且 auto_fix_eligible=false，均已含自动修复判定，无需处理
+[2026-09-09T09:08:42+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0
+[2026-09-09T10:08:29+08:00] AUTO_FIX 开始 — OPEN: 0, AUTO_FIX: 0, MANUAL_REVIEW: 0
+[2026-09-09T10:08:29+08:00] 无待处理 BUG，跳过（未生成报告）；BUG_INDEX OPEN=0，bugs/open 下 9 项（BUG-005/007/012/013/014/015/025/029/030）均为 MANUAL_REVIEW 且 auto_fix_eligible=false，均已含自动修复判定，无需处理
+[2026-09-09T10:08:29+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0
+[2026-09-09T11:08:46+08:00] AUTO_FIX 开始 — OPEN: 0, AUTO_FIX: 0, MANUAL_REVIEW: 0
+[2026-09-09T11:08:46+08:00] 无待处理 BUG，跳过（未生成报告）；BUG_INDEX OPEN=0，bugs/open 下 9 项（BUG-005/007/012/013/014/015/025/029/030）均为 MANUAL_REVIEW 且 auto_fix_eligible=false，均已含自动修复判定，无需处理
+[2026-09-09T11:08:46+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0
+[2026-09-09T11:09:20+08:00] AUTO_FIX 开始 — OPEN: 0, AUTO_FIX: 0, MANUAL_REVIEW: 0
+[2026-09-09T11:09:20+08:00] 手动触发：无待处理 BUG，跳过（未生成报告）；BUG_INDEX OPEN=0，bugs/open 下 9 项（BUG-005/007/012/013/014/015/025/029/030）均为 MANUAL_REVIEW 且 auto_fix_eligible=false，均已含自动修复判定，无需处理
+[2026-09-09T11:09:20+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0
+[2026-09-09T12:08:31+08:00] AUTO_FIX 开始 — OPEN: 0, AUTO_FIX: 0, MANUAL_REVIEW: 0
+[2026-09-09T12:08:31+08:00] 无待处理 BUG，跳过（未生成报告）；BUG_INDEX OPEN=0，bugs/open 下 9 项（BUG-005/007/012/013/014/015/025/029/030）均为 MANUAL_REVIEW 且 auto_fix_eligible=false，均已含自动修复判定，无需处理
+[2026-09-09T12:08:31+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0
+[2026-09-09T13:11:58+08:00] AUTO_FIX 开始 — OPEN: 1 (BUG-033), AUTO_FIX: 1, MANUAL_REVIEW: 0
+[2026-09-09T13:12:30+08:00] BUG-033: auto_fix_eligible=true，但修复前置条件未满足 — 当前 13:07 未收盘（A股 15:00 收盘），09-09 官方收盘 bar 尚不存在：实测 ① 腾讯 qfq 日K 最后 bar=2026-09-08（09-09 bar 未定型，收盘后才会出现）② 东财 push2his 不可达（ConnectionError，网络被风控，同 BUG 报告 12:15 记录）③ 缓存 last=2026-09-08（缺 09-09）。按 REQ-001「交易时段内不把盘中 partial/异常 bar 当完整日K 写死」约束 + BUG-026 教训（盘中重拉引入 partial 快照），本轮不写入 partial bar → 保持 OPEN，待 15:00 收盘后由后续 bug_auto_fix 轮次（16:07/17:07）或次日巡检以官方收盘价补拉
+[2026-09-09T13:12:30+08:00] BUG-033: 保持 OPEN（未到修复窗口，非修复失败）；BUG_INDEX.md 统计无变化；本轮无实质修复操作，未生成 AUTO_FIX_REPORT
+[2026-09-09T13:12:30+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0（OPEN 保持 1: BUG-033 待收盘后补拉）
+[2026-09-09T14:08:12+08:00] AUTO_FIX 开始 — OPEN: 1 (BUG-033), AUTO_FIX: 1, MANUAL_REVIEW: 0
+[2026-09-09T14:11:36+08:00] BUG-033: 手动触发 14:07 轮复核 — 修复前置条件仍不满足，保持 OPEN。实测 ① 腾讯 qfq 日K 最后 bar=2026-09-08（09-09 bar 盘中未定型/未提供）② 东财 push2his 不可达（ConnectionError，网络被风控，同 12:15/13:07 记录）③ 缓存 513100 last=2026-09-08 mtime=09-09 09:53（缺 09-09），其余 12 只活跃 ETF 均为盘中 partial 09-09 bar（mtime 09-09 09:53~10:44）；腾讯实时行情 513100 正常交易（现价 2.233 高 2.234 低 2.225）→ 市场未收盘。按 REQ-001 + BUG-026 教训不写 partial bar，顺延至 15:00 收盘后由后续轮次（15:07/16:07/17:07）或次日巡检补拉；BUG-033.md 已追加 14:07 轮判定记录
+[2026-09-09T14:11:36+08:00] BUG-033: 保持 OPEN（未到修复窗口，非修复失败）；BUG_INDEX.md 巡检历史已追加 2026-09-09 自动修复 行（新增 0 修复 0 仍开放 1）；本轮无实质修复操作，未生成 AUTO_FIX_REPORT
+[2026-09-09T14:11:36+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0（OPEN 保持 1: BUG-033 待收盘后补拉）
+[2026-09-09T15:07:50+08:00] AUTO_FIX 开始 — OPEN: 1 (BUG-033), AUTO_FIX: 1, MANUAL_REVIEW: 0
+[2026-09-09T15:23:40+08:00] BUG-033: auto_fix_eligible=true，前置条件已满足（A股 15:00 收盘，腾讯 fqkline qt 时间戳 20260909152155 标记 SH_close_已收盘）→ 执行补拉。东财 push2his 仍不可达（ConnectionError，网络被风控，同 12:15/13:07/14:11 记录）→ 走腾讯双端点：① 腾讯 fqkline qt 字段（3位精度官方收盘）O=2.233 C=2.234 H=2.235 L=2.225 V=875760 amount=195292257 amp=0.45 ② 腾讯 qfq 日K 09-09（2位显示 2.23/2.23/2.24/2.23 V=875760）与 qt 3位值十进制半进位舍入完全自洽 + vol 一致 → bar 定型确认。merge keep="last" 写回 cache/513100.parquet（修复前备份 _tmp_backup_033/513100.parquet），结构校验 high>=max(o,c)/low<=min(o,c)/正数全部通过，09-08 close=2.233 保留正确 → 修复成功 → FIXED（13 只活跃 ETF 最后数据日期全部对齐 2026-09-09）
+[2026-09-09T15:27:20+08:00] BUG-033: 测试验证 — 定向 pytest -k "test_backtest or test_strategies" → 65 passed；全量回归 pytest tests/ → 526 passed, 18 skipped, 3 failed（3 failed = BUG-029×2 + BUG-030×1，均为 auto_fix_eligible=false MANUAL_REVIEW 桌宠前端契约，非本轮引入，对比 09-08 基线失败集合一致，无新增失败）
+[2026-09-09T15:27:40+08:00] 更新 BUG_INDEX.md 完成（OPEN: 1→0, FIXED: 19→20, MANUAL_REVIEW: 9→9）；BUG-033.md 状态 FIXED 移至 closed/；生成 AUTO_FIX_REPORT_2026-09-09_15-27.md；清理临时脚本 _probe*/_fix*/_verify*
+[2026-09-09T15:27:40+08:00] AUTO_FIX 结束 — FIXED: 1, MANUAL_REVIEW: 0（OPEN: 0，本轮全部 BUG 处理完毕）
