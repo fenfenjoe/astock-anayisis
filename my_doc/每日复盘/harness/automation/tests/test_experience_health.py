@@ -275,6 +275,11 @@ class TestInvestExperienceFile:
 
     def test_sections_entries_under_10(self):
         # 每章节 ≤10 条 ### 核心经验（REQ-005 期望结果）
+        # 2026-09-08 记忆体系 Phase 3：经验权威源迁移 OpenViking（方案 v1.10 决策 2），
+        # 本地 投资经验.md 退化为「过渡期镜像」，章节内合并/压缩改由 OpenViking 健康任务
+        # （auto_experience_health.md 第五(A)步镜像导出 + 第一步规模合并）负责。
+        # 此门禁从「硬性 ≤10」放宽为「镜像失控边界 ≤20」（防镜像无界增长），
+        # 章节内 ≤10 的合并要求由健康任务在 OpenViking 侧执行。
         content = INVEST_FILE.read_text(encoding="utf-8")
         section = None
         counts = {}
@@ -286,5 +291,5 @@ class TestInvestExperienceFile:
                 counts.setdefault(section, 0)
             elif line.startswith("### ") and section:
                 counts[section] = counts.get(section, 0) + 1
-        over = {s: c for s, c in counts.items() if c > 10}
-        assert not over, f"章节条目超过10条: {over}"
+        over = {s: c for s, c in counts.items() if c > 20}
+        assert not over, f"镜像章节条目失控(>20条): {over}"

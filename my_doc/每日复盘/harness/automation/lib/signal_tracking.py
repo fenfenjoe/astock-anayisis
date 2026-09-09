@@ -10,6 +10,11 @@
   - parse_signal_markdown()   — 解析每日信号.md，提取已触发/已执行的信号记录
   - merge_new_signals()       — 将解析出的新信号并入追踪库（去重）
   - settle_due_signals()      — 目标价结算：T+3 窗口内 hit/stopped/miss（v2.0 改）
+
+新增（REQ-006，2026-09-09）：
+  - is_simulated()            — 判定"未执行模拟样本"（显式 simulated 字段优先，否则按 status_history 推断）
+  - settle_due_signals()      — 结算时标注 simulated（未执行信号按假设结算，P&L 归模拟口径）
+  - update_aggregation()      — total_pnl_amount 仅含已执行；simulated_pnl_amount 单列未执行模拟 P&L
 """
 
 import re
@@ -75,6 +80,30 @@ def is_archived(signal_date: date, current_date: date, archive_days: int = 90) -
 
 
 # ============================================================
+# 已执行/未执行模拟样本判定（REQ-006）
+# ============================================================
+
+def is_simulated(sig: dict) -> bool:
+    """判断信号是否为"未执行模拟样本"（REQ-006）。
+
+    未执行信号（status=triggered 且从无 executed/partial_executed 记录）按假设结算，
+    其 P&L 是信号质量评估（方向/目标达成率）而非账户损益，不计入账户级统计。
+
+    判定规则：
+    1. 显式 `simulated` 字段优先（True/False）
+    2. 无该字段 → 按 status_history 推断：含 executed/partial_executed → 已执行(False)
+    3. status 字段兜底：status ∈ {executed, partial_executed} → 已执行(False)
+    4. 其余情况（含旧记录无历史）→ 视为未执行模拟(True，保守推断)
+    """
+    if 'simulated' in sig:
+        return bool(sig.get('simulated'))
+    if sig.get('status') in ('executed', 'partial_executed'):
+        return False
+    history = sig.get('status_history') or []
+    return not any(h.get('status') in ('executed', 'partial_executed') for h in history)
+
+
+# ============================================================
 # 聚合统计
 # ============================================================
 
@@ -112,19 +141,23 @@ def update_aggregation(tracking: dict) -> dict:
 
     tracking['aggregation'] = agg
     # 兼容 signal_tracking.json 的 'aggregates' 字段（v1.0 schema）
+    # REQ-006: total_pnl_amount 仅含已执行样本；simulated_pnl_amount 单独列示未执行模拟 P&L（假设口径）
+    total_executed_pnl = agg['by_urgency']['high']['total_pnl'] + agg['by_urgency']['low']['total_pnl']
+    total_simulated_pnl = agg['by_urgency']['high']['simulated_pnl'] + agg['by_urgency']['low']['simulated_pnl']
     tracking['aggregates'] = {
         'total_signals_tracked': agg['by_urgency']['high']['count'] + agg['by_urgency']['low']['count'],
         'total_resolved': agg['by_urgency']['high']['settled'] + agg['by_urgency']['low']['settled'],
         'total_open': len(signals) - (agg['by_urgency']['high']['settled'] + agg['by_urgency']['low']['settled']),
-        'total_pnl_amount': round(agg['by_urgency']['high']['total_pnl'] + agg['by_urgency']['low']['total_pnl'], 2),
+        'total_pnl_amount': round(total_executed_pnl, 2),
+        'simulated_pnl_amount': round(total_simulated_pnl, 2),
         'total_avoided_loss': round(sum(s.get('avoided_loss', 0.0) for s in signals), 2),
         'win_count': agg['by_urgency']['high']['win_count'] + agg['by_urgency']['low']['win_count'],
-        'lose_count': agg['by_urgency']['high']['settled'] + agg['by_urgency']['low']['settled']
-                      - (agg['by_urgency']['high']['win_count'] + agg['by_urgency']['low']['win_count']),
+        'lose_count': 0,  # 下面按已执行样本重算
         'by_urgency': {
             k: {
                 'count': v['count'], 'resolved': v['settled'],
                 'total_pnl': round(v['total_pnl'], 2),
+                'simulated_pnl': round(v['simulated_pnl'], 2),
                 'total_avoided_loss': round(sum(
                     s.get('avoided_loss', 0.0) for s in signals if s.get('urgency') == k
                 ), 2),
@@ -135,21 +168,27 @@ def update_aggregation(tracking: dict) -> dict:
             k: {
                 'count': v['count'], 'resolved': v['settled'],
                 'total_pnl': round(v['total_pnl'], 2),
+                'simulated_pnl': round(v['simulated_pnl'], 2),
             }
             for k, v in agg['by_priority'].items()
         },
     }
-    # win_rate
-    total_settled = agg['by_urgency']['high']['settled'] + agg['by_urgency']['low']['settled']
+    # win_rate / lose_count 仅基于已执行样本（REQ-006）
+    win_count = tracking['aggregates']['win_count']
+    executed_settled = sum(1 for s in signals
+                           if s.get('status') == 'settled' and not is_simulated(s))
+    lose_count = executed_settled - win_count
+    tracking['aggregates']['lose_count'] = lose_count
     tracking['aggregates']['win_rate'] = (
-        round((tracking['aggregates']['win_count'] / total_settled * 100), 1)
-        if total_settled else None
+        round((win_count / executed_settled * 100), 1)
+        if executed_settled else None
     )
     return tracking
 
 
 def _empty_agg() -> dict:
-    return {'count': 0, 'settled': 0, 'total_pnl': 0.0, 'win_count': 0}
+    """聚合桶初始结构。total_pnl 仅含已执行样本；simulated_pnl 单独列示（REQ-006）。"""
+    return {'count': 0, 'settled': 0, 'total_pnl': 0.0, 'simulated_pnl': 0.0, 'win_count': 0}
 
 
 def _update_bucket(agg_dict: dict, key: str, signal: dict) -> None:
@@ -160,9 +199,13 @@ def _update_bucket(agg_dict: dict, key: str, signal: dict) -> None:
     if signal.get('status') == 'settled':
         bucket['settled'] += 1
         pnl = signal.get('pnl', 0.0)
-        bucket['total_pnl'] += pnl
-        if pnl > 0:
-            bucket['win_count'] += 1
+        # REQ-006: 未执行模拟样本的 P&L 单列（假设口径），不入账户级
+        if is_simulated(signal):
+            bucket['simulated_pnl'] += pnl
+        else:
+            bucket['total_pnl'] += pnl
+            if pnl > 0:
+                bucket['win_count'] += 1
 
 
 # ============================================================
@@ -556,6 +599,9 @@ def settle_due_signals(tracking: dict, price_history: dict, today: str = '') -> 
             pnl = calc_sell_pnl(sell_price, cost, shares)
             avoided_loss = calc_avoided_loss(sell_price, settle_price, shares)
 
+        # REQ-006: 结算前判定是否"未执行模拟样本"（status 尚未改为 settled 时推断）
+        simulated = is_simulated(sig)
+        sig['simulated'] = simulated
         sig['pnl'] = round(pnl, 2)
         sig['avoided_loss'] = round(avoided_loss, 2)
         sig['outcome'] = outcome
@@ -566,7 +612,8 @@ def settle_due_signals(tracking: dict, price_history: dict, today: str = '') -> 
         sig['status'] = 'settled'
         sig.setdefault('status_history', []).append({
             'date': today, 'status': 'settled',
-            'note': f'T+3目标价结算: {outcome} @{settle_price}',
+            'note': f'T+3目标价结算: {outcome} @{settle_price}'
+                    + ('（模拟，未执行）' if simulated else ''),
         })
 
     return tracking

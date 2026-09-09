@@ -4,13 +4,18 @@
 
 路由：
   GET    /api/agent/status                  角色状态（进程存活/今日发文/LLM 配置/上线状态/行为状态机）
-  GET    /api/agent/profile                 认识小满（人设/兴趣/最近动态/最近在读/爱逛站点）
+  GET    /api/agent/profile                 认识小满（人设/兴趣/最近动态/最近在读/爱逛的地方）
   POST   /api/agent/online                  小满上线
   POST   /api/agent/offline                 小满下线
   POST   /api/agent/sessions                新建会话
   GET    /api/agent/sessions                会话列表
   DELETE /api/agent/sessions/{sid}          删除会话
   POST   /api/agent/sessions/{sid}/messages 发送消息 → SSE 流式回复
+  GET    /api/agent/notices                 提示/待办列表 + 未读数
+  POST   /api/agent/notices/{id}/read       标记已读
+  POST   /api/agent/notices/read-all        全部标记已读
+  POST   /api/agent/notices/{id}/reply      待办回复（回调 dispatch）
+  POST   /api/agent/notices/{id}/dismiss    忽略（视为已读）
   GET    /api/agent/articles                文章列表
   GET    /api/agent/articles/{aid}          文章详情
 """
@@ -30,14 +35,6 @@ from dashboard.auth import get_current_user
 # 状态机中属于"认真学习/工作"的状态（桌宠工作姿态 + 状态 pill 工作色）；其余为摸鱼活动
 _PRODUCTIVE_STATES = {"reading", "writing", "thinking"}
 
-# 内置 RSS 热榜 → 可点击的人类站点首页（介绍页"爱逛的地方"用）
-_SITE_HOME = {
-    "cls": ("财联社·电报", "https://www.cls.cn/telegraph"),
-    "wallstreetcn": ("华尔街见闻", "https://wallstreetcn.com/news/global"),
-    "zhihu": ("知乎热榜", "https://www.zhihu.com/hot"),
-    "xueqiu": ("雪球·今日话题", "https://xueqiu.com/today"),
-}
-
 router = APIRouter(prefix="/api/agent", dependencies=[Depends(get_current_user)])
 
 
@@ -52,7 +49,10 @@ async def _run_thread(fn):
 
 
 def _state(
-    alive: bool, attendance: str, current_task: dict | None, online: bool,
+    alive: bool,
+    attendance: str,
+    current_task: dict | None,
+    online: bool,
     state_id: str | None = None,
 ) -> str:
     """机器可读状态枚举（桌宠/状态栏共用）：offline / leave / working / slack。
@@ -87,10 +87,15 @@ def agent_status():
     attendance = (sched_status or {}).get("attendance") or "leave"
     current = (sched_status or {}).get("current_task")
     alive = hb_age is not None and hb_age < 60 * 15
-    online = agent_db.meta_get("xiaoman_online") == "1"
 
-    state_id = agent_db.meta_get("xiaoman_current_state") or "daydream"
-    state_until = agent_db.meta_get("xiaoman_state_until")
+    # 2026-09-08 优化：批量一次取全部 metadata key（原逐个 meta_get = N 次云往返）
+    meta = agent_db.meta_get_many([
+        "xiaoman_online", "xiaoman_current_state", "xiaoman_state_until",
+        "published_on", "last_rss_fetch_at",
+    ])
+    online = meta.get("xiaoman_online") == "1"
+    state_id = meta.get("xiaoman_current_state") or "daydream"
+    state_until = meta.get("xiaoman_state_until")
     state_label = lifecycle._state_label(state_id)
 
     return {
@@ -103,10 +108,10 @@ def agent_status():
         "current_task": current,
         "mood": _mood(attendance, current, online, state_id, state_label),
         # 仅当最后发文日=今天时才返回该字段，否则置空，避免前端误显示"今日已发文"
-        "published_on": agent_db.meta_get("published_on")
-        if agent_db.meta_get("published_on") == datetime.now().strftime("%Y-%m-%d")
+        "published_on": meta.get("published_on")
+        if meta.get("published_on") == datetime.now().strftime("%Y-%m-%d")
         else None,
-        "last_rss_fetch_at": agent_db.meta_get("last_rss_fetch_at"),
+        "last_rss_fetch_at": meta.get("last_rss_fetch_at"),
         "current_state": state_id,
         "current_state_label": state_label,
         "state_until": state_until,
@@ -175,42 +180,39 @@ def _persona_basic(persona_md):
     return out
 
 
-def _build_activities(limit=30):
-    """小满"做过的事"（动作事件模型，只读活动台账，不含与你聊天）。
+def _build_activities(limit=30, date_filter=None, offset=0):
+    """小满"做过的事"（动作事件模型，只读活动台账）。
 
-    行类型：
-    - 事件：阅读（一次会话一条，备注读了哪几篇）/ 写文章（备注写了哪篇）——完成后关闭（有结束时间）；
-    - 常驻状态段：空闲时她"正在摸鱼/发呆/打游戏…"，结束后关闭。
-    进行中 = 台账里 ended_at 为 NULL 的那条（真实在执行/正停留在该状态）。
-
-    tokens：真实 usage 需 dsh 层暴露后才能计量（用户已确认不估算）→ 一律 None。
-    访问小红书 / 逛站等接入采集后，在这里追加对应事件来源即可。
+    date_filter: 可选，格式 YYYY-MM-DD，按开始日期筛选。
+    offset: 分页偏移量。
     """
     acts = []
-    for a in agent_db.activity_list(limit=120):
+    for a in agent_db.activity_list(
+        limit=limit, date_filter=date_filter, offset=offset
+    ):
         raw = a.get("label") or a.get("kind") or "状态"
         parts = raw.split(" ", 1)
         emoji = parts[0] if len(parts) == 2 else raw
         name = parts[1].strip() if len(parts) == 2 else raw
         note = (a.get("note") or "").strip()
-        acts.append({
-            "kind": a.get("kind") or "episode",
-            "label": emoji,                       # 列头只放图标
-            "title": name,                        # 正文放名称（如"阅读"/"写文章"）
-            "url": None,
-            "at": a.get("started_at"),
-            "ended": a.get("ended_at"),
-            "meta": note or ("手动" if a.get("source") == "manual" else "自动"),
-            "tokens": a.get("tokens"),
-        })
-    # 进行中（未结束）排最前，其余按开始时间倒序
-    acts.sort(key=lambda x: (x.get("ended") is None, x.get("at") or ""), reverse=True)
-    return acts[:limit]
+        acts.append(
+            {
+                "kind": a.get("kind") or "episode",
+                "label": emoji,
+                "title": name,
+                "url": None,
+                "at": a.get("started_at"),
+                "ended": a.get("ended_at"),
+                "meta": note or ("手动" if a.get("source") == "manual" else "自动"),
+                "tokens": a.get("tokens"),
+            }
+        )
+    return acts
 
 
 @router.get("/profile")
 def agent_profile():
-    """认识小满页聚合数据：人设卡 + 最近动态 + 最近阅读 + 爱逛站点 + 兴趣爱好。"""
+    """认识小满页聚合数据：人设卡 + 最近动态 + 最近阅读 + 爱逛的地方 + 兴趣爱好。"""
     # 人设卡 markdown（personas/xiaoman/persona.md）
     persona_md = ""
     try:
@@ -243,39 +245,90 @@ def agent_profile():
         for k in agent_db.knowledge_with_memory(limit=8)
     ]
 
-    # 爱逛的地方：内置热榜站点 + 自定义启用素材源
-    feed_ids = {f["id"] for f in config.RSS_FEEDS}
-    sites = [
-        {"name": name, "url": url, "kind": "内置热榜"}
-        for _id, (name, url) in _SITE_HOME.items()
-        if _id in feed_ids
-    ]
-    try:
-        for s in agent_db.source_list(enabled_only=True):
-            sites.append({
-                "name": s.get("name"),
-                "url": s.get("url"),
-                "kind": "常驻站点" if s.get("kind") == "website" else "单篇",
-            })
-    except Exception:
-        pass
+    # 爱逛的地方：合并进 social_platforms（含 RSS 源财联社/华尔街见闻/知乎/雪球，见下）
 
-    # 兴趣：知识域 + 状态机里的摸鱼爱好（排除认真态/睡眠）
+    # 兴趣：知识域 + 状态机里的摸鱼爱好（排除认真态/睡眠；含逛微博/小红书/知乎/雪球）
     interests = ["A股", "ETF", "宏观经济", "国际时事", "产业趋势", "财经大V观点"]
     hobbies = [
-        label for sid, label in lifecycle._STATE_LABELS.items()
+        label
+        for sid, label in lifecycle._STATE_LABELS.items()
         if sid not in (_PRODUCTIVE_STATES | {"sleep", "nap"})
-    ][:8]
+    ][:15]
+
+    # 爱逛的地方（方案 v1.10 §9.4 + 2026-09 合并）：配置 + 可访问性缓存
+    # （服务器缓存，前端不实时探测；RSS 源可达=能拉到条目，Cookie 源可达=探测通过，X 固定置灰）
+    try:
+        from agent.core import reachability as reach_mod
+
+        reach_cache = reach_mod.get_reachability()
+        social_platforms = []
+        for p in config.SOCIAL_PLATFORMS:
+            r = reach_cache.get(p["id"], {})
+            social_platforms.append(
+                {
+                    "id": p["id"],
+                    "name": p["name"],
+                    "url": p["url"],
+                    "icon": p["icon"],
+                    "needs_cookie": p.get("needs_cookie", False),
+                    "playable": p.get("playable", False),
+                    "reachable": bool(r.get("reachable")),
+                    "checked_at": r.get("checked_at"),
+                    "reason": r.get("reason"),
+                }
+            )
+    except Exception:
+        # 探测模块/缓存不可用 → 全部保守置灰
+        social_platforms = [
+            {
+                "id": p["id"],
+                "name": p["name"],
+                "url": p["url"],
+                "icon": p["icon"],
+                "needs_cookie": p.get("needs_cookie", False),
+                "playable": p.get("playable", False),
+                "reachable": False,
+                "checked_at": None,
+                "reason": "缓存不可用",
+            }
+            for p in config.SOCIAL_PLATFORMS
+        ]
 
     return {
         "persona_md": persona_md,
-        "basic": _persona_basic(persona_md),      # 侧栏「关于我」精简版
-        "activity": _build_activities(),          # 右侧「做过的事」（token 待真实 usage）
+        "basic": _persona_basic(persona_md),  # 侧栏「关于我」精简版
+        "activity": _build_activities(),  # 右侧「做过的事」（精选展示，不分页）
         "recent_articles": recent_articles,
         "recent_reads": recent_reads,
-        "sites": sites,
+        "social_platforms": social_platforms,
         "interests": interests,
         "hobbies": hobbies,
+    }
+
+
+@router.get("/activities")
+def agent_activities(date: str = "", page: int = 1, page_size: int = 20):
+    """小满「做过的事」分页查询，支持按日期筛选。
+
+    date: 可选，格式 YYYY-MM-DD，筛选当天开始的活动。
+    page: 页码，从 1 开始。
+    page_size: 每页条数，默认 20，上限 100。
+    """
+    page_size = min(max(page_size, 1), 100)
+    date_filter = date.strip() if date else None
+    offset = max(page - 1, 0) * page_size
+
+    total = agent_db.activity_count(date_filter=date_filter)
+    activities = _build_activities(
+        limit=page_size, date_filter=date_filter, offset=offset
+    )
+
+    return {
+        "activities": activities,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": max((total + page_size - 1) // page_size, 0),
     }
 
 
@@ -318,13 +371,112 @@ def agent_set_state(body: dict):
     else:
         raise HTTPException(400, "action 必须是 random | reading | slack 之一")
     sw = behavior_mod.switch_state(target, now=now, source="manual")
-    # 严格零本地：memory 模式下立刻把这条活动记录回传 TOS（重启/下次登录可见）
-    try:
-        if agent_db.USE_MEMORY:
-            agent_db.cloud_backup()
-    except Exception:
-        pass
     return {"ok": True, "state": sw}
+
+
+# ═══════════════════════════════════════════
+# 提示/待办（agent_notices）：REQ-002 聊天页「📌 提示与待办」
+# ═══════════════════════════════════════════
+
+
+def _notice_card(n):
+    """列表项展示数据（todo_data 已由 _row_dict 解析为 dict）。"""
+    return {
+        "id": n["id"],
+        "kind": n["kind"],
+        "status": n["status"],
+        "title": n["title"],
+        "content": n["content"],
+        "todo_type": n.get("todo_type"),
+        "todo_data": n.get("todo_data") or {},
+        "reply": n.get("reply"),
+        "reply_at": n.get("reply_at"),
+        "result": n.get("result"),
+        "read": n.get("read_at") is not None,
+        "source": n.get("source"),
+        "created_at": n.get("created_at"),
+    }
+
+
+@router.get("/notices")
+def list_notices(page: int = 1, page_size: int = 5):
+    """提示/待办列表（未处理在前、已处理在后；组内新→旧）+ 未读数 + 分页信息。
+
+    page: 页码（从 1 开始）；page_size: 每页条数（默认 5，防堆积 + 面板不出现滚动条）。
+    """
+    page = max(page, 1)
+    page_size = max(min(page_size, 50), 1)
+    total = agent_db.notice_count()
+    notices = [
+        _notice_card(n)
+        for n in agent_db.notice_list(limit=page_size, offset=(page - 1) * page_size)
+    ]
+    return {
+        "notices": notices,
+        "unread_count": agent_db.notice_unread_count(),
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": max((total + page_size - 1) // page_size, 0),
+    }
+
+
+@router.get("/notices/unread-count")
+def notices_unread_count():
+    return {"unread_count": agent_db.notice_unread_count()}
+
+
+@router.post("/notices/{nid}/read")
+def notice_read(nid: int):
+    n = agent_db.notice_get(nid)
+    if not n:
+        raise HTTPException(404, "提示/待办不存在")
+    agent_db.notice_mark_read(nid)
+    return {"ok": True, "unread_count": agent_db.notice_unread_count()}
+
+
+@router.post("/notices/read-all")
+def notice_read_all():
+    agent_db.notice_mark_all_read()
+    return {"ok": True, "unread_count": 0}
+
+
+@router.post("/notices/{nid}/dismiss")
+def notice_dismiss(nid: int):
+    n = agent_db.notice_get(nid)
+    if not n:
+        raise HTTPException(404, "提示/待办不存在")
+    agent_db.notice_mark_read(nid)  # 忽略视为已读
+    agent_db.notice_set_status(nid, "dismissed")
+    return {"ok": True, "unread_count": agent_db.notice_unread_count()}
+
+
+@router.post("/notices/{nid}/reply")
+def notice_reply(nid: int, body: dict):
+    """待办回复（状态机：open → replied → done / 失败回 open）。
+
+    回调成功后：status=done，result=小满处理成功的回复（已读）。
+    回调失败：status 重置为 open（可重试），result=小满的失败原因，read_at 清空
+    （重新计未读 → 小红点重新提醒）；reply 保留用户回复。
+    """
+    from agent.core import notices as notices_mod
+
+    n = agent_db.notice_get(nid)
+    if not n:
+        raise HTTPException(404, "提示/待办不存在")
+    reply = (body.get("reply") or "").strip()
+    if not reply:
+        raise HTTPException(400, "回复不能为空")
+    res = notices_mod.dispatch_todo_reply(n, reply)
+    ok = bool(res.get("ok"))
+    agent_db.notice_reply(nid, reply, result=res.get("message"), success=ok)
+    updated = agent_db.notice_get(nid)
+    return {
+        "ok": ok,
+        "message": res.get("message"),
+        "notice": _notice_card(updated),
+        "unread_count": agent_db.notice_unread_count(),
+    }
 
 
 # ═══════════════════════════════════════════
@@ -389,7 +541,9 @@ async def chat_message(sid: int, request: Request):
             last = len(msgs) - 1
             for i, m in enumerate(msgs):
                 agent_db.message_add(
-                    sid, "assistant", m,
+                    sid,
+                    "assistant",
+                    m,
                     sources=sources if i == last else [],
                 )
             for m in msgs:

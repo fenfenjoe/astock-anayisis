@@ -12,33 +12,18 @@ metadata            key-value 元数据（种子标记等）
 import sqlite3
 import json
 import os
-import threading
 from pathlib import Path
 from datetime import date, datetime, timedelta
 from contextlib import contextmanager
 
 DB_PATH = Path(__file__).resolve().parent / "data" / "cache.db"
 
-# ── 严格零本地：DB_MODE=memory 时用内存库（:memory:），
-#    启动从 TOS 载入最新快照（cloud_restore），定时/退出快照回传（cloud_backup）。
-#    默认 file 模式（向后兼容 + 测试/降级）。
-USE_MEMORY = os.environ.get("DB_MODE", "").lower() == "memory"
-
 # ── 云端权威数据库后端（DASHBOARD_DB_BACKEND=cloud 时启用）：
 #    权威表（users/portfolio/daily_reports/scheduler_runs/metadata/strategy_kb/
 #    strategy_metrics/daily_signals）直接读写火山 Supabase Postgres（PostgREST），
 #    跨机器一致；kline_daily / backtest_nav（可重建缓存）仍走本地 SQLite。
+#    2026-09-07 移除 DB_MODE=memory（TOS 快照互覆机制），仅保留 file/cloud 两后端。
 USE_CLOUD = os.environ.get("DASHBOARD_DB_BACKEND", "").lower() == "cloud"
-
-_mem_lock = threading.RLock()
-_mem_conn: sqlite3.Connection | None = None
-
-# TOS 读写（严格零本地内存库的快照源；未配置云时置 None → 恢复/备份 no-op）
-try:
-    from cloud_store import (get_object as _cs_get, put_object as _cs_put,
-                             list_objects as _cs_list)
-except ImportError:
-    _cs_get = _cs_put = _cs_list = None
 
 # cloud_db helpers（总是导入，测试可动态把 USE_CLOUD 置 True）
 try:
@@ -59,93 +44,9 @@ def _cd_json_fields(row):
     return row
 
 
-def _memory_conn() -> sqlite3.Connection:
-    global _mem_conn
-    if _mem_conn is None:
-        _mem_conn = sqlite3.connect(":memory:", check_same_thread=False)
-        _mem_conn.row_factory = sqlite3.Row
-        _mem_conn.execute("PRAGMA foreign_keys=ON")
-    return _mem_conn
-
-
-def _deserialize_mem(data: bytes) -> bool:
-    """把快照字节载入内存库：临时文件 + sqlite3 backup（即时删除，零持久文件）。
-
-    不用 deserialize()：其对 WAL 库半成功（返回但连接损坏，Python 3.11 已知行为）。
-    """
-    tmp = None
-    try:
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-            f.write(data)
-            tmp = f.name
-        src = sqlite3.connect(tmp)
-        try:
-            src.backup(_memory_conn())
-        finally:
-            src.close()
-        return True
-    except Exception:
-        return False
-    finally:
-        if tmp:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-
-
-def cloud_restore() -> bool:
-    """memory 模式：从 TOS 最新 cache.db 快照载入（纯内存，零持久文件）。
-
-    返回 True=已载入；False=无快照/TOS 不可用（调用方建空 schema）。
-    """
-    if not USE_MEMORY or _cs_get is None or _cs_list is None:
-        return False
-    try:
-        keys = [k for k in _cs_list("sqlite/") if k.endswith("/cache.db")]
-        if not keys:
-            return False
-        data = _cs_get(max(keys))  # 字典序=时间序，取最新
-        if not data:
-            return False
-        return _deserialize_mem(data)
-    except Exception:
-        return False
-
-
-def cloud_backup() -> bool:
-    """memory 模式：导出快照并上传 TOS（sqlite/<ts>/cache.db）。"""
-    if not USE_MEMORY or _cs_put is None:
-        return False
-    try:
-        data = _memory_conn().serialize()
-        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-        _cs_put(f"sqlite/{ts}/cache.db", data)
-        return True
-    except Exception:
-        return False
-
-
-def cloud_backup_loop(interval_seconds: int = 900) -> None:
-    """后台定时快照回传（daemon 线程，仅 memory 模式生效）。"""
-    while True:
-        try:
-            cloud_backup()
-        except Exception:
-            pass
-        threading.Event().wait(interval_seconds)
-
-
 # ── Connection management ──
 @contextmanager
 def get_conn():
-    if USE_MEMORY:
-        conn = _memory_conn()
-        with _mem_lock:
-            yield conn
-            conn.commit()
-        return
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
@@ -530,18 +431,12 @@ CREATE INDEX IF NOT EXISTS idx_sched_time  ON scheduler_runs(run_time);
 def init_db():
     """Create all tables and indexes if they don't exist.
 
-    memory 模式：先从 TOS 载入最新快照（空连接 deserialize），无快照才建空 schema。
     cloud 模式：云表已由 schema 建好；本地仅保留 kline/nav 缓存表。
+    file 模式：本地 SQLite 全量 schema。
     """
     if USE_CLOUD:
         with get_conn() as conn:
             conn.executescript(_CACHE_SCHEMA)
-            _migrate(conn)
-        return
-    if USE_MEMORY:
-        if not cloud_restore():
-            _memory_conn().executescript(SCHEMA)
-        with get_conn() as conn:
             _migrate(conn)
         return
     with get_conn() as conn:
@@ -1181,6 +1076,20 @@ def meta_get_prefix(prefix: str) -> dict:
         return {r["key"]: r["value"] for r in rows}
 
 
+def meta_get_all() -> dict:
+    """一次取回全部 portfolio_meta（云模式 1 次往返；表极小，行数通常 <20）。
+
+    2026-09-08 性能优化：GET /api/portfolio 原先对每个 key 单独 meta_get
+    （云模式 = N 次 HTTPS 往返，实测单次 ~0.08-0.8s），改批量后降为 1 次。
+    """
+    if USE_CLOUD:
+        rows = _cd_select("portfolio_meta", columns="key,value")
+        return {r["key"]: r["value"] for r in rows if r.get("value") is not None}
+    with get_conn() as conn:
+        rows = conn.execute("SELECT key, value FROM portfolio_meta").fetchall()
+        return {r["key"]: r["value"] for r in rows if r["value"] is not None}
+
+
 # ═══════════════════════════════════════════════════════════════
 # Daily Reports CRUD (每日复盘报告/信号)
 # ═══════════════════════════════════════════════════════════════
@@ -1269,6 +1178,34 @@ def report_types_for_date(report_date: str) -> list[str]:
         return [r["report_type"] for r in rows]
 
 
+def report_dates_with_types() -> dict[str, list[str]]:
+    """一次取回 日期 → 报告类型列表 的映射（日期倒序）。
+
+    2026-09-08 性能优化：GET /api/daily-signals 找"最近含每日信号的日期"时，
+    原先 report_get_dates() + 逐日 report_types_for_date() = N+1 次云往返
+    （每天 0.08-0.8s，历史 60+ 天 → 数秒~数十秒）→ 改单次查询 + Python 聚合。
+    """
+    if USE_CLOUD:
+        rows = _cd_select("daily_reports", columns="report_date,report_type",
+                          order="report_date.desc,report_type.asc")
+    else:
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT report_date, report_type FROM daily_reports "
+                "ORDER BY report_date DESC, report_type"
+            ).fetchall()
+            rows = [dict(r) for r in rows]
+    out: dict[str, list[str]] = {}
+    for r in rows:
+        d = r["report_date"]
+        t = r["report_type"]
+        if d not in out:
+            out[d] = []
+        if t not in out[d]:
+            out[d].append(t)
+    return out
+
+
 # ═══════════════════════════════════════════════════════════════
 # Scheduler Runs CRUD (定时任务运行日志 + 幂等)
 # ═══════════════════════════════════════════════════════════════
@@ -1309,11 +1246,11 @@ def scheduler_runs_list(task_id: str | None = None, limit: int = 50) -> list[dic
     if USE_CLOUD:
         # BUG-FIX(2026-09-07)：列表只取轻量元数据列，不拉完整 output（可能几千字符，
         # 每刷一次后台页下载 15+ 份 → 慢）。完整 output 由 /scheduler/runs/{id}/log 按需返回。
-        cols = "id,task_id,trigger,status,window_key,run_time,duration_sec,started_at,finished_at"
+        cols = "id,task_id,trigger,status,window_key,run_time,duration_sec,completed_at"
         filters = [("task_id", "eq", task_id)] if task_id else None
         return _cd_select("scheduler_runs", columns=cols, filters=filters,
                           order="id.desc", limit=limit)
-    sql = "SELECT id,task_id,trigger,status,window_key,run_time,duration_sec,started_at,finished_at FROM scheduler_runs"
+    sql = "SELECT id,task_id,trigger,status,window_key,run_time,duration_sec,completed_at FROM scheduler_runs"
     params: list = []
     if task_id:
         sql += " WHERE task_id=?"
@@ -1381,12 +1318,12 @@ def scheduler_window_done(task_id: str, window_key: str,
 def scheduler_latest(task_id: str) -> dict | None:
     if USE_CLOUD:
         # BUG-FIX(2026-09-07)：latest 供任务表"最近运行"状态展示，同样不拉 output。
-        cols = "id,task_id,trigger,status,window_key,run_time,duration_sec,started_at,finished_at"
+        cols = "id,task_id,trigger,status,window_key,run_time,duration_sec,completed_at"
         return _cd_select_one("scheduler_runs", columns=cols,
                               filters=[("task_id", "eq", task_id)], order="id.desc")
     with get_conn() as conn:
         r = conn.execute(
-            "SELECT id,task_id,trigger,status,window_key,run_time,duration_sec,started_at,finished_at "
+            "SELECT id,task_id,trigger,status,window_key,run_time,duration_sec,completed_at "
             "FROM scheduler_runs WHERE task_id=? ORDER BY id DESC LIMIT 1",
             (task_id,),
         ).fetchone()
@@ -1404,13 +1341,13 @@ def scheduler_latest_map(task_ids: list[str]) -> dict[str, dict]:
     if not task_ids:
         return {}
     if USE_CLOUD:
-        cols = "id,task_id,trigger,status,window_key,run_time,duration_sec,started_at,finished_at"
+        cols = "id,task_id,trigger,status,window_key,run_time,duration_sec,completed_at"
         rows = _cd_select("scheduler_runs", columns=cols, order="id.desc", limit=500)
     else:
         qmarks = ",".join("?" for _ in task_ids)
         with get_conn() as conn:
             rows = conn.execute(
-                "SELECT id,task_id,trigger,status,window_key,run_time,duration_sec,started_at,finished_at "
+                "SELECT id,task_id,trigger,status,window_key,run_time,duration_sec,completed_at "
                 f"FROM scheduler_runs WHERE task_id IN ({qmarks}) ORDER BY id DESC LIMIT 500",
                 task_ids,
             ).fetchall()

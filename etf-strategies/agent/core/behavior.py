@@ -80,12 +80,10 @@ def compose_article(materials, llm_fn=None, db=None, persona_id=config.PERSONA_I
         "1. 第一行输出「标题：xxx」；\n"
         "2. 转述素材要点并给出你自己的看法（要有独立见解，可质疑）；\n"
         "3. 区分事实与观点；素材链接以来源形式附在文末；\n"
-        "4. 不整篇复制素材原文；\n"
-        "5. 结尾附「不构成投资建议」。\n\n"
+        "4. 不整篇复制素材原文。\n\n"
         f"今日素材：\n{material_text}"
     )
     content = llm_fn(task)
-    content = persona.append_disclaimer(content)
     title = _parse_title(content)
     if not title:
         date_part = (
@@ -142,7 +140,9 @@ def run_publish_pipeline(today, now=None, llm_fn=None, db=None):
         _finish_writing(note=f"写文异常：{e}")
         raise
     if not art["ok"]:
-        _finish_writing(title=art.get("title") or "", note=f"未通过校验：{art['issues']}")
+        _finish_writing(
+            title=art.get("title") or "", note=f"未通过校验：{art['issues']}"
+        )
         return {
             "published": False,
             "reason": f"validation: {art['issues']}",
@@ -165,7 +165,9 @@ def run_publish_pipeline(today, now=None, llm_fn=None, db=None):
     for m in pick["items"]:
         db.knowledge_mark_consumed(m["id"])
     db.meta_set("published_on", today)
-    _finish_writing(title=art.get("title") or "", note=f"完成：{art.get('title') or ''}")
+    _finish_writing(
+        title=art.get("title") or "", note=f"完成：{art.get('title') or ''}"
+    )
     return {"published": True, "reason": "done", "article_id": aid}
 
 
@@ -210,6 +212,10 @@ def pick_random_state(now=None, db=None):
         state_history = []
 
     weights = []
+    browse_bonus = pool.get("browse_bonus", {})
+    browse_targets = set(browse_bonus.get("targets", []))
+    browse_per_platform = browse_bonus.get("per_platform_weight", 0)
+    candidates = list(behaviors)
     for b in behaviors:
         w = b["weight"]
 
@@ -231,12 +237,40 @@ def pick_random_state(now=None, db=None):
             last_read_raw = db.meta_get("xiaoman_last_read_at")
             if last_read_raw:
                 try:
-                    last_read = datetime.strptime(
-                        last_read_raw, "%Y-%m-%d %H:%M:%S")
-                    if (now - last_read).total_seconds() < config.READING_COOLDOWN_SECONDS:
+                    last_read = datetime.strptime(last_read_raw, "%Y-%m-%d %H:%M:%S")
+                    if (
+                        now - last_read
+                    ).total_seconds() < config.READING_COOLDOWN_SECONDS:
                         w = 0
                 except ValueError:
                     pass
+
+        # 逛状态（{platform}_browse，weibo/xhs/zhihu/xueqiu 等）：
+        # - 权重加成：有可逛平台（有 Cookie 且 playable）时小幅加权；
+        # - 逛冷却：与 reading 冷却**独立**（BROWSE_COOLDOWN_SECONDS），逛完仍可进 reading
+        if b["id"] in config.browse_state_ids():
+            platform_id = config.browse_state_to_platform(b["id"])
+            platform = next(
+                (p for p in config.SOCIAL_PLATFORMS if p["id"] == platform_id), None
+            )
+            if platform and platform.get("playable") and db.platform_cookie_get(platform_id):
+                w += browse_per_platform
+            else:
+                w = 0  # 无 Cookie / 不可逛 → 不进入逛状态
+            last_browse_raw = db.meta_get("xiaoman_last_browse_at")
+            if last_browse_raw:
+                try:
+                    last_browse = datetime.strptime(
+                        last_browse_raw, "%Y-%m-%d %H:%M:%S"
+                    )
+                    if (now - last_browse).total_seconds() < config.BROWSE_COOLDOWN_SECONDS:
+                        w = 0
+                except ValueError:
+                    pass
+            if w <= 0:
+                # 完全排除（max(1,w) 会拉回 1，这里显式从候选池剔除）
+                candidates.remove(b)
+                continue
 
         if b["id"] == "sleep" and w == 0 and now.hour < 23:
             w = 0
@@ -248,7 +282,14 @@ def pick_random_state(now=None, db=None):
 
         weights.append(max(1, w))
 
-    chosen = random.choices(behaviors, weights=weights, k=1)[0]
+    if not candidates:
+        # 极端情况：全部被排除（如所有逛态无 Cookie 且其余权重为 0）→ 兜底发呆
+        fallback = next(
+            (x for x in behaviors if x["id"] == "daydream"), behaviors[0]
+        )
+        chosen = fallback
+    else:
+        chosen = random.choices(candidates, weights=weights, k=1)[0]
     duration = random.randint(chosen["duration_min"], chosen["duration_max"])
     until = now + timedelta(minutes=duration)
 
@@ -271,17 +312,25 @@ def pick_random_state(now=None, db=None):
 # 认真/工作态（桌宠 working 语义，其余即"摸鱼"池）
 _PRODUCTIVE_IDS = {"reading", "writing", "thinking"}
 
-# 动作事件型状态：不占"常驻状态段"台账，由真实执行（阅读/写文章）时单独开/关事件记录
-_EVENT_KINDS = {"reading", "writing"}
+# 动作事件型状态：不占"常驻状态段"台账，由真实执行（阅读/写文章/逛社交）时单独开/关事件记录
+_EVENT_KINDS = {"reading", "writing"} | config.browse_state_ids()
 
 
 def pick_manual_slack(now=None, db=None):
-    """用户点"摸鱼"：从非工作/非睡觉的状态里按权重随机选一个。"""
+    """用户点"摸鱼"：从非工作/非睡觉的状态里按权重随机选一个。
+
+    排除逛社交状态（{platform}_browse）：逛状态会触发 Playwright 采集+
+    浏览（动作事件型，重），只由状态机自动触发，不随用户手动"摸鱼"弹出。
+    """
     now = now or datetime.now()
     pool = load_behaviors()
+    browse_ids = config.browse_state_ids()
     cand = [
-        b for b in pool["behaviors"]
-        if b["id"] not in _PRODUCTIVE_IDS and b["id"] != "sleep"
+        b
+        for b in pool["behaviors"]
+        if b["id"] not in _PRODUCTIVE_IDS
+        and b["id"] != "sleep"
+        and b["id"] not in browse_ids
     ]
     weights = [max(1, b["weight"]) for b in cand]
     chosen = random.choices(cand, weights=weights, k=1)[0]
@@ -430,10 +479,10 @@ def _write_reading_ctx(unread, past_memories):
     try:
         ctx_dir = _READING_CTX_DIR / datetime.now().strftime("%Y%m%d_%H%M%S")
         ctx_dir.mkdir(parents=True, exist_ok=True)
-        (ctx_dir / "unread.md").write_text(
-            _fmt_unread_md(unread), encoding="utf-8")
+        (ctx_dir / "unread.md").write_text(_fmt_unread_md(unread), encoding="utf-8")
         (ctx_dir / "memories.md").write_text(
-            _fmt_memories_md(past_memories), encoding="utf-8")
+            _fmt_memories_md(past_memories), encoding="utf-8"
+        )
         return ctx_dir
     except OSError:
         return None
@@ -459,8 +508,9 @@ def execute_reading(db=None, llm_fn=None):
         db.activity_close_open(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         # BUG-FIX(2026-09-07)：记录阅读完成时间，供 pick_random_state 的
         # READING_COOLDOWN 判定使用（防阅读权重垄断 → 高频反复 spawn dsh）。
-        db.meta_set("xiaoman_last_read_at",
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        db.meta_set(
+            "xiaoman_last_read_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
         note = f"读了 {result.get('read_count', 0)} 篇"
         if err:
             note += f"（异常：{err}）"
@@ -525,7 +575,6 @@ def execute_reading(db=None, llm_fn=None):
         content = (post.get("content") or "").strip()
         if not content:
             continue
-        content = persona.append_disclaimer(content)
         if not validate_article(content, min_len=10)["ok"]:
             continue
         db.article_create(
@@ -593,4 +642,152 @@ def _parse_reading_output(text):
         "articles": obj.get("articles") or [],
         "posts": obj.get("posts") or [],
         "_parse_error": None,
+    }
+
+
+def execute_browse(platform_id, db=None, llm_fn=None):
+    """执行"逛微博/逛小红书"行为（方案 v1.10 §9.4 决策 26/30/31/34/38/41）。
+
+    流程（同轮串行，一次只逛一个平台）：
+    1. Playwright 采集该平台热点 → 入 agent_knowledge（source=weibo/xhs，标题相似去重 0.85）
+    2. 复用 reading 管道"阅读→观点"浏览采集到的新文章（当场吸收，不排队等 reading 状态）
+    3. 有触动 → 只产出"动态"（微博式短文本），**直接发，不排队等 POST_ACTIVE_HOURS**
+    4. 逛完回写 xiaoman_last_browse_at（冷却，与 reading 独立）
+
+    返回 {"platform_id", "collected", "added", "read_count", "posted_count", "ok", "error"}。
+    """
+    from agent.core import playwright_collector
+
+    db = db or agent_db
+    llm_fn = llm_fn or dsh_task_llm
+
+    platform = next(
+        (p for p in config.SOCIAL_PLATFORMS if p["id"] == platform_id), None
+    )
+    label = platform["name"] if platform else platform_id
+
+    # 逛会话 = 一条独立事件
+    start_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ev_id = db.activity_start(f"browse_{platform_id}", f"📱 逛{label}", start_str, source="auto")
+
+    def _finish_browse(note=""):
+        db.activity_close_open(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        db.meta_set(
+            "xiaoman_last_browse_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
+        db.activity_set_note(ev_id, note)
+
+    # 1. 采集
+    collect = playwright_collector.collect_platform(platform_id, db=db)
+    if not collect.get("ok"):
+        _finish_browse(f"采集失败：{collect.get('error')}")
+        return {
+            "platform_id": platform_id,
+            "ok": False,
+            "collected": 0,
+            "added": 0,
+            "read_count": 0,
+            "posted_count": 0,
+            "error": collect.get("error"),
+        }
+
+    # 2. 复用 reading 管道浏览采集到的新文章（未读 & source=该平台 & 未读）
+    unread = db.knowledge_unread(limit=100)
+    browse_items = [u for u in unread if u.get("source") == platform_id][
+        : config.BROWSE_READ_LIMIT
+    ]
+    read_count = 0
+    posted_count = 0
+    posts = []
+    if browse_items:
+        past_memories = db.knowledge_with_memory(limit=10)
+        past_lines = ""
+        if past_memories:
+            past_lines = (
+                "小满过去的阅读记忆（可联想、对比，避免重复感受）：\n"
+                + "\n".join(
+                    f"- [{p['id']}] {p['title']} | 观点: {p.get('viewpoint') or ''} | 记忆: {p.get('memory') or ''}"
+                    for p in past_memories
+                )
+            )
+        for item in browse_items:
+            try:
+                task = (
+                    "你是小满。请先用 web 工具打开这篇社交平台内容，浏览全文。\n"
+                    f"链接：{item['url']}\n"
+                    f"标题：{item['title']}\n"
+                    f"已有摘要：{item.get('summary') or ''}\n\n" + past_lines + "\n"
+                    "浏览后，若这条内容有触动你（值得记录的观点/情绪被调动），"
+                    "只输出一个严格的 JSON 对象，不要输出其他任何文字：\n"
+                    "{\n"
+                    '  "viewpoint": "核心观点（一句话，30字以内）",\n'
+                    '  "emotion": "excited|angry|curious|calm|skeptical",\n'
+                    '  "memory": "你的个人感受或联想（50字以内）",\n'
+                    '  "post_content": "若想发一条微博式动态（≤80字）就写在这；没触动则为空字符串",\n'
+                    '  "worth_post": true/false\n'
+                    "}\n"
+                    "若没触动，输出 {\"viewpoint\": \"\", \"emotion\": \"calm\", "
+                    '"memory": "", "post_content": "", "worth_post": false}'
+                )
+                text = llm_fn(task)
+                parsed = _parse_browse_output(text)
+                if not parsed:
+                    continue
+                # 写观点记忆
+                db.knowledge_set_memory(
+                    item["id"],
+                    viewpoint=parsed.get("viewpoint"),
+                    emotion=parsed.get("emotion"),
+                    memory=parsed.get("memory"),
+                    read_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                )
+                read_count += 1
+                # 动态直接发（不排队等 POST_ACTIVE_HOURS）
+                pc = (parsed.get("post_content") or "").strip()
+                if parsed.get("worth_post") and pc:
+                    if validate_article(pc, min_len=10)["ok"]:
+                        db.article_create(
+                            datetime.now().strftime("%Y-%m-%d"),
+                            pc[:120],
+                            pc,
+                            topics=["动态"],
+                            sources=[],
+                            kind="post",
+                        )
+                        posted_count += 1
+                        posts.append(pc)
+            except Exception:
+                continue
+
+    _finish_browse(
+        f"采集 {collect.get('collected', 0)} 条，新增 {collect.get('added', 0)} 条，读了 {read_count} 条，发 {posted_count} 条动态"
+    )
+    return {
+        "platform_id": platform_id,
+        "ok": True,
+        "collected": collect.get("collected", 0),
+        "added": collect.get("added", 0),
+        "read_count": read_count,
+        "posted_count": posted_count,
+        "posts": posts,
+    }
+
+
+def _parse_browse_output(text):
+    """解析逛状态浏览输出 JSON。"""
+    if not text or not text.strip():
+        return None
+    obj = _extract_outer_json(text.strip(), wanted=("viewpoint", "memory", "post_content"))
+    if obj is None:
+        return None
+    valid_emotions = {"excited", "angry", "curious", "calm", "skeptical"}
+    emotion = obj.get("emotion", "")
+    if emotion not in valid_emotions:
+        emotion = "calm"
+    return {
+        "viewpoint": (obj.get("viewpoint") or "").strip(),
+        "emotion": emotion,
+        "memory": (obj.get("memory") or "").strip(),
+        "post_content": (obj.get("post_content") or "").strip(),
+        "worth_post": bool(obj.get("worth_post", False)),
     }

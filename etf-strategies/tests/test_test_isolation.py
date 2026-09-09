@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 """测试：测试环境隔离防护 — 确保 pytest 运行时不会污染真实 DB / 云端数据。
 
-背景（2026-08-31 事故）：test_dashboard_auth.py 用 `with TestClient(app)` 触发
-lifespan，lifespan 执行真实启动副作用（CLOUD_RESTORE 云下载覆盖本地 +
-import_holdings/trades 写真实 DB + upload_reports 上传云），且测试进程读了
-.env 的 DB_MODE=memory / CLOUD_RESTORE_ON_START=1 → 测试数据污染真实 DB 并
-经 memory 快照回传扩散到 TOS。
+背景（2026-08-31 事故 + 2026-09-07 云迁移）：lifespan 若在测试中执行真实启动
+副作用（import_holdings/trades 写真实 DB），会污染真实数据。2026-09-07 已移除
+TOS/DB_MODE=memory/CLOUD_RESTORE（不再有 TOS 快照回传污染面）；剩余防护是把
+云端权威库后端强制为本地 file（防测试写进真实 Supabase 云库）。
 
 本测试验证三层防护：
-1. conftest 在测试进程设置 DB_MODE=file + CLOUD_RESTORE_ON_START=0（环境变量优先，
+1. conftest 在测试进程设置 DASHBOARD_DB_BACKEND/AGENT_DB_BACKEND=file（环境变量优先，
    load_env_file 不覆盖已存在键）
 2. app.lifespan 在测试环境跳过启动副作用
 3. 测试期间对真实 DB 写操作有拦截
@@ -30,37 +29,37 @@ if str(_PARENT) not in sys.path:
 # ═══════════════════════════════════════════════════════════════
 
 def test_conftest_sets_safe_env():
-    """测试进程必须运行在安全环境：DB 文件模式 + 禁用启动云恢复 + 禁用云权威库。"""
-    assert os.environ.get("DB_MODE", "").lower() != "memory", \
-        "测试进程 DB_MODE 必须不是 memory（防止 memory 快照回传污染 TOS）"
-    assert os.environ.get("CLOUD_RESTORE_ON_START", "").lower() in ("", "0", "false"), \
-        "测试进程必须禁用 CLOUD_RESTORE_ON_START（防止启动时云下载覆盖本地）"
+    """测试进程必须运行在安全环境：禁用云权威库（防写入真实云库）。"""
     assert os.environ.get("DASHBOARD_DB_BACKEND", "file").lower() != "cloud", \
         "测试进程必须禁用 DASHBOARD_DB_BACKEND=cloud（防止测试数据写入真实云库）"
     assert os.environ.get("AGENT_DB_BACKEND", "file").lower() != "cloud", \
         "测试进程必须禁用 AGENT_DB_BACKEND=cloud（防止测试数据写入真实云库）"
 
 
-def test_load_env_does_not_override_existing():
-    """load_env_file 不覆盖已存在的环境变量（隔离防护的前提）。"""
+def test_load_env_does_not_override_existing(tmp_path):
+    """load_env_file 不覆盖已存在的环境变量（隔离防护的前提）。
+
+    用 tmp .env（仅含云后端开关）验证加载语义，避免把真实 .env 的
+    SUPABASE_URL/SERVICE_KEY 泄漏进测试进程环境（否则后续 realcloud
+    测试的 skipif 会误判为已配置云端）。
+    """
     from load_env import load_env_file
-    os.environ["DB_MODE"] = "file"
-    os.environ["CLOUD_RESTORE_ON_START"] = "0"
+    tmp_env = tmp_path / ".env"
+    tmp_env.write_text(
+        "DASHBOARD_DB_BACKEND=cloud\nAGENT_DB_BACKEND=cloud\n",
+        encoding="utf-8",
+    )
     os.environ["DASHBOARD_DB_BACKEND"] = "file"
     os.environ["AGENT_DB_BACKEND"] = "file"
-    # 模拟 load_env_file 读 .env（含 DB_MODE=memory / 云后端开关）
-    load_env_file()
-    assert os.environ["DB_MODE"] == "file"  # 未被 .env 覆盖
-    assert os.environ["CLOUD_RESTORE_ON_START"] == "0"
+    # 模拟 load_env_file 读 .env（含云后端开关）
+    load_env_file(tmp_env)
     assert os.environ["DASHBOARD_DB_BACKEND"] == "file"
     assert os.environ["AGENT_DB_BACKEND"] == "file"
 
 
 def test_db_not_in_memory_mode_under_pytest():
-    """pytest 进程里 dashboard.db 必须 USE_MEMORY=False（写本地文件而非云端快照）。"""
+    """pytest 进程里 dashboard.db 必须 USE_CLOUD=False（写本地文件而非云端权威库）。"""
     import dashboard.db as db_mod
-    assert db_mod.USE_MEMORY is False, \
-        "测试进程 USE_MEMORY 必须为 False，否则 memory 回传会污染 TOS"
     assert db_mod.USE_CLOUD is False, \
         "测试进程 USE_CLOUD 必须为 False，否则测试数据写入真实云库"
 
@@ -70,12 +69,11 @@ def test_db_not_in_memory_mode_under_pytest():
 # ═══════════════════════════════════════════════════════════════
 
 def test_lifespan_skips_side_effects_in_test_env(monkeypatch):
-    """lifespan 在测试环境下必须跳过启动副作用（不调用真实导入/上传/云恢复）。"""
+    """lifespan 在测试环境下必须跳过启动副作用（不调用真实导入/上传）。"""
     import dashboard.app as app_mod
     from dashboard import scheduler as sched_mod
 
-    calls = {"import_holdings": 0, "import_trades": 0,
-             "import_reports": 0, "upload_reports": 0}
+    calls = {"import_holdings": 0, "import_trades": 0, "import_reports": 0}
 
     def _spy_holdings():
         calls["import_holdings"] += 1
@@ -89,14 +87,9 @@ def test_lifespan_skips_side_effects_in_test_env(monkeypatch):
         calls["import_reports"] += 1
         return {"imported": 0}
 
-    def _spy_upload_reports():
-        calls["upload_reports"] += 1
-        return {"uploaded": 0}
-
     monkeypatch.setattr(sched_mod, "import_holdings_from_md", _spy_holdings)
     monkeypatch.setattr(sched_mod, "import_trades_from_md", _spy_trades)
     monkeypatch.setattr(sched_mod, "import_reports_from_disk", _spy_import_reports)
-    monkeypatch.setattr(sched_mod, "upload_reports_to_cloud", _spy_upload_reports)
 
     # 模拟测试环境：即使 lifespan 被触发，副作用函数也不应被调用
     from fastapi.testclient import TestClient
@@ -108,7 +101,6 @@ def test_lifespan_skips_side_effects_in_test_env(monkeypatch):
     assert calls["import_holdings"] == 0, "测试中 lifespan 不应调用 import_holdings_from_md"
     assert calls["import_trades"] == 0, "测试中 lifespan 不应调用 import_trades_from_md"
     assert calls["import_reports"] == 0, "测试中 lifespan 不应调用 import_reports_from_disk"
-    assert calls["upload_reports"] == 0, "测试中 lifespan 不应调用 upload_reports_to_cloud"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -147,10 +139,6 @@ def test_real_db_untouched_by_api_trade_test(monkeypatch, tmp_path):
     monkeypatch.setattr(portfolio, "TRADES_MD", daily)
     monkeypatch.setattr(portfolio, "HOLDINGS_MD", holdings_f)
     monkeypatch.setattr(portfolio, "SNAPSHOT_DIR", tmp_path / "undo")
-    monkeypatch.setattr(portfolio, "_cs_get", None)
-    monkeypatch.setattr(portfolio, "_cs_put", None)
-    monkeypatch.setattr(portfolio, "_cs_del", None)
-    monkeypatch.setattr(portfolio, "_cs_list", None)
 
     # mock api_daily 依赖（同 _apply_api_mocks 其余部分）
     monkeypatch.setattr(db_mod, "portfolio_holdings_get_all",

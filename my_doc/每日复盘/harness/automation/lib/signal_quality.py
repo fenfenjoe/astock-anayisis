@@ -7,9 +7,33 @@
 指标（A 层全自动）:
   触发率 / 目标达成率 / 平均达标天数 / 平均盈亏比 / 方向准确率 /
   预期vs实际触发率偏差 / 信号期望价值 / 单笔最大亏损
+
+REQ-006（2026-09-09）:
+  账户级指标（期望价值/盈亏比/最大亏损/方向准确率/目标达成率/平均达标天数）
+  仅基于"已执行样本"；"未执行模拟样本"单独披露（simulated_* 字段，假设口径）。
 """
 
+import sys
+from pathlib import Path
+
+_HERE = Path(__file__).resolve().parent.parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+
+from signal_tracking import is_simulated
+
 _TRIGGERED_STATUSES = ('triggered', 'executed', 'partial_executed', 'settled')
+
+
+def split_executed_simulated(settled: list) -> tuple:
+    """将已结算信号分为 (已执行样本, 未执行模拟样本) 两组（REQ-006）。
+
+    账户级指标只应基于已执行样本；未执行模拟样本的 P&L 是假设口径，
+    仅用于方向/目标达成率评估。
+    """
+    executed = [s for s in settled if not is_simulated(s)]
+    simulated = [s for s in settled if is_simulated(s)]
+    return executed, simulated
 
 
 def _is_triggered(sig: dict) -> bool:
@@ -110,16 +134,27 @@ def calc_max_loss(settled: list) -> float:
 
 
 def generate_quality_dashboard(signals: list, settled: list, today: str = '') -> dict:
-    """汇总 A 层 8 项指标为仪表盘数据 dict（复盘 prompt 渲染为表格）。"""
-    return {
+    """汇总 A 层 8 项指标为仪表盘数据 dict（复盘 prompt 渲染为表格）。
+
+    REQ-006: 账户级指标（期望价值/盈亏比/最大亏损/方向准确率/目标达成率/平均达标天数）
+    仅基于已执行样本；未执行模拟样本单独披露（simulated_* 字段，标注假设口径）。
+    """
+    executed, simulated = split_executed_simulated(settled)
+    dashboard = {
         'date': today,
         'trigger_rate_p1': calc_trigger_rate(signals, 'P1'),
         'trigger_rate_all': calc_trigger_rate(signals),
-        'target_hit_rate': calc_target_hit_rate(settled),
-        'avg_hit_days': calc_avg_hit_days(settled),
-        'avg_profit_loss_ratio': calc_avg_profit_loss_ratio(settled),
-        'direction_accuracy': calc_direction_accuracy(settled),
+        'target_hit_rate': calc_target_hit_rate(executed),
+        'avg_hit_days': calc_avg_hit_days(executed),
+        'avg_profit_loss_ratio': calc_avg_profit_loss_ratio(executed),
+        'direction_accuracy': calc_direction_accuracy(executed),
         'expected_vs_actual': calc_expected_vs_actual(signals),
-        'signal_expected_value': calc_signal_expected_value(settled),
-        'max_loss': calc_max_loss(settled),
+        'signal_expected_value': calc_signal_expected_value(executed),
+        'max_loss': calc_max_loss(executed),
+        # 未执行模拟样本单独披露（假设口径，不入账户级）
+        'simulated_count': len(simulated),
+        'simulated_pnl_amount': round(sum(s.get('pnl', 0.0) for s in simulated), 2),
+        'simulated_expected_value': calc_signal_expected_value(simulated),
+        'simulated_target_hit_rate': calc_target_hit_rate(simulated),
     }
+    return dashboard

@@ -13,15 +13,11 @@ from load_env import load_env_file
 def test_loads_keys_and_does_not_override_existing(tmp_path, monkeypatch):
     env = tmp_path / ".env"
     env.write_text(
-        "DB_MODE=memory\nCLOUD_RESTORE_ON_START=1\nOTHER=value\n",
+        "DASHBOARD_DB_BACKEND=cloud\nOTHER=value\n",
         encoding="utf-8")
-    monkeypatch.setenv("DB_MODE", "file")  # 已存在 → 不覆盖
-    # conftest.py 为测试隔离预置了 CLOUD_RESTORE_ON_START=0（BUG-009/010 防护）；
-    # 先删除该键，验证 load_env_file 对"未设置键"的 .env 加载语义。
-    monkeypatch.delenv("CLOUD_RESTORE_ON_START", raising=False)
+    monkeypatch.setenv("DASHBOARD_DB_BACKEND", "file")  # 已存在 → 不覆盖
     load_env_file(env)
-    assert os.environ["DB_MODE"] == "file"          # 环境变量优先
-    assert os.environ["CLOUD_RESTORE_ON_START"] == "1"
+    assert os.environ["DASHBOARD_DB_BACKEND"] == "file"  # 环境变量优先
     assert os.environ["OTHER"] == "value"
 
 

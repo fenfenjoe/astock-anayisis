@@ -59,7 +59,7 @@ function switchView(viewId) {
   // 持仓只在首次进入加载（避免覆盖用户未保存的编辑）；
   // 信号/报告/调度每次进入都刷新（这些内容会随时间新增）。
   if (viewId === 'view-portfolio' && !_viewInit.portfolio) { _viewInit.portfolio = true; pfLoad(); }
-  if (viewId === 'view-signals') { _viewInit.signals = true; sigLoad(true); }
+  if (viewId === 'view-signals') { _viewInit.signals = true; sigLoad(true); sigqLoad('day'); }
   if (viewId === 'view-reports') { _viewInit.reports = true; repLoad(true); }
   if (viewId === 'view-scheduler') { _viewInit.scheduler = true; schedLoad(true); }
   if (viewId === 'view-agent') { _viewInit.agent = true; Agent.load(true); }
@@ -449,6 +449,11 @@ async function sigRender(date) {
     const d = await apiGet('/api/daily-signals?date=' + encodeURIComponent(date));
     const box = $el('sig-content');
     if (!box) return;
+    // Phase 3 云库化：云库有结构化信号（d.signals）→ 渲染含评价列的结构化表
+    if (d.signals && d.signals.length) {
+      box.innerHTML = renderCloudSignals(d.signals);
+      return;
+    }
     if (sigView === 'table' && d.parsed && d.parsed.length) {
       // 列与 每日信号.md v2.0 信号总表（12 列）对齐
       // BUG-FIX(2026-09-07)：补回"触发条件"列（原先 11 列，触发条件被静默丢弃），
@@ -465,6 +470,99 @@ async function sigRender(date) {
   } catch (e) {
     safeSetHTML('sig-content', '<p class="muted">加载信号失败: ' + escapeHtml(e.message) + '</p>');
   }
+}
+
+// ── 云库信号结构化表（含复盘回填评价列）──
+function renderCloudSignals(signals) {
+  const cols = ['信号ID', '日期', '优先级', '标的', '操作', '状态', '方向', '紧急度', '预期触发率', '目标/止损', '仓位', '决策质量', '执行质量', 'P&L'];
+  const rows = signals.map((s) => {
+    const target = s.target_price != null ? s.target_price : (s.target_pct != null ? s.target_pct + '%' : '—');
+    const stop = s.stop_price != null ? s.stop_price : (s.stop_pct != null ? s.stop_pct + '%' : '—');
+    const pnl = s.pnl != null ? '<span class="sig-pnl ' + (s.pnl >= 0 ? 'up' : 'down') + '">' + fmtMoney(s.pnl) + '</span>' : '—';
+    const statusClass = 'sig-status ' + String(s.status || '').replace(/[^a-z]/g, '');
+    return '<tr>' +
+      '<td>' + escapeHtml(s.signal_id || '') + '</td>' +
+      '<td>' + escapeHtml((s.signal_date || s.trigger_date || '').slice(0, 10)) + '</td>' +
+      '<td><span class="badge badge-' + escapeHtml(String(s.priority || '').toLowerCase()) + '">' + escapeHtml(s.priority || '') + '</span></td>' +
+      '<td>' + escapeHtml(s.name || '') + ' <span class="muted">' + escapeHtml(s.ticker || '') + '</span></td>' +
+      '<td>' + escapeHtml(s.trade_type === 'buy' ? '买入' : s.trade_type === 'sell' ? '卖出' : (s.trade_type || '')) + '</td>' +
+      '<td><span class="' + statusClass + '">' + escapeHtml(s.status || '') + '</span></td>' +
+      '<td>' + escapeHtml(s.direction === 'buy' ? '多' : s.direction === 'sell' ? '空' : '—') + '</td>' +
+      '<td>' + escapeHtml(String(s.urgency || '')) + '</td>' +
+      '<td>' + (s.expected_trigger_rate != null ? escapeHtml(String(s.expected_trigger_rate)) + '%' : '—') + '</td>' +
+      '<td>' + escapeHtml(String(target)) + ' / ' + escapeHtml(String(stop)) + '</td>' +
+      '<td>' + escapeHtml(s.position || '—') + '</td>' +
+      '<td class="muted">' + escapeHtml(s.eval_decision_quality || '—') + '</td>' +
+      '<td class="muted">' + escapeHtml(s.eval_execution_quality || '—') + '</td>' +
+      '<td>' + pnl + '</td>' +
+      '</tr>';
+  }).join('');
+  return '<div class="table-wrap"><table class="data-table sig-table"><thead><tr>' +
+    cols.map((c) => '<th>' + escapeHtml(c) + '</th>').join('') +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+// ── 信号质量评估（Phase 3 · §9.3）──
+async function sigqLoad(period) {
+  document.querySelectorAll('#sigq-period .seg-item').forEach((b) => {
+    b.classList.toggle('is-active', b.getAttribute('data-period') === period);
+  });
+  try {
+    const d = await apiGet('/api/signal-quality?period=' + encodeURIComponent(period));
+    const box = $el('sigq-content');
+    if (!box) return;
+    const src = $el('sigq-source');
+    if (src) src.textContent = '数据源: ' + (d.source === 'cloud' ? '云库' : '本地缓存');
+    if (!d.metrics) {
+      box.innerHTML = '<p class="muted">该周期暂无已生成信号</p>';
+      return;
+    }
+    box.innerHTML = renderQuality(d);
+  } catch (e) {
+    safeSetHTML('sigq-content', '<p class="muted">加载质量评估失败: ' + escapeHtml(e.message) + '</p>');
+  }
+}
+
+function renderQuality(d) {
+  const m = d.metrics;
+  const eva = m.expected_vs_actual || {};
+  const gap = eva.avg_gap;
+  const cards = [
+    ['触发率 (P1)', m.trigger_rate_p1 + '%', m.trigger_rate_p1 >= 40 ? 'ok' : (m.trigger_rate_p1 < 40 && m.trigger_rate_p1 > 0 ? 'warn' : 'muted')],
+    ['触发率 (全部)', m.trigger_rate_all + '%', 'neutral'],
+    ['目标达成率', m.target_hit_rate + '%', m.target_hit_rate >= 50 ? 'ok' : 'warn'],
+    ['平均达标天数', m.avg_hit_days + ' 天', m.avg_hit_days > 0 && m.avg_hit_days <= 2 ? 'ok' : 'warn'],
+    ['平均盈亏比', m.avg_profit_loss_ratio, m.avg_profit_loss_ratio >= 1 ? 'ok' : 'warn'],
+    ['方向准确率', m.direction_accuracy + '%', m.direction_accuracy >= 50 ? 'ok' : 'warn'],
+    ['期望价值', fmtMoney(m.signal_expected_value), m.signal_expected_value >= 0 ? 'ok' : 'down'],
+    ['单笔最大亏损', fmtMoney(m.max_loss), m.max_loss === 0 ? 'neutral' : 'down'],
+  ];
+  const cardHtml = cards.map(([label, val, tone]) =>
+    '<div class="qcard qcard-' + tone + '"><div class="qcard-label">' + escapeHtml(label) + '</div>' +
+    '<div class="qcard-value">' + escapeHtml(String(val)) + '</div></div>').join('');
+
+  const p0 = d.p0_execution;
+  let p0Html = '<p class="muted">暂无 P0 信号</p>';
+  if (p0 && p0.total > 0) {
+    p0Html = '<div class="qcard ' + (p0.rate >= 100 ? 'qcard-ok' : p0.rate >= 50 ? 'qcard-warn' : 'qcard-down') + '">' +
+      '<div class="qcard-label">P0 执行率</div><div class="qcard-value">' + p0.rate + '%</div>' +
+      '<div class="qcard-sub">' + p0.executed + '/' + p0.total + ' 已执行</div></div>';
+    if (p0.pending && p0.pending.length) {
+      p0Html += '<div class="qcard-warn-inline">待执行: ' +
+        p0.pending.map((p) => escapeHtml((p.name || '') + ' (' + (p.status || '') + ')')).join('、') +
+        '</div>';
+    }
+  }
+
+  const gapHtml = (gap === null || gap === undefined)
+    ? '<span class="muted">无预期率数据</span>'
+    : '<span class="' + (gap >= 0 ? 'sig-pnl up' : 'sig-pnl down') + '">' + gap + ' 个百分点</span>' +
+      (gap < 0 ? ' <span class="muted">(生成者偏乐观，建议下调预期)</span>' : '');
+
+  return '<div class="qgrid">' + cardHtml + '</div>' +
+    '<div class="qrow"><span class="qrow-label">预期 vs 实际触发率</span>' + gapHtml + '</div>' +
+    '<div class="qrow"><span class="qrow-label">P0 执行</span><div class="qrow-inline">' + p0Html + '</div></div>' +
+    '<p class="muted qnote">信号数 ' + d.signals_included + ' · 已结算 ' + d.settled_included + ' · 指标由复盘/周三周报生产，本页只读聚合展示</p>';
 }
 
 function sigToggle() {
@@ -547,11 +645,11 @@ let schedAuto = false;  // 当前 auto 开关状态（schedLoad 刷新）
 async function schedLoad(force) {
   if (!force && !_viewInit.scheduler) return;
   try {
-    const [tasks, status, runs] = await Promise.all([
+    const [tasksData, runs] = await Promise.all([
       apiGet('/api/scheduler/tasks'),
-      apiGet('/api/scheduler/status'),
       apiGet('/api/scheduler/runs?limit=15'),
     ]);
+    const tasks = tasksData;
     schedAuto = !!tasks.auto_enabled;
     const online = !!tasks.online;
     const eng = $el('sched-engine');
@@ -559,11 +657,11 @@ async function schedLoad(force) {
       if (!online) {
         eng.textContent = '😴 小满未上线 · 定时任务暂停'
           + ` · 今日交易日:${tasks.is_trading_day ? '是' : '否'}`
-          + (status.last_tick ? ' · 心跳:' + status.last_tick.slice(11, 19) : '');
+          + (tasks.last_tick ? ' · 心跳:' + tasks.last_tick.slice(11, 19) : '');
       } else {
         eng.textContent = (schedAuto ? '👔 上班中 · 按日程表执行' : '🏖️ 请假中 · 定时任务暂停')
           + ` · 今日交易日:${tasks.is_trading_day ? '是' : '否'}`
-          + (status.last_tick ? ' · 心跳:' + status.last_tick.slice(11, 19) : '');
+          + (tasks.last_tick ? ' · 心跳:' + tasks.last_tick.slice(11, 19) : '');
       }
     }
     const autoBtn = $el('sched-auto-btn');

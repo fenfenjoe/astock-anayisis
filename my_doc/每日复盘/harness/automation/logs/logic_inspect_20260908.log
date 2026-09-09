@@ -1,0 +1,21 @@
+﻿[2026-09-08T17:09:49] LOGIC_INSPECT 开始 | 交易日=是
+[A组] A1:FAIL archive/20260908/早盘分析-staging.md 不存在（evening_review in_progress，归档未执行）
+[A组] A2:FAIL archive/20260908/复盘分析-staging.md 不存在（evening_review in_progress，归档未执行）
+[B组] B1:PASS staging/今日-早盘分析.md 全部章节完整
+[B组] B2:PASS staging/今日-复盘分析.md 全部章节完整，核心教训>=2条，核心变量>=3个
+[B组] B3:PASS staging code-name 映射与 config/持仓.md 一致
+[B组] B4:PASS (豁免) evening_review 未完成，staging 新鲜度检查豁免（staging 仍指向 9/8，未刷新为 9/9）
+[C组] C1:PASS reports/20260908/早盘报告.md 核心章节完整
+[C组] C2:FAIL reports/20260908/每日信号.md 缺「信号收益追踪」章节（该节由复盘 7.6.3 填充，复盘未完成故缺失）
+[C组] C3:FAIL reports/20260908/复盘报告.md 不存在（evening_review 未完成）
+[C组] C4:PASS task_state 与报告产出一致（evening_review in_progress，复盘报告检查跳过）
+[D组] D1:PASS config/持仓.md 与 每日调仓.md 一致 (5 个持仓, 含可用金额)
+[D组] D2:PASS task_state date=20260908, trading_day=True
+[D组] D3:PASS 无孤立信号 (9 条追踪中)
+[D组] D4:PASS 信号模型一致性 (7 目标全部标记齐全)
+[E组] E1:PASS 经验文件无内容矛盾 (LLM 语义审查: 三份经验逐对比较, 冲突点均带场景限定+交叉引用)
+[E组] E2:PASS BUG_INDEX 统计 (OPEN=7,FIXED=12,WONT_FIX=1) 与实际一致
+汇总: 12 PASS, 4 FAIL, 0 WARN | 新增 BUG: 1 (BUG-023) | PENDING_CONFIRMATION: 1 项 (#9)
+根因: evening_review 17:07 仍 in_progress（started 15:53:47, completed_at 残留 9/7）→ 归档缺失+复盘报告缺失+信号收益追踪未填充+次日 staging 未刷新
+BUG-023 已创建 (bugs/open/BUG-023.md) + BUG_INDEX 更新 + PENDING_CONFIRMATION #9
+[2026-09-08T17:17:06] LOGIC_INSPECT 结束 | 4 FAIL → BUG-023 已创建，PENDING_CONFIRMATION #9 已登记

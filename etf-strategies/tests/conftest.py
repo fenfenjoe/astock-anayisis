@@ -7,27 +7,28 @@ import pytest
 
 
 # ═══════════════════════════════════════════════════════════════
-# 测试环境隔离（2026-08-31 事故修复）
+# 测试环境隔离（2026-08-31 事故修复 + 2026-09-07 云迁移适配）
 # ───────────────────────────────────────────────────────────────
 # 事故：test_dashboard_auth.py 用 `with TestClient(app)` 触发 lifespan，
-# lifespan 执行真实启动副作用（CLOUD_RESTORE 云下载覆盖本地账本 +
-# import_holdings/trades 用真实文件覆盖真实 DB + upload 上传云），且
-# dashboard.app 导入时会 load_env_file() 读 .env 的 DB_MODE=memory /
-# CLOUD_RESTORE_ON_START=1 → 测试数据污染真实 DB 并经 memory 快照回传扩散到 TOS。
+# lifespan 执行真实启动副作用（import_holdings/trades 用真实文件覆盖真实 DB、
+# 调度器真实跑任务），且 dashboard.app 导入时会 load_env_file() 读 .env。
+# 2026-09-07 已移除 TOS/DB_MODE=memory/CLOUD_RESTORE —— 不再有 TOS 快照回传污染面；
+# 剩余防护是把云端权威库后端强制为本地 file（防测试写进真实 Supabase 云库）。
 #
 # 防护：在 pytest 进程最早阶段（本模块导入时，早于任何 dashboard 模块）
 # 设置安全环境变量。load_env_file 的语义是"已存在的键不覆盖"，因此
 # 只要这里的值先于 .env 设置，dashboard 导入后仍保持安全值。
 # 注意：必须用强制赋值而非 setdefault —— 宿主环境（harness/Claude Code 会话
-# 加载 .env 后）可能已继承 DB_MODE=memory / CLOUD_RESTORE_ON_START=1，
-# setdefault 无法覆盖继承值，会重新触发 2026-08-31 事故（BUG-009/BUG-010）。
-os.environ["DB_MODE"] = "file"                           # 强制文件模式，禁用 memory 快照回传
-os.environ["CLOUD_RESTORE_ON_START"] = "0"               # 强制禁用启动云下载（file 模式下 cloud_restore 本就 no-op）
-# 云端权威库隔离（2026-09-07 云端迁移后新增）：普通测试强制走本地 file 后端，
-# 避免 DASHBOARD_DB_BACKEND/AGENT_DB_BACKEND=cloud（.env 已开启）把测试数据写进真实云库。
-# 云端集成测试（test_*_cloud.py）自行在 fixture 里 monkeypatch 把 USE_CLOUD 置 True。
+# 加载 .env 后）可能已继承 DASHBOARD_DB_BACKEND/AGENT_DB_BACKEND=cloud。
 os.environ["DASHBOARD_DB_BACKEND"] = "file"
 os.environ["AGENT_DB_BACKEND"] = "file"
+# 强制清空 SUPABASE 凭据：dashboard.app 导入时会 load_env_file() 读 .env 把
+# SUPABASE_URL/SERVICE_KEY 注入进程环境，会让 realcloud 测试（test_*_cloud.py）
+# 的 skipif 误判"已配置云端"而不跳过、进而误连真实云库。此处强制置空（load_env_file
+# 不覆盖已存在键），保证普通测试进程永远看不到云凭据（真实云集成测试需显式 `-m realcloud`
+# 且自行注入凭据运行）。
+os.environ["SUPABASE_URL"] = ""
+os.environ["SUPABASE_SERVICE_KEY"] = ""
 os.environ.setdefault("DSH_TEST", "1")                   # app.lifespan 测试免疫标记
 
 

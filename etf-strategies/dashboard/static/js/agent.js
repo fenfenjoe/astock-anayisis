@@ -16,6 +16,17 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  // 发文时间展示：同一年 → "MM-DD HH:MM"，跨年 → "YYYY-MM-DD HH:MM"。
+  // 输入兼容 "YYYY-MM-DD HH:MM:SS" / ISO "YYYY-MM-DDTHH:MM:SS" / 纯日期。
+  function fmtTime(s) {
+    if (!s) return '';
+    var m = String(s).replace('T', ' ').trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[ ](\d{2}):(\d{2}))?/);
+    if (!m) return String(s).slice(0, 16);
+    var nowY = new Date().getFullYear();
+    var hm = (m[4] != null) ? (' ' + m[4] + ':' + (m[5] || '00')) : '';
+    return (Number(m[1]) === nowY ? '' : (m[1] + '-')) + m[2] + '-' + m[3] + hm;
+  }
+
   function scrollBottom() {
     const box = document.getElementById('agent-messages');
     if (box) box.scrollTop = box.scrollHeight;
@@ -32,7 +43,9 @@
       loadProfile();
     } else if (tab === 'articles') {
       loadArticles();
-      loadSources();
+    } else if (tab === 'chat') {
+      // 进入聊天页：刷新提示/待办（含未读小红点）
+      loadNotices();
     }
   }
 
@@ -45,6 +58,7 @@
     loadArticles();
     loadSources();
     loadStatus();
+    loadNotices();
     // 状态轮询收敛到桌宠 pet.js（单一轮询源，30s）；角色页订阅 xm:status 更新 pill
     if (!state.statusBound) {
       state.statusBound = true;
@@ -459,7 +473,9 @@
   function postItem(a) {
     const item = document.createElement('div');
     item.className = 'agent-post';
-    const meta = [a.published_at || '', '动态'].filter(Boolean).join(' · ');
+    // BUG-FIX(2026-09-08)：动态必须展示发文时间（fmtTime 格式化），
+    // 且已回填 published_at + article_create 云端补写，时间不会再为空。
+    const meta = [(a.published_at ? fmtTime(a.published_at) : ''), '动态'].filter(Boolean).join(' · ');
     item.innerHTML =
       '<div class="agent-post-meta"><span class="agent-post-avatar">🌾</span><span>' + esc(meta) + '</span></div>' +
       '<div class="agent-post-body">' + marked.parse(a.content || '') + '</div>';
@@ -470,7 +486,7 @@
     const card = document.createElement('div');
     card.className = 'agent-article-card';
     const topics = (a.topics || []).map(esc).join(' · ');
-    const meta = [a.published_at || '', topics].filter(Boolean).join(' · ');
+    const meta = [(a.published_at ? fmtTime(a.published_at) : ''), topics].filter(Boolean).join(' · ');
     card.innerHTML =
       '<div class="agent-article-title">' + esc(a.title) + '</div>' +
       (meta ? '<div class="agent-article-meta">' + meta + '</div>' : '') +
@@ -493,7 +509,7 @@
         '<div><button class="btn btn-sm" onclick="Agent.loadArticles()">← 返回列表</button></div>' +
         '<article class="agent-article-detail">' +
         '<h2 class="agent-article-title">' + esc(a.title) + '</h2>' +
-        '<div class="agent-article-meta">' + esc(a.published_at || '') + '</div>' +
+        '<div class="agent-article-meta">' + esc(a.published_at ? fmtTime(a.published_at) : '') + '</div>' +
         '<div class="agent-article-body">' + marked.parse(a.content || '') + '</div>' +
         '</article>';
       scrollBottom();
@@ -515,6 +531,38 @@
     }
   }
 
+  // ── 社交平台品牌 SVG（前端内置，方案 v1.10 §9.4；仅作链接入口指名使用）──
+  // 图标为简化品牌徽标（单色，经 CSS 着色：可达=高亮色，不可达=置灰）
+  var PLATFORM_ICONS = {
+    weibo: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10.05 12.53c-.55-.26-1.2-.08-1.5.32-.27.36-.2.82.17 1.1.45.32 1.15.23 1.54-.17.35-.4.28-.97-.21-1.25zM11.1 13.35c.32-.15.4-.53.2-.84-.19-.3-.6-.36-.92-.19-.3.18-.38.55-.19.85.2.28.6.35.91.18z"/><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm4.46 13.3c-.15.4-.37.7-.64.95-.29.27-.65.5-1.1.7-.85.4-2 .6-3.32.6-1.24 0-2.37-.22-3.34-.66-.51-.23-.97-.55-1.37-.96-.18-.18-.34-.37-.47-.56.55-.06 1-.3 1.34-.7.3-.37.28-.9-.06-1.24-.35-.34-.86-.35-1.23-.06-.08.06-.15.13-.2.21.66-2.6 2.2-4.16 3.4-4.55.87-.28 1.6.05 1.8.83.13.5-.08 1.06-.53 1.4-.3.23-.66.34-1.02.32-.2.04-.4.02-.6 0 .6.55 1.4.87 2.3.95.58.05 1.1-.34 1.2-.92.08-.5-.2-1-.68-1.2-.13-.06-.27-.1-.4-.1 1.4-.32 2.9.16 3.87 1.38.67.83.95 1.83.76 2.65zM7.2 8.42c.48.66.95 1.33 1.42 2l.05.05c.36.55.28 1.27-.2 1.7-.5.46-1.24.47-1.76.07l-.02-.02c-.83-.6-1.64-1.24-2.42-1.88-.34-.3-.36-.8-.07-1.14.3-.35.8-.38 1.15-.1l.3.28c.17-.36.3-.7.45-1.02.16-.36.53-.58.93-.55.4.03.75.3.9.68.14.34.06.72-.27.97l-.66.57c.03.01.06.03.1.04zM5.9 10.7c-.28.08-.5.33-.55.62-.06.3.1.59.38.73.27.13.6.08.82-.13.3-.3.2-.8-.2-.96a.61.61 0 00-.45-.26z"/></svg>',
+    xhs: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c1.8 0 3.2.7 4.2 1.9 1 1.3 1.6 3.1 1.6 5.2 0 2.2-.8 4.1-2.2 5.6-.8.9-1.9 1.7-3.2 2.3l-1.4-.7c1.1-.5 2-1.1 2.7-1.9-2 .3-3.8-.3-4.9-1.7-.9-1.2-1.2-2.7-.8-4.2.4-1.6 1.3-2.8 2.5-3.5.8-.5 1.7-.8 2.6-.8.9 0 1.7.3 2.4.8-1.9.1-3.3.9-4 2.3-.5 1-.4 2 .2 2.8.6.9 1.6 1.4 2.8 1.4 1.1 0 2.1-.4 2.8-1.2.6-.8.9-1.8.7-2.9-.3-1.4-1-2.6-2.1-3.4C14.7 2.5 13.4 2 12 2zm0 2.2c1.3 0 2.3.4 3 1.1.6.7 1 1.6 1 2.7 0 1.4-.5 2.6-1.4 3.4-.8.8-1.9 1.2-3.1 1.2-1.2 0-2.3-.5-3-1.3-.7-.8-1-1.8-.9-2.9.1-1.4.6-2.5 1.5-3.3.8-.7 1.9-1 3-1l-.1.1zm0 3.4c-1 0-1.9.8-1.9 1.9 0 1 .9 1.9 1.9 1.9s1.9-.9 1.9-1.9-.9-1.9-1.9-1.9zm7.6 6.4c-1.9.2-3.4 1.3-4.2 3.1-.3.7-.5 1.5-.4 2.3.1.8.5 1.5 1.1 2 .6.5 1.4.8 2.2.8h2.1c1 0 1.9-.5 2.5-1.2.6-.8.9-1.7.8-2.7-.1-1-.6-1.9-1.4-2.5-.7-.6-1.6-.9-2.5-.9l-.2.1zm.6 1.9c.8 0 1.5.3 2 .8.5.5.8 1.2.8 2 0 .7-.3 1.4-.8 1.9-.5.5-1.2.8-2 .8-.8 0-1.5-.3-2-.8-.5-.5-.8-1.2-.8-2 0-.8.3-1.5.8-2 .5-.5 1.2-.8 2-.8z"/></svg>',
+    x: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.66l-5.21-6.82L5 21.75H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23 5.45-6.23zm-1.16 17.52h1.83L7.08 4.13H5.12l11.96 15.64z"/></svg>',
+    zhihu: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.45 2.5h7.3c.6 0 1.1.5 1.1 1.1v16.8c0 .6-.5 1.1-1.1 1.1h-7.3l-2.2 1.3c-.5.3-1.1-.1-1.1-.7v-.6H4.35c-.6 0-1.1-.5-1.1-1.1V3.6c0-.6.5-1.1 1.1-1.1h7.3l.8-.5v.5zm-1.7 2.2H4.6a.9.9 0 00-.9.9v15.6a.9.9 0 00.9.9h2.7v.4l1.6-.9v.5h1.4l.45-.3v-16.4a.5.5 0 00-.5-.7zm8.6 0h-6.5v17.2h6.5a.9.9 0 00.9-.9V5.6a.9.9 0 00-.9-.9z"/></svg>',
+    xueqiu: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5c1.9 0 3.6.6 5 1.7 1.5 1.1 2.5 2.8 2.5 4.7 0 1.4-.4 2.7-1.1 3.9.8.6 1.4 1.5 1.7 2.5.3 1.1.2 2.3-.4 3.3-.6 1.1-1.5 1.9-2.7 2.4-.8.3-1.7.5-2.6.5-.9 0-1.8-.2-2.5-.5-1-.3-1.8-.9-2.4-1.7-.5-.7-.8-1.6-.7-2.5l.1-.9c-1.6.6-3 .4-4.1-.5-1-.9-1.5-2.2-1.4-3.6.1-1.3.6-2.5 1.4-3.4.8-1 1.9-1.6 3.2-1.8.5-2.4 1.9-4.3 3.9-5.4.7-.4 1.5-.6 2.3-.6zm0 2.1c-1.4 0-2.7.4-3.7 1.2-1.6 1.2-2.5 3.2-2.5 5.5v.2c-.9.3-1.6.8-2.1 1.5-.5.7-.8 1.5-.7 2.4 0 .9.4 1.8 1 2.4.7.7 1.7 1 2.9.8-.1 1-.2 1.9-.7 2.5-.6.8-1.7 1.4-3 1.4.2-1 .8-1.9 1.6-2.5.6-.5 1.4-.8 2.2-.8.3 0 .5 0 .8.1-.3 1.3 0 2.6.9 3.5.6.6 1.4 1 2.3 1.3.8.3 1.7.4 2.5.4 1.9 0 3.7-.7 5-2 .9-1 1.4-2.3 1.3-3.7-.1-1.2-.6-2.3-1.4-3.1-.4-.4-.9-.7-1.4-.9.2-.8.1-1.6-.4-2.3-.5-.7-1.4-1.1-2.4-1.2l-.2-.1v-.1c0-2.3-.8-4.3-2.2-5.6-.7-.6-1.5-1-2.3-1.2l-.3-.1z"/></svg>',
+    cls: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M13.2 6.5l-4.6 5.6h3.1l-1.4 5.4 5-5.8h-3.2l1.1-5.2z" fill="var(--bg-deep, #1a140f)"/></svg>',
+    wallstreetcn: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h4.2l3.8 6.6L15.8 4H20l-6.4 9.3V20h-3.2v-6.7L4 4z"/></svg>',
+  };
+  var PLATFORM_FALLBACK = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16zm0-11a1 1 0 00-1 1v4a1 1 0 002 0v-4a1 1 0 00-1-1zm0 7.5a1.2 1.2 0 100 2.4 1.2 1.2 0 000-2.4z"/></svg>';
+
+  function renderSocialPlatforms(list) {
+    if (!list || !list.length) return '';
+    // 可达的排前面（高亮），不可达的排后面；组内保持原有顺序（稳定排序）
+    return list.slice().sort(function (a, b) {
+      return (b.reachable ? 1 : 0) - (a.reachable ? 1 : 0);
+    }).map(function (s) {
+      var icon = PLATFORM_ICONS[s.icon] || PLATFORM_FALLBACK;
+      var reachable = !!s.reachable;
+      var tip = s.reason || (reachable ? '可访问' : '暂不可访问');
+      return '<a class="xm-social-item ' + (reachable ? 'is-on' : 'is-off') + '" ' +
+        'href="' + esc(s.url) + '" target="_blank" rel="noopener" ' +
+        'title="' + esc(s.name + ' · ' + tip) + '" aria-label="' + esc(s.name) + '">' +
+        '<span class="xm-social-icon">' + icon + '</span>' +
+        '<span class="xm-social-name">' + esc(s.name) + '</span>' +
+        (reachable ? '<span class="xm-social-dot" title="小满可以逛这里"></span>' : '') +
+        '</a>';
+    }).join('');
+  }
+
   function renderProfile(p) {
     const box = document.getElementById('agent-profile');
     const chips = function (arr, cls) {
@@ -523,41 +571,12 @@
       }).join('');
     };
 
-    // 侧栏「关于我」= 人设卡「基本」节精简
     const basicLi = (p.basic || []).map(function (b) {
       return '<li class="xm-basic-item"><b>' + esc(b.k) + '</b>' + esc(b.v) + '</li>';
     }).join('');
 
-    const sites = (p.sites || []).map(function (s) {
-      return '<a class="xm-site" href="' + esc(s.url) + '" target="_blank" rel="noopener">' +
-        '<span class="xm-site-name">' + esc(s.name) + '</span>' +
-        '<span class="xm-site-kind">' + esc(s.kind || '') + '</span></a>';
-    }).join('');
-
-    // 右侧「做过的事」：每条一行（类别 / 干了啥 / 时间 / token）
-    const actRows = (p.activity || []).map(function (a) {
-      const title = a.url
-        ? '<a class="xm-act-link" href="' + esc(a.url) + '" target="_blank" rel="noopener">' + esc(a.title) + '</a>'
-        : '<span class="xm-act-title">' + esc(a.title) + '</span>';
-      const range = a.ended
-        ? esc(a.at || '') + ' → ' + esc(a.ended || '')
-        : esc(a.at || '') + ' · <span class="xm-act-ing">进行中</span>';
-      return '<li class="xm-act-item' + (a.ended ? '' : ' ongoing') + '">' +
-        '<span class="xm-act-label">' + esc(a.label) + '</span>' +
-        '<span class="xm-act-main">' + title +
-          (a.meta ? '<span class="xm-act-meta">' + esc(a.meta) + '</span>' : '') +
-        '</span>' +
-        '<span class="xm-act-date">' + range + '</span>' +
-        '<span class="xm-act-tokens" title="该活动的真实 token 用量（需 dsh 暴露 usage 后接入；暂无通道 → 未计量）">' +
-          (a.tokens == null ? '—' : esc(String(a.tokens))) +
-        '</span>' +
-        '</li>';
-    }).join('');
-    const actHead =
-      '<div class="xm-act-head">' +
-        '<h3 class="em-title">🌱 做过的事</h3>' +
-        '<span class="xm-act-note">token 列：真实 usage 待接入，暂不估算</span>' +
-      '</div>';
+    // ── 爱逛的地方（方案 v1.10 §9.4 + 2026-09 合并）：社交平台 + 财联社/华尔街见闻 ──
+    const social = renderSocialPlatforms(p.social_platforms);
 
     box.innerHTML =
       '<div class="xm-page">' +
@@ -578,20 +597,115 @@
             '<div class="xm-chip-row"><span class="xm-chip-label">研究</span>' + chips(p.interests, 'xm-chip-blue') + '</div>' +
             '<div class="xm-chip-row"><span class="xm-chip-label">生活</span>' + chips(p.hobbies, 'xm-chip-warm') + '</div>' +
           '</section>' +
-          (sites
+          (social
             ? '<section class="xm-card">' +
                 '<h3 class="em-title">🌐 爱逛的地方</h3>' +
-                '<div class="xm-sites">' + sites + '</div>' +
+                '<div class="xm-social">' + social + '</div>' +
+                '<p class="xm-social-note muted">置灰 = 小满暂时逛不了这里（可点击仍可人工访问）</p>' +
               '</section>'
             : '') +
         '</aside>' +
         '<main class="xm-main">' +
-          '<section class="xm-card xm-card-activity">' +
-            actHead +
-            (actRows ? '<ul class="xm-act">' + actRows + '</ul>' : '<p class="muted">还没有自主活动记录——等她去阅读、写文章、逛站点吧～</p>') +
+          '<section class="xm-card xm-card-activity" id="xm-activities-section">' +
+            '<div class="xm-act-head">' +
+              '<h3 class="em-title">🌱 做过的事</h3>' +
+              '<div class="xm-act-filter">' +
+                '<input type="date" id="xm-act-date-filter" class="xm-act-date-input" title="按日期筛选">' +
+                '<button id="xm-act-filter-today" class="btn btn-sm" title="只看今天">今天</button>' +
+                '<button id="xm-act-filter-all" class="btn btn-sm" title="查看全部">全部</button>' +
+              '</div>' +
+            '</div>' +
+            '<div id="xm-act-list"><p class="muted">加载中...</p></div>' +
+            '<div id="xm-act-pager" class="xm-act-pager"></div>' +
           '</section>' +
         '</main>' +
       '</div>';
+
+    setTimeout(function () { loadActivities(); }, 50);
+
+    document.getElementById('xm-act-date-filter').addEventListener('change', function () {
+      loadActivities(1);
+    });
+    document.getElementById('xm-act-filter-today').addEventListener('click', function () {
+      var today = new Date().toISOString().slice(0, 10);
+      document.getElementById('xm-act-date-filter').value = today;
+      loadActivities(1);
+    });
+    document.getElementById('xm-act-filter-all').addEventListener('click', function () {
+      document.getElementById('xm-act-date-filter').value = '';
+      loadActivities(1);
+    });
+  }
+
+  var _actPage = 1;
+  function loadActivities(page) {
+    page = page || _actPage || 1;
+    _actPage = page;
+    var dateFilter = '';
+    var dateEl = document.getElementById('xm-act-date-filter');
+    if (dateEl) dateFilter = dateEl.value || '';
+
+    Auth.fetchGet('/api/agent/activities?page=' + page + '&page_size=20&date=' + encodeURIComponent(dateFilter))
+      .then(function (resp) { return resp.json(); })
+      .then(function (data) {
+        renderActivities(data);
+      })
+      .catch(function () {
+        document.getElementById('xm-act-list').innerHTML = '<p class="agent-error">加载失败</p>';
+      });
+  }
+
+  function renderActivities(data) {
+    var list = document.getElementById('xm-act-list');
+    var pager = document.getElementById('xm-act-pager');
+
+    var rows = (data.activities || []).map(function (a) {
+      var title = a.url
+        ? '<a class="xm-act-link" href="' + esc(a.url) + '" target="_blank" rel="noopener">' + esc(a.title) + '</a>'
+        : '<span class="xm-act-title">' + esc(a.title) + '</span>';
+      var range = a.ended
+        ? esc(a.at || '') + ' → ' + esc(a.ended || '')
+        : esc(a.at || '') + ' · <span class="xm-act-ing">进行中</span>';
+      return '<li class="xm-act-item' + (a.ended ? '' : ' ongoing') + '">' +
+        '<span class="xm-act-label">' + esc(a.label) + '</span>' +
+        '<span class="xm-act-main">' + title +
+          (a.meta ? '<span class="xm-act-meta">' + esc(a.meta) + '</span>' : '') +
+        '</span>' +
+        '<span class="xm-act-date">' + range + '</span>' +
+        '<span class="xm-act-tokens" title="该活动的真实 token 用量">' +
+          (a.tokens == null ? '—' : esc(String(a.tokens))) +
+        '</span>' +
+        '</li>';
+    }).join('');
+
+    if (!rows) {
+      list.innerHTML = '<p class="muted">还没有自主活动记录——等她去阅读、写文章、逛站点吧～</p>';
+      pager.innerHTML = '';
+      return;
+    }
+    list.innerHTML = '<ul class="xm-act">' + rows + '</ul>';
+
+    pager.innerHTML = '';
+    if (data.total_pages <= 1) return;
+    var pagerHtml = '<div class="xm-pager">';
+    pagerHtml += '<span class="xm-pager-info">共 ' + data.total + ' 条，' + data.total_pages + ' 页</span>';
+    for (var i = 1; i <= data.total_pages; i++) {
+      if (i === data.page) {
+        pagerHtml += '<span class="xm-pager-btn is-active">' + i + '</span>';
+      } else {
+        pagerHtml += '<button class="xm-pager-btn" data-page="' + i + '">' + i + '</button>';
+      }
+    }
+    pagerHtml += '</div>';
+    pager.innerHTML = pagerHtml;
+
+    var btns = pager.querySelectorAll('.xm-pager-btn');
+    for (var j = 0; j < btns.length; j++) {
+      btns[j].addEventListener('click', function () {
+        var p = parseInt(this.getAttribute('data-page'), 10);
+        if (p) loadActivities(p);
+      });
+    }
   }
 
   async function toggleOnline() {
@@ -610,6 +724,220 @@
     }
   }
 
+  // ── 📌 提示与待办（REQ-002）：小满主动发；提示不需回复，待办回复后回调执行 ──
+  //    未处理在前、已处理（已阅/已回复/已忽略）排后并置灰；分页防堆积
+  //    待办状态机：open(未处理) → done(处理成功，展示小满回复) / 失败回 open(展示失败原因，可重试)
+  //    状态变更后【就地更新】当前项，不整页重拉（否则已处理项被排到后面/翻页，看不到置灰）
+  var _notices = [];
+  var _noticesPage = 1;
+  var _noticesTotalPages = 1;
+  var _NOTICES_PAGE_SIZE = 5;
+
+  function updateNoticesBadge(unread) {
+    var badge = document.getElementById('agent-chat-badge');
+    if (!badge) return;
+    unread = Number(unread) || 0;
+    if (unread > 0) {
+      badge.textContent = unread > 99 ? '99+' : String(unread);
+      badge.hidden = false;
+    } else {
+      badge.hidden = true;
+    }
+  }
+
+  // 就地合并某条提示/待办（未处理在前 → 已处理自动排到末尾）。
+  // patch 可为完整卡片（API 返回）或局部字段（如 {id, read:true}）；未找到则插入。
+  function upsertNotice(patch) {
+    if (!patch || !patch.id) return;
+    var found = false;
+    for (var i = 0; i < _notices.length; i++) {
+      if (_notices[i].id === patch.id) {
+        for (var k in patch) {
+          if (patch.hasOwnProperty(k)) _notices[i][k] = patch[k];
+        }
+        found = true;
+        break;
+      }
+    }
+    if (!found) _notices.unshift(patch);
+    // 排序：未处理在前，已处理在后（组内保持顺序）
+    _notices.sort(function (a, b) {
+      var ap = isProcessedNotice(a) ? 1 : 0;
+      var bp = isProcessedNotice(b) ? 1 : 0;
+      return ap - bp;
+    });
+  }
+
+  function isProcessedNotice(n) {
+    return n.read || n.status === 'done' || n.status === 'dismissed';
+  }
+
+  async function loadNotices(page) {
+    if (page === undefined) page = _noticesPage;
+    try {
+      const resp = await Auth.fetchGet('/api/agent/notices?page=' + page +
+        '&page_size=' + _NOTICES_PAGE_SIZE);
+      const d = await resp.json();
+      _notices = d.notices || [];
+      _noticesPage = d.page || page;
+      _noticesTotalPages = d.total_pages || 0;
+      updateNoticesBadge(d.unread_count);
+      renderNotices();
+    } catch (e) {
+      // 加载失败：不阻塞聊天页，仅隐藏面板
+      const sec = document.getElementById('agent-notices');
+      if (sec) sec.hidden = true;
+    }
+  }
+
+  function escAttr(s) {
+    return esc(s).replace(/"/g, '&quot;');
+  }
+
+  function noticeCard(n) {
+    var isTodo = n.kind === 'todo';
+    var processed = isProcessedNotice(n);
+    var cls = ['agent-notice'];
+    cls.push(isTodo ? 'is-todo' : 'is-notice');
+    if (processed) cls.push('is-processed');
+    if (!n.read && n.status !== 'dismissed') cls.push('is-unread');
+    var tag = isTodo
+      ? '<span class="agent-notice-tag todo">待办</span>'
+      : '<span class="agent-notice-tag notice">提示</span>';
+    var meta = fmtTime(n.created_at) + (n.source ? ' · ' + esc(n.source) : '');
+    // 状态行：小满处理结果（成功回复 / 失败原因）
+    var stateLine = '';
+    if (isTodo && n.status === 'done' && n.result) {
+      stateLine = '<div class="agent-notice-result">✅ 处理成功 · 小满：' + esc(n.result) + '</div>';
+    } else if (isTodo && n.status === 'open' && n.result && n.reply) {
+      stateLine = '<div class="agent-notice-result is-fail">⚠️ 处理失败：' + esc(n.result) + '（可重新回复重试）</div>';
+    }
+    // 用户已回复内容
+    var replyLine = '';
+    if (isTodo && n.reply) {
+      replyLine = '<div class="agent-notice-replied">已回复：' + esc(n.reply) + '</div>';
+    }
+    var actions = '';
+    if (isTodo) {
+      if (n.status === 'open') {
+        // 未处理：可回复（失败后重试也走这里）
+        actions =
+          '<input class="agent-notice-reply-input" data-reply-id="' + n.id + '" ' +
+          'placeholder="回复内容…" aria-label="回复待办：' + escAttr(n.title) + '">' +
+          '<button class="agent-notice-btn" data-reply-btn="' + n.id + '" onclick="Agent.noticeReply(' + n.id + ')">回复</button>' +
+          '<button class="agent-notice-btn" onclick="Agent.noticeDismiss(' + n.id + ')" title="忽略该待办，不再提示">忽略</button>';
+      } else if (n.status === 'done') {
+        actions = '<button class="agent-notice-btn" onclick="Agent.noticeDismiss(' + n.id + ')" title="忽略该待办，不再提示">忽略</button>';
+      }
+      // dismissed：无操作
+    } else if (!n.read && n.status !== 'dismissed') {
+      actions = '<button class="agent-notice-btn" onclick="Agent.noticeMarkRead(' + n.id + ')" title="标记为已读">知道了</button>';
+    }
+    return '<div class="' + cls.join(' ') + '" data-nid="' + n.id + '">' +
+      '<div class="agent-notice-body">' +
+        '<div class="agent-notice-title">' + tag + esc(n.title) + '</div>' +
+        '<div class="agent-notice-content">' + esc(n.content) + '</div>' +
+        replyLine + stateLine +
+        '<div class="agent-notice-meta">' + esc(meta) + '</div>' +
+      '</div>' +
+      '<div class="agent-notice-actions">' + actions + '</div>' +
+    '</div>';
+  }
+
+  function renderNotices() {
+    var sec = document.getElementById('agent-notices');
+    var box = document.getElementById('agent-notices-list');
+    var pager = document.getElementById('agent-notices-pager');
+    if (!sec || !box) return;
+    if (!_notices.length) {
+      sec.hidden = true;
+      return;
+    }
+    sec.hidden = false;
+    box.innerHTML = _notices.map(noticeCard).join('');
+    // 待办输入框：Enter 提交
+    box.querySelectorAll('.agent-notice-reply-input').forEach(function (inp) {
+      inp.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          var id = Number(inp.getAttribute('data-reply-id'));
+          Agent.noticeReply(id);
+        }
+      });
+    });
+    // 分页控件
+    if (pager) {
+      pager.innerHTML =
+        '<button class="agent-notice-page-btn" onclick="Agent.noticesPage(' + (_noticesPage - 1) + ')" ' +
+        (_noticesPage <= 1 ? 'disabled' : '') + '>‹ 上一页</button>' +
+        '<span class="agent-notice-page-info">第 ' + _noticesPage + ' / ' +
+        (_noticesTotalPages || 1) + ' 页</span>' +
+        '<button class="agent-notice-page-btn" onclick="Agent.noticesPage(' + (_noticesPage + 1) + ')" ' +
+        (_noticesPage >= _noticesTotalPages ? 'disabled' : '') + '>下一页 ›</button>';
+    }
+  }
+
+  async function noticesPage(page) {
+    if (page < 1 || page > _noticesTotalPages || page === _noticesPage) return;
+    await loadNotices(page);
+  }
+
+  async function noticesReadAll() {
+    try {
+      const resp = await Auth.fetchPost('/api/agent/notices/read-all', {});
+      const d = await resp.json();
+      updateNoticesBadge(d.unread_count || 0);
+      // 就地全部标记已读（不整页重拉 → 不打断用户当前查看的位置）
+      _notices.forEach(function (n) { n.read = true; });
+      renderNotices();
+    } catch (e) { /* 静默 */ }
+  }
+
+  async function noticeMarkRead(nid) {
+    try {
+      const resp = await Auth.fetchPost('/api/agent/notices/' + nid + '/read', {});
+      const d = await resp.json();
+      upsertNotice({ id: nid, read: true });  // 就地合并：仅改 read
+      updateNoticesBadge(d.unread_count);
+      renderNotices();
+    } catch (e) { /* 静默 */ }
+  }
+
+  async function noticeReply(nid) {
+    var inp = document.querySelector('.agent-notice-reply-input[data-reply-id="' + nid + '"]');
+    var reply = inp ? inp.value.trim() : '';
+    if (!reply) {
+      if (inp) inp.focus();
+      return;
+    }
+    var btn = document.querySelector('.agent-notice-btn[data-reply-btn="' + nid + '"]');
+    if (btn) { btn.disabled = true; btn.textContent = '处理中…'; }
+    try {
+      const resp = await Auth.fetchPost('/api/agent/notices/' + nid + '/reply', { reply: reply });
+      const d = await resp.json();
+      // 就地更新该条（成功→done 置灰并显示小满回复；失败→回 open 显示失败原因 + 未读）
+      upsertNotice(d.notice);
+      updateNoticesBadge(d.unread_count);
+      renderNotices();
+      toast(d.ok ? '待办已处理' : '处理失败：' + (d.message || ''), d.ok ? 'success' : 'error');
+    } catch (e) {
+      toast('回复失败: ' + (e.message || '待办已过期或回复无效'), 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '回复'; }
+    }
+  }
+
+  async function noticeDismiss(nid) {
+    try {
+      const resp = await Auth.fetchPost('/api/agent/notices/' + nid + '/dismiss', {});
+      const d = await resp.json();
+      // 就地合并：忽略 → dismissed（已处理，不计未读；保留回复/结果历史）
+      upsertNotice({ id: nid, status: 'dismissed', read: true });
+      updateNoticesBadge(d.unread_count);
+      renderNotices();
+    } catch (e) { /* 静默 */ }
+  }
+
   window.Agent = {
     switchTab: switchTab,
     load: load,
@@ -624,5 +952,10 @@
     deleteSession: deleteSession,
     send: send,
     toggleOnline: toggleOnline,
+    noticesReadAll: noticesReadAll,
+    noticesPage: noticesPage,
+    noticeMarkRead: noticeMarkRead,
+    noticeReply: noticeReply,
+    noticeDismiss: noticeDismiss,
   };
 })();

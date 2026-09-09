@@ -3,8 +3,9 @@
 职责（与方案 §2 对应）：
 - 人设卡（persona.md）= 单一事实源，注入每次对话/发文
 - 观点自洽：check_consistency 检索历史观点；check_conflict 检测方向冲突
-- 合规（D6）：sanitize_output 拦截确定性买卖指令；append_disclaimer 加免责声明
+- 合规（D6）：sanitize_output 拦截确定性买卖指令
 """
+
 from pathlib import Path
 
 from agent import config, db as agent_db
@@ -34,20 +35,12 @@ def build_system_prompt(persona_id=config.PERSONA_ID):
         f"你是「{card['name']}」，以下是你的人设卡，必须严格遵守：",
         card["content"],
         "—— 输出硬性要求 ——",
-        f"1. 观点输出必须带免责声明（至少一句「不构成投资建议」）。",
-        "2. 区分「事实 / 观点 / 猜测」；事实性内容标注来源与时点。",
-        "3. 不给出确定性买卖指令（不说买入/卖出/加仓/清仓等动词）。",
-        "4. 涉及 A 股数据必须来自 a-stock-data 的真实数据，禁止凭印象估算。",
-        "5. 引用大V内容用「学习后总结」方式，不整篇复制，注明出处。",
+        "1. 区分「事实 / 观点 / 猜测」；事实性内容标注来源与时点。",
+        "2. 不给出确定性买卖指令（不说买入/卖出/加仓/清仓等动词）。",
+        "3. 涉及 A 股数据必须来自 a-stock-data 的真实数据，禁止凭印象估算。",
+        "4. 引用大V内容用「学习后总结」方式，不整篇复制，注明出处。",
     ]
     return "\n".join(parts)
-
-
-def append_disclaimer(text):
-    """尾部追加免责声明（幂等：已含则不重复追加）。"""
-    if config.DISCLAIMER in text:
-        return text
-    return f"{text.rstrip()}\n\n{config.DISCLAIMER}"
 
 
 def sanitize_output(text):

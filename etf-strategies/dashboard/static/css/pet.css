@@ -4,10 +4,9 @@
    Design: Tech Noir 骨架 + 小满蜜橘暖色延伸（复用 agent.css 的 --xm-accent 家族）
    Layout: 全局右下角 fixed（滚动不位移），z-700（内容之上 / toast 999 / 登录遮罩 1000 之下）
    Motion: 桌宠属于 delight 层允许 expressive，但 idle 节流 + 尊重 prefers-reduced-motion
-   结构:   .xm-pet > .xm-pet-stage(canvas/fallback/scene/bubble/zzz)
+   结构:   .xm-pet > .xm-pet-stage(canvas/fallback/bubble/zzz)
            + .xm-pet-modes(状态切换按钮) + .xm-pet-bar(收起/隐藏)
    状态:   data-state = unknown|offline|leave|sleep|slack|working|thinking（JS 切换）
-   姿态:   data-posture = type|code|data|read（working 细分；read=阅读，隐藏场景动画）
    ═══════════════════════════════════════════════════════════════ */
 
 /* ── 容器与层级 ── */
@@ -36,10 +35,9 @@
   background: radial-gradient(circle at 50% 92%, oklch(0.78 0.15 60 / 0.10) 0%, transparent 62%);
 }
 
-/* 渲染层 canvas 挂载点 */
 .xm-pet-canvas {
   position: absolute;
-  inset: 0 0 46px 0;          /* 底部让位给场景层 */
+  inset: 0;
   z-index: 1;
   overflow: hidden;
 }
@@ -55,163 +53,6 @@
   line-height: 1;
   filter: drop-shadow(0 6px 18px oklch(0.78 0.15 60 / 0.35));
   animation: xm-bob 3.2s var(--ease-out) infinite;
-}
-
-/* ── 场景层（小桌 + 笔记本）── */
-.xm-pet-scene {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  transform: translateX(-50%) scale(1.2);
-  transform-origin: 50% 100%;
-  width: 224px;
-  height: 108px;
-  z-index: 3;                  /* 盖住 canvas 底部：模型"坐"在桌后 */
-  display: none;
-}
-/* 场景层仅"对着电脑干活"时显示（打字/写代码/盯盘）；
-   阅读（read）不敲键盘不闪屏幕——非 LIVE2D 动画全部收掉，只留角色安静待机 */
-.xm-pet[data-state="working"]:not([data-posture="read"]) .xm-pet-scene { display: block; }
-
-.xm-desk {
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  height: 30px;
-  background: linear-gradient(180deg, var(--bg-surface-2), var(--bg-surface));
-  border: 1px solid var(--border);
-  border-bottom: none;
-  border-radius: 6px 6px 0 0;
-  box-shadow: 0 10px 22px oklch(0.06 0.02 210 / 0.5);
-}
-
-.xm-laptop {
-  position: absolute;
-  left: 50%; bottom: 24px;
-  transform: translateX(-50%);
-  width: 150px;
-}
-
-/* 屏幕（开盖视角：立起） */
-.xm-screen {
-  position: relative;
-  height: 52px;
-  margin-bottom: 6px;
-  background: oklch(0.16 0.02 210);
-  border: 2px solid var(--bg-surface-2);
-  border-radius: 5px;
-  box-shadow: 0 0 0 1px var(--border), inset 0 0 0 1px var(--bg-primary);
-  overflow: hidden;
-}
-/* 屏幕内容区（posture 动画目标） */
-.xm-screen-art {
-  position: absolute;
-  inset: 5px;
-  border-radius: 2px;
-  background: oklch(0.05 0.015 210);
-  overflow: hidden;
-}
-.xm-screen-art .xm-art-code,
-.xm-screen-art .xm-art-data,
-.xm-screen-art .xm-caret { display: none; }
-
-.xm-pet[data-posture="code"] .xm-art-code,
-.xm-pet[data-posture="data"] .xm-art-data,
-.xm-pet[data-posture="type"] .xm-caret { display: block; }
-.xm-pet[data-posture="type"] .xm-art-code { display: block; opacity: 0.45; }
-
-/* 代码行（缓慢上滚） */
-.xm-art-code {
-  position: absolute; inset: 0;
-  padding: 3px 4px;
-}
-.xm-art-code span {
-  display: block;
-  height: 3px;
-  margin: 0 0 3px 0;
-  border-radius: 2px;
-  background: oklch(0.72 0.16 215 / 0.75);
-  width: 100%;
-  animation: xm-scroll-line 1.9s linear infinite;
-}
-.xm-art-code span:nth-child(2) { width: 78%; background: oklch(0.68 0.16 145 / 0.8); animation-delay: .35s; }
-.xm-art-code span:nth-child(3) { width: 90%; background: oklch(0.74 0.14 80 / 0.85); animation-delay: .7s; }
-.xm-art-code span:nth-child(4) { width: 60%; background: oklch(0.65 0.15 300 / 0.8); animation-delay: 1.05s; }
-@keyframes xm-scroll-line {
-  0%   { transform: translateY(100%); opacity: 0; }
-  18%  { opacity: 1; }
-  82%  { opacity: 1; }
-  100% { transform: translateY(-240%); opacity: 0; }
-}
-
-/* 数据/K线等化器 */
-.xm-art-data {
-  position: absolute; inset: 0;
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  padding: 4px;
-}
-.xm-art-data i {
-  flex: 1;
-  height: 20%;
-  background: linear-gradient(180deg, oklch(0.78 0.15 60), oklch(0.60 0.21 25 / 0.9));
-  border-radius: 1px;
-  animation: xm-bar 1.1s ease-in-out infinite alternate;
-}
-.xm-art-data i:nth-child(2) { animation-delay: .12s; }
-.xm-art-data i:nth-child(3) { animation-delay: .24s; }
-.xm-art-data i:nth-child(4) { animation-delay: .36s; }
-.xm-art-data i:nth-child(5) { animation-delay: .48s; }
-.xm-art-data i:nth-child(6) { animation-delay: .6s; }
-@keyframes xm-bar {
-  0%   { height: 18%; }
-  100% { height: 96%; }
-}
-
-/* 光标（打字） */
-.xm-caret {
-  position: absolute;
-  right: 6px; bottom: 4px;
-  width: 2px; height: 8px;
-  background: var(--xm-accent);
-  animation: xm-caret-blink 0.9s steps(1) infinite;
-}
-@keyframes xm-caret-blink { 50% { opacity: 0; } }
-
-/* 键盘 */
-.xm-keyboard {
-  display: flex;
-  gap: 4px;
-  justify-content: center;
-  padding: 3px 4px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  box-shadow: 0 3px 6px oklch(0.06 0.02 210 / 0.4);
-}
-.xm-key {
-  width: 12px;
-  height: 7px;
-  border-radius: 2px;
-  background: oklch(0.30 0.03 210);
-  border-bottom: 2px solid oklch(0.20 0.03 210);
-}
-/* 敲键盘：键帽高亮律动（code/type 时开） */
-.xm-pet[data-posture="code"] .xm-key,
-.xm-pet[data-posture="type"] .xm-key {
-  animation: xm-keypress 0.5s ease-in-out infinite;
-  transform-origin: 50% 100%;
-}
-.xm-pet[data-posture="code"] .xm-key:nth-child(even),
-.xm-pet[data-posture="type"] .xm-key:nth-child(even) { animation-delay: .25s; }
-@keyframes xm-keypress {
-  0%, 100% { transform: translateY(0); background: oklch(0.30 0.03 210); }
-  50%      { transform: translateY(1.5px); background: var(--xm-accent); box-shadow: 0 0 6px oklch(0.78 0.15 60 / 0.8); }
-}
-
-/* 屏幕发光（工作时整屏暖光） */
-.xm-pet[data-state="working"] .xm-screen {
-  box-shadow: 0 0 0 1px var(--border), 0 0 14px oklch(0.78 0.15 60 / 0.28), inset 0 0 0 1px var(--bg-primary);
 }
 
 /* ── 状态对角色本体的处理 ── */
@@ -407,12 +248,7 @@
 /* ── 无障碍：尊重 reduced-motion ── */
 @media (prefers-reduced-motion: reduce) {
   .xm-pet-fallback,
-  .xm-pet-zzz span,
-  .xm-art-code span,
-  .xm-art-data i,
-  .xm-caret,
-  .xm-pet[data-posture="code"] .xm-key,
-  .xm-pet[data-posture="type"] .xm-key {
+  .xm-pet-zzz span {
     animation: none !important;
   }
   .xm-pet-zzz span { opacity: 0.55; }

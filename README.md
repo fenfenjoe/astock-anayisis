@@ -30,10 +30,10 @@ python -m pip install --user boto3
 | 1 | **Node.js + dsh CLI** | 小满与调度引擎的大脑，必须。先装 Node.js（Windows 推荐 nvm4w，npm 随自带）；**dsh 与 pnpm 无需手动装**，第 3 步 sync 脚本检测到缺失会自动安装（手动装：`npm i -g @deepseek-ai/dsh@0.1.0-rc.6`） |
 | 2 | **dsh 凭据** | `~/.dsh/.credentials.yaml` 填 `DEEPSEEK_API_KEY`（key 单点，Dashboard 与小满共用）；验证：`dsh --profile xiaoman "在吗"` |
 | 3 | **dsh 环境同步（一键）** | `powershell -ExecutionPolicy Bypass -File scripts/sync_dsh.ps1`：自动检测/安装 pnpm、dsh（缺失时），同步仓库 `.dsh/profiles`（xiaoman）到本机，并为每个 profile 自动安装插件依赖（`dsh plugin --profile <name> install`），最后校验凭据与版本 |
-| 4 | **Python 依赖** | `pip install -r etf-strategies/requirements.txt`；可选 `python -m pip install --user boto3`（云备份） |
-| 5 | **`.env` 配置（可选）** | 复制 `etf-strategies/.env.example` → `.env`。**严格零本地**加 `DB_MODE=memory` + `CLOUD_RESTORE_ON_START=1`；用 claude 兜底才需填 `ANTHROPIC_AUTH_TOKEN`（默认走 dsh 不需要） |
+| 4 | **Python 依赖** | `pip install -r etf-strategies/requirements.txt` |
+| 5 | **`.env` 配置（可选）** | 复制 `etf-strategies/.env.example` → `.env`。云端权威库：`DASHBOARD_DB_BACKEND=cloud` + `AGENT_DB_BACKEND=cloud` + `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`（见 `docs/2026-09-07-云端数据库迁移方案.md`）；用 claude 兜底才需填 `ANTHROPIC_AUTH_TOKEN`（默认走 dsh 不需要） |
 | 6 | **OpenViking 记忆（可选）** | 已接入**火山云版**（`~/.openviking/ovcli.conf` 指向 `api.vikingdb.cn-beijing.volces.com/openviking`，含云 API Key，敏感不入 git）；无需本地跑 `openviking-server`，见 `docs/DEPLOYMENT.md` §4.1 |
-| 7 | **云备份 TOS（可选）** | `scripts/cloud_sync.py` 配 `scripts/config/cloud.json`（火山引擎 AK/SK），见 `docs/DEPLOYMENT.md` §5 |
+| 7 | ~~云备份 TOS（已下线）~~ | **2026-09-07 移除**：TOS 对象存储停用（`cloud_sync.py`/`cloud.json` 已删/清空），权威数据在 Supabase 云库；删桶步骤见 `docs/DEPLOYMENT.md` §5 |
 
 ### 启动方式
 
@@ -137,12 +137,12 @@ etf-strategies/
 │   ├── core/                   # persona/memory/knowledge/behavior/lifecycle
 │   ├── personas/xiaoman/       # 人设卡
 │   └── __main__.py             # 常驻进程入口 (python -m agent)
-├── cloud_store.py              # TOS 对象存储读写抽象层（严格零本地）
+├── cloud_db.py                 # 云端权威库访问层（火山 Supabase PostgREST）
 ├── dashboard/
 │   ├── app.py                  # FastAPI 后端
-│   ├── db.py                   # SQLite 持久化层（支持 DB_MODE=memory）
+│   ├── db.py                   # SQLite 持久化层（权威表走 cloud，可重建缓存本地）
 │   ├── scheduler.py            # 定时任务引擎（工作日程/上班请假状态）
-│   ├── portfolio.py            # 持仓/调仓（TOS 直读写）
+│   ├── portfolio.py            # 持仓/调仓（本地 md 文件工作副本）
 │   ├── api_agent.py            # 小满 API（聊天/文章/状态）
 │   ├── api_daily.py            # 信号/报告/调度 API
 │   ├── templates/dashboard.html
@@ -152,7 +152,7 @@ etf-strategies/
 └── report/                     # 生成的 HTML 回测报告
 ```
 
-**数据流：** 启动时自动种子化策略定义 → K线增量同步至 SQLite → 信号/回测结果写入 SQLite → API 从 SQLite 读取 → 前端 ECharts 渲染图表。小满经 dsh 调用 LLM，素材/文章经 agent.db 与 TOS 云端。
+**数据流：** 启动时自动种子化策略定义 → K线增量同步至 SQLite → 信号/回测结果写入 SQLite → API 从 SQLite 读取 → 前端 ECharts 渲染图表。小满经 dsh 调用 LLM。权威数据（用户/持仓/报告/调度/Agent 会话）存火山 Supabase 云库（`cloud_db.py`），本地仅留可重建缓存（K线/NAV）。
 
 （原「项目结构 / 策略速览 / 数据来源」详表见本仓库 `etf-strategies/README.md` 补充与 `03_ETF策略回测报告.md`。）
 

@@ -128,6 +128,29 @@ def test_update_sends_patch_with_filters(monkeypatch):
     assert captured["prefer"] == "return=representation"
 
 
+def test_update_keeps_none_to_set_null(monkeypatch):
+    """update 必须保留 None（PostgREST null = SQL NULL），用于显式清空列。"""
+    captured = {}
+
+    def fake_req(method, path, *, params=None, json_body=None, timeout=30, prefer=None):
+        captured.update(body=json_body)
+        return [{"id": 1, "read_at": None}]
+
+    monkeypatch.setattr(cloud_db, "_req", fake_req)
+    cloud_db.update("agent_notices", {"status": "open", "read_at": None},
+                    filters=[("id", "eq", 1)])
+    assert "read_at" in captured["body"]
+    assert captured["body"]["read_at"] is None  # null 需提交，而非被剥离
+
+
+def test_row_dict_parses_todo_data(monkeypatch):
+    """云模式回归（2026-09-09）：todo_data 是 JSONB，可能以字符串/对象返回，须解析为 dict。"""
+    d = cloud_db._row_dict({"id": 1, "todo_data": '{"platform_id": "weibo"}'})
+    assert d["todo_data"] == {"platform_id": "weibo"}
+    d2 = cloud_db._row_dict({"id": 2, "todo_data": {"platform_id": "xhs"}})
+    assert d2["todo_data"] == {"platform_id": "xhs"}
+
+
 # ═══════════════════════════════════════════
 # upsert
 # ═══════════════════════════════════════════

@@ -1211,3 +1211,96 @@ body {
   padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border);
 }
 .modal-body { flex: 1; overflow: auto; margin: 0; padding: var(--space-4); font-family: var(--font-mono); font-size: 0.75rem; white-space: pre-wrap; }
+
+/* ═══ 信号质量评估（Phase 3 · 方案 v1.10 §9.3）═══ */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: var(--bg-surface-2);
+}
+.seg-item {
+  border: none; background: transparent; color: var(--text-secondary);
+  padding: 0.3rem 0.8rem; font-size: 0.75rem; cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.seg-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.seg-item:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: -1px;
+}
+.seg-item.is-active {
+  background: var(--accent-blue); color: var(--bg-deep);
+  font-weight: 600;
+}
+.sigq-source { font-size: 0.72rem; }
+
+.qgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.qcard {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+.qcard:hover { border-color: var(--border-light); transform: translateY(-1px); }
+.qcard-label { font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.25rem; }
+.qcard-value {
+  font-family: var(--font-mono); font-size: 1.15rem; font-weight: 600;
+  color: var(--text-primary);
+}
+.qcard-sub { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; }
+.qcard-ok { border-left-color: var(--accent-green); }
+.qcard-ok .qcard-value { color: var(--accent-green); }
+.qcard-warn { border-left-color: var(--accent-amber); }
+.qcard-warn .qcard-value { color: var(--accent-amber); }
+.qcard-down { border-left-color: var(--accent-red); }
+.qcard-down .qcard-value { color: var(--accent-red); }
+.qcard-muted, .qcard-neutral { border-left-color: var(--border-light); }
+
+.qrow {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  margin-bottom: var(--space-2);
+}
+.qrow-label {
+  font-size: 0.78rem; color: var(--text-secondary);
+  min-width: 8.5rem;
+}
+.qrow-inline { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.qcard-warn-inline {
+  font-size: 0.75rem; color: var(--accent-amber);
+  background: color-mix(in oklch, var(--accent-amber) 10%, var(--bg-surface-2));
+  padding: 0.2rem 0.6rem; border-radius: var(--radius-sm);
+}
+.qnote { margin-top: var(--space-3); }
+
+/* 云库信号表：状态/收益着色 */
+.sig-status {
+  font-size: 0.72rem; padding: 0.1rem 0.45rem; border-radius: var(--radius-sm);
+  background: var(--bg-surface-2); color: var(--text-secondary);
+}
+.sig-status.settled { color: var(--accent-green); }
+.sig-status.executed { color: var(--accent-cyan); }
+.sig-status.triggered { color: var(--accent-amber); }
+.sig-status.expired { color: var(--text-muted); }
+.sig-pnl.up { color: var(--accent-green); font-family: var(--font-mono); }
+.sig-pnl.down { color: var(--accent-red); font-family: var(--font-mono); }
+.badge { font-size: 0.68rem; padding: 0.08rem 0.4rem; border-radius: var(--radius-full); font-weight: 600; }
+.badge-p0 { background: color-mix(in oklch, var(--accent-red) 18%, var(--bg-surface-2)); color: var(--accent-red); }
+.badge-p1 { background: color-mix(in oklch, var(--accent-amber) 15%, var(--bg-surface-2)); color: var(--accent-amber); }
+.badge-p2 { background: var(--bg-surface-2); color: var(--text-secondary); }
+
+@media (max-width: 700px) {
+  .qgrid { grid-template-columns: repeat(2, 1fr); }
+  .qrow { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+}

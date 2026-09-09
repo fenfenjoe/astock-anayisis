@@ -18,15 +18,17 @@ DSH_TIMEOUT_SECONDS = 240  # 阅读要读资料包文件 + web 读多篇全文�
 PERSONA_ID = "xiaoman"
 
 # ── RSS 订阅源（RSSHub 路由；实例按优先序尝试）──
+# 实测（2026-09-09）：rsshub.app 官方实例在大陆网络 ConnectTimeout（不可达），已移除；
+# 剩余实例为实测可用（wallstreetcn 全通；cls 在 pseudoyu/slarker/ktachibana 通）。
 RSSHUB_INSTANCES = [
-    "https://rsshub.app",
+    "https://rsshub.pseudoyu.com",
+    "https://hub.slarker.me",
+    "https://rsshub.ktachibana.party",
     "https://rsshub.rssforever.com",
 ]
 RSS_FEEDS = [
     {"id": "cls", "name": "财联社电报", "path": "/cls/telegraph"},
     {"id": "wallstreetcn", "name": "华尔街见闻", "path": "/wallstreetcn/live"},
-    {"id": "zhihu", "name": "知乎热榜", "path": "/zhihu/hotlist"},
-    {"id": "xueqiu", "name": "雪球热帖", "path": "/xueqiu/hots"},
 ]
 
 # ── LLM（由 dsh 管理：dsh --profile xiaoman，凭据在 ~/.dsh/.credentials.yaml）──
@@ -50,8 +52,67 @@ READING_PROMPT_FILE = PERSONAS_DIR / "xiaoman" / "reading.md"
 STATE_MIN_DURATION_SECONDS = 60
 READING_COOLDOWN_SECONDS = 1200  # 20 分钟
 
-# ── 合规（D6：允许点评个股 + 强约束）──
-DISCLAIMER = "以上仅为小满的个人学习笔记与观点，不构成投资建议。"
+# ── 社交平台/爱逛的地方（认识小满页「爱逛的地方」+ 素材源；方案 v1.10 §9.4）──
+# kind: 可达性来源分类
+#   rss    = RSSHub 阅读源（财联社/华尔街见闻）：RSS 能拉到条目即可达
+#   cookie = 登录态采集（微博/小红书/知乎/雪球）：有 Cookie 且探测通过即可达
+#   none   = 未实施访问逻辑（X）：固定置灰，仅展示图标
+# needs_cookie: 走 Cookie 登录态采集
+# playable:     可成为"逛"状态素材源；X 暂不实施（仅展示图标置灰）
+# cookie_keys:  该平台 Cookie 的关键 key（提示用户去浏览器 Cookie 里找哪几项）
+SOCIAL_PLATFORMS = [
+    {"id": "weibo",       "name": "微博",       "url": "https://weibo.com",
+     "icon": "weibo",       "kind": "cookie", "needs_cookie": True,  "playable": True,
+     "cookie_keys": ["SUB", "SUBP"]},
+    {"id": "xhs",         "name": "小红书",     "url": "https://www.xiaohongshu.com",
+     "icon": "xhs",         "kind": "cookie", "needs_cookie": True,  "playable": True,
+     "cookie_keys": ["web_session", "a1", "webId"]},
+    {"id": "x",           "name": "X",          "url": "https://x.com",
+     "icon": "x",           "kind": "none",   "needs_cookie": False, "playable": False},
+    {"id": "zhihu",       "name": "知乎",       "url": "https://www.zhihu.com/hot",
+     "icon": "zhihu",       "kind": "cookie", "needs_cookie": True,  "playable": True,
+     "cookie_keys": ["z_c0", "d_c0"]},
+    {"id": "xueqiu",      "name": "雪球",       "url": "https://xueqiu.com/today",
+     "icon": "xueqiu",      "kind": "cookie", "needs_cookie": True,  "playable": True,
+     "cookie_keys": ["xq_a_token", "xq_r_token", "u"]},
+    {"id": "cls",         "name": "财联社",     "url": "https://www.cls.cn/telegraph",
+     "icon": "cls",         "kind": "rss",    "needs_cookie": False, "playable": False},
+    {"id": "wallstreetcn", "name": "华尔街见闻", "url": "https://wallstreetcn.com/news/global",
+     "icon": "wallstreetcn", "kind": "rss",   "needs_cookie": False, "playable": False},
+]
+
+# Playwright 采集源（微博/小红书/知乎/雪球）：随状态机"逛"状态触发，同轮串行
+PLAYWRIGHT_SOURCES = [p for p in SOCIAL_PLATFORMS if p.get("playable")]
+
+# 逛状态 id → 平台 id 映射（如 "weibo_browse" → "weibo"）；仅 playable 平台参与
+_BROWSE_STATES = {
+    f"{p['id']}_browse": p["id"]
+    for p in SOCIAL_PLATFORMS
+    if p.get("playable")
+}
+
+
+def browse_state_to_platform(state_id):
+    """状态机逛状态 id → 平台 id；非逛状态返回 None。"""
+    return _BROWSE_STATES.get(state_id)
+
+
+def browse_state_ids():
+    """全部逛状态 id 集合（如 {'weibo_browse', 'zhihu_browse', ...}）。"""
+    return set(_BROWSE_STATES.keys())
+
+# 逛状态冷却：与 READING_COOLDOWN_SECONDS 对齐但**独立**（逛完仍可进 reading）
+BROWSE_COOLDOWN_SECONDS = 1200  # 20 分钟
+
+# 标题相似度去重阈值（difflib.SequenceMatcher 字符级，0.85，不引 embedding）
+TITLE_SIMILARITY_THRESHOLD = 0.85
+
+# 逛状态采集/浏览超时（秒）与采集条数上限
+BROWSE_COLLECT_TIMEOUT_SECONDS = 90
+BROWSE_COLLECT_LIMIT = 15
+BROWSE_READ_LIMIT = 5
+
+# ── 合规（允许点评个股 + 强约束）──
 # 输出中禁止出现的确定性买卖指令动词
 FORBIDDEN_VERBS = (
     "买入",

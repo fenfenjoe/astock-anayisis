@@ -33,47 +33,24 @@ TRADES_MD = REPO_ROOT / "my_doc" / "每日复盘" / "每日调仓.md"
 # 界面录入的撤销快照目录（写前快照，undo 回滚，不依赖历史可重放）
 SNAPSHOT_DIR = REPO_ROOT / ".dsh" / "trade-entry" / "undo"
 
-# ── 云端存储适配（严格零本地：配置了 TOS 时读写全走云端，本地仅作降级）──
-# TOS key 与 cloud_sync.py 的 holdings/ 前缀一致。
+# ── 本地文件读写（2026-09-07 移除 TOS：云权威库已迁移 Supabase，持仓/调仓以本地 md 为工作副本）──
+# key 参数仅为兼容历史签名保留（曾用于 TOS 对象 key），现本地实现不使用。
 HOLDINGS_KEY = "holdings/持仓.md"
 TRADES_KEY = "holdings/每日调仓.md"
 UNDO_PREFIX = "holdings/undo/"
-try:
-    from cloud_store import (get_text as _cs_get, put_text as _cs_put,
-                             delete_object as _cs_del, list_objects as _cs_list)
-except ImportError:
-    _cs_get = _cs_put = _cs_del = _cs_list = None
 
 
 def _md_text(key: str, local: Path) -> str | None:
-    """读：TOS 优先；TOS 未配置/无对象时降级本地文件。"""
-    if _cs_get is not None:
-        try:
-            t = _cs_get(key)
-            if t is not None:
-                return t
-        except Exception:
-            pass
+    """读本地文件；不存在返回 None。key 参数保留以兼容调用方签名。"""
     return local.read_text(encoding="utf-8") if local.exists() else None
 
 
 def _md_exists(key: str, local: Path) -> bool:
-    if _cs_get is not None:
-        try:
-            return _cs_get(key) is not None
-        except Exception:
-            pass
     return local.exists()
 
 
 def _md_write(key: str, local: Path, text: str) -> None:
-    """写：TOS 成功则不落本地（严格零本地）；TOS 不可用时降级本地写。"""
-    if _cs_put is not None:
-        try:
-            _cs_put(key, text)
-            return
-        except Exception:
-            pass
+    """写本地文件。key 参数保留以兼容调用方签名。"""
     local.parent.mkdir(parents=True, exist_ok=True)
     local.write_text(text, encoding="utf-8")
 
@@ -143,8 +120,7 @@ def read_available_cash_md() -> float | None:
 def holdings_md_mtime() -> float | None:
     """内容指纹（变更检测守卫，替代文件 mtime）：内容变则值变。
 
-    TOS 模式无本地 mtime，用 sha256 指纹转 float；scheduler/api_daily
-    只比较该值是否变化，语义不变。
+    scheduler/api_daily 只比较该值是否变化，语义不变。
     """
     text = _md_text(HOLDINGS_KEY, HOLDINGS_MD)
     if text is None:
@@ -262,35 +238,6 @@ def parse_trades_md(text: str) -> list[dict]:
 def read_trades_md() -> list[dict] | None:
     daily_text = _md_text(TRADES_KEY, TRADES_MD)
     return parse_trades_md(daily_text) if daily_text else None
-
-
-def pull_holdings_to_local() -> dict:
-    """TOS → 本地镜像（每日复盘 prompt 读取前置，2026-08-31 BUG 修复）。
-
-    背景：TOS 模式（严格零本地）下，Dashboard「持仓/资产」页面录入的调仓只写云端
-    `holdings/每日调仓.md` + `holdings/持仓.md`，本地 `my_doc/每日复盘/...` 文件不更新；
-    而每日复盘/早盘/盘中/周报 prompt 读取的是本地文件，导致复盘读到过期数据
-    （"今日调仓：无"、SIG 执行记录缺失）。本函数把云端两文件拉回本地，保证复盘与
-    dashboard 同源。未配置云端（_cs_get=None）或云端无对象 → 跳过（本地模式无需同步）。
-
-    返回 {'pulled': [key...], 'skipped': [key...]}；调用方（scheduler/脚本）据此打印结果。
-    """
-    result = {"pulled": [], "skipped": []}
-    if _cs_get is None:
-        return result
-    for key, local in ((TRADES_KEY, TRADES_MD), (HOLDINGS_KEY, HOLDINGS_MD)):
-        try:
-            text = _cs_get(key)
-        except Exception:
-            result["skipped"].append(key)
-            continue
-        if text is None:
-            result["skipped"].append(key)
-            continue
-        local.parent.mkdir(parents=True, exist_ok=True)
-        local.write_text(text, encoding="utf-8")
-        result["pulled"].append(key)
-    return result
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -652,23 +599,8 @@ def apply_trade(state: dict, trade: dict) -> dict:
 def _write_files_atomic(daily_text: str, positions_text: str, before_daily: str) -> None:
     """原子写 每日调仓.md + 持仓.md：先调仓再持仓，任一步失败回滚前一步。
 
-    TOS 模式：两对象顺序 put，失败回滚前一个对象；本地降级：原 tmp+replace 逻辑。
+    本地原子写：tmp+replace；调仓失败则回滚调仓文件。
     """
-    if _cs_put is not None:
-        try:
-            _cs_put(TRADES_KEY, daily_text)
-        except Exception:
-            raise
-        try:
-            _cs_put(HOLDINGS_KEY, positions_text)
-        except Exception:
-            try:
-                _cs_put(TRADES_KEY, before_daily)
-            except Exception:
-                pass
-            raise
-        return
-    # 降级：本地原子写（原逻辑）
     TRADES_MD.parent.mkdir(parents=True, exist_ok=True)
     HOLDINGS_MD.parent.mkdir(parents=True, exist_ok=True)
     tmp_daily = TRADES_MD.with_suffix(".tmp")
@@ -714,7 +646,7 @@ def write_ledger_state(state: dict) -> None:
         cost = _fmt_price(p.get("cost_price")) if p.get("cost_price") is not None else ""
         positions_text += f"| {p['name']} | {p['code']} | {_fmt_qty(p['shares'])} | {cost} |\n"
 
-    # 撤销快照：写前保存两个文件原文（TOS 或本地）
+    # 撤销快照：写前保存两个文件原文（本地）
     before_daily = _md_text(TRADES_KEY, TRADES_MD) or ""
     before_pos = _md_text(HOLDINGS_KEY, HOLDINGS_MD) or ""
     _write_files_atomic(daily_text, positions_text, before_daily)
@@ -723,19 +655,10 @@ def write_ledger_state(state: dict) -> None:
         "daily": before_daily, "positions": before_pos,
         "note": state.get("trades")[-1] if state.get("trades") else None,
     }, ensure_ascii=False)
-    if _cs_put is not None:
-        _cs_put(f"{UNDO_PREFIX}{snap_id}.json", snap_payload)
-        # 只保留最近 10 份快照（TOS）
-        for old in sorted(_cs_list(UNDO_PREFIX))[:-10]:
-            try:
-                _cs_del(old)
-            except Exception:
-                pass
-    else:
-        SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
-        (SNAPSHOT_DIR / f"{snap_id}.json").write_text(snap_payload, encoding="utf-8")
-        for old in sorted(SNAPSHOT_DIR.glob("*.json"))[:-10]:
-            old.unlink(missing_ok=True)
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    (SNAPSHOT_DIR / f"{snap_id}.json").write_text(snap_payload, encoding="utf-8")
+    for old in sorted(SNAPSHOT_DIR.glob("*.json"))[:-10]:
+        old.unlink(missing_ok=True)
 
 
 def append_trade(trade: dict) -> dict:
@@ -750,28 +673,15 @@ def append_trade(trade: dict) -> dict:
 
 
 def undo_last_trade() -> dict:
-    """撤销最近一笔界面录入（回滚快照）。无快照时抛 ValueError。"""
-    if _cs_list is not None:
-        keys = sorted(_cs_list(UNDO_PREFIX))
-        if not keys:
-            raise ValueError("没有可撤销的录入")
-        latest = keys[-1]
-        raw = _cs_get(latest) or ""
-        snapshot = json.loads(raw)
-        if snapshot.get("daily"):
-            _cs_put(TRADES_KEY, snapshot["daily"])
-        if snapshot.get("positions"):
-            _cs_put(HOLDINGS_KEY, snapshot["positions"])
-        _cs_del(latest)
-    else:
-        snaps = sorted(SNAPSHOT_DIR.glob("*.json"))
-        if not snaps:
-            raise ValueError("没有可撤销的录入")
-        latest = snaps[-1]
-        snapshot = json.loads(latest.read_text(encoding="utf-8"))
-        if snapshot.get("daily"):
-            TRADES_MD.write_text(snapshot["daily"], encoding="utf-8")
-        if snapshot.get("positions"):
-            HOLDINGS_MD.write_text(snapshot["positions"], encoding="utf-8")
-        latest.unlink(missing_ok=True)
+    """撤销最近一笔界面录入（回滚本地快照）。无快照时抛 ValueError。"""
+    snaps = sorted(SNAPSHOT_DIR.glob("*.json"))
+    if not snaps:
+        raise ValueError("没有可撤销的录入")
+    latest = snaps[-1]
+    snapshot = json.loads(latest.read_text(encoding="utf-8"))
+    if snapshot.get("daily"):
+        TRADES_MD.write_text(snapshot["daily"], encoding="utf-8")
+    if snapshot.get("positions"):
+        HOLDINGS_MD.write_text(snapshot["positions"], encoding="utf-8")
+    latest.unlink(missing_ok=True)
     return read_daily_ledger()

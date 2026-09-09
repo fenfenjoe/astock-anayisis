@@ -672,3 +672,34 @@ class TestZombieRunningCleanup:
         db_mod.scheduler_run_insert("task_a", "task_a:2026-09-02", "auto",
                                    "2026-09-02 14:30:00", status="success")
         assert db_mod.scheduler_mark_zombies_running() == 0
+
+
+# ── 2026-09-08 云后端回归测试（mock _cd_select，无需真实云）─────────
+
+
+def test_meta_get_all_cloud(monkeypatch):
+    """持仓页优化回归：meta_get_all 云分支一次批量取全部 meta。"""
+    monkeypatch.setattr(db_mod, "USE_CLOUD", True)
+    monkeypatch.setattr(
+        db_mod, "_cd_select",
+        lambda table, **kw: [{"key": "k1", "value": "v1"}, {"key": "k2", "value": "v2"}],
+    )
+    assert db_mod.meta_get_all() == {"k1": "v1", "k2": "v2"}
+    monkeypatch.setattr(db_mod, "USE_CLOUD", False)
+
+
+def test_report_dates_with_types_cloud(monkeypatch):
+    """每日信号页 N+1 优化回归：单次查询聚合 日期→类型。"""
+    monkeypatch.setattr(db_mod, "USE_CLOUD", True)
+    monkeypatch.setattr(
+        db_mod, "_cd_select",
+        lambda table, **kw: [
+            {"report_date": "2026-09-08", "report_type": "早盘分析"},
+            {"report_date": "2026-09-08", "report_type": "每日信号"},
+            {"report_date": "2026-09-07", "report_type": "每日信号"},
+        ],
+    )
+    m = db_mod.report_dates_with_types()
+    assert m["2026-09-08"] == ["早盘分析", "每日信号"]
+    assert m["2026-09-07"] == ["每日信号"]
+    monkeypatch.setattr(db_mod, "USE_CLOUD", False)

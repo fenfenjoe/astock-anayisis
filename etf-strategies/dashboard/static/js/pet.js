@@ -7,7 +7,7 @@
        offline / leave / working / slack），本地瞬时态 thinking 由 agent.js
        发 CustomEvent('xm:thinking') 叠加。轮询结果广播 CustomEvent('xm:status')
        （agent.js 订阅更新角色页状态 pill，自身不再轮询）。
-     - 场景层：CSS 驱动的小桌/笔记本（敲键盘/盯屏/代码滚动/Zzz），见 pet.css
+     - 场景层：已移除（不再展示小桌/笔记本/键盘等 CSS 驱动动画）
      - 渲染层：PixiJS + pixi-live2d-display（LIVE2D），资产自托管于
        /static/live2d/；资产缺失或 WebGL 不可用时自动降级（不报错、不影响主体）
 
@@ -114,6 +114,7 @@
     greeted: false,          // 本会话已打招呼
     miniAuto: false,         // 因窄屏自动收起
     sessionHidden: false,    // 用户点 × 隐藏（本会话）
+    ro: null,                // 画布容器 ResizeObserver（尺寸沉降后重新布局）
   };
 
   function isCollapsed() {
@@ -138,27 +139,7 @@
     el.modes = $('xm-pet-modes');
   }
 
-  // ═══════════ 场景层装配（小桌 + 笔记本骨架；动画全在 CSS）═══
-  function buildScene() {
-    if (!el.scene || el.scene.getAttribute('data-built')) return;
-    var keys = '';
-    for (var i = 0; i < 8; i++) keys += '<span class="xm-key"></span>';
-    el.scene.innerHTML =
-      '<div class="xm-desk">' +
-        '<div class="xm-laptop">' +
-          '<div class="xm-screen">' +
-            '<div class="xm-screen-art">' +
-              '<div class="xm-art-code"><span></span><span></span><span></span><span></span></div>' +
-              '<div class="xm-art-data"><i></i><i></i><i></i><i></i><i></i><i></i></div>' +
-              '<span class="xm-caret"></span>' +
-            '</div>' +
-          '</div>' +
-          '<div class="xm-keyboard">' + keys + '</div>' +
-        '</div>' +
-        '<div class="xm-desk-top"></div>' +
-      '</div>';
-    el.scene.setAttribute('data-built', '1');
-  }
+  function buildScene() {}
 
   // ═══════════ 状态机：状态推导 + UI 应用 ═══════════
   // 作息钟：22:00–次日 06:00 为睡眠时间（强制 sleep；进程未跑的 offline 不遮蔽）
@@ -181,26 +162,9 @@
     return k;
   }
 
-  function derivePosture(s) {
-    var tid = (s.current_task && s.current_task.task_id) || '';
-    if (/morning_analysis|intraday_|evening_review|weekly_portfolio/.test(tid)) return 'data';
-    if (/req_implement|bug_|logic_inspect|strategy_scan|experience_health|pending_remind/.test(tid)) return 'code';
-    return 'type';
-  }
-
-  // 无调度任务时，按行为状态机当前活动推导场景姿态：
-  // 阅读 → read（不显示小桌/键盘/屏幕等非 LIVE2D 动画，角色安静待机）；写作/思考 → 敲键盘（type）
-  function deriveStatePosture(stateId) {
-    if (stateId === 'reading') return 'read';
-    return 'type';
-  }
-
-  // 综合后端状态 + 作息钟，推导当前 key/posture
   function recompute() {
     var s = state.status || {};
     state.key = deriveKey(s);
-    if (state.key !== 'working') { state.posture = 'type'; return; }
-    state.posture = s.current_task ? derivePosture(s) : deriveStatePosture(s.current_state);
   }
 
   function applyStatus(s) {
@@ -216,14 +180,8 @@
     if (isCollapsed()) return;
     if (k === 'working') {
       announce(stateLine(), 5200);
-      if (state.posture === 'read') {
-        // 阅读：不敲键盘不做手势，安静待机（非 LIVE2D 的场景动画也一并隐藏）
-        modelMotionAny(['Idle', 'idle'], 0);
-      } else {
-        // 开工手势：Senko=Tap(Anim_1) / Haru=TapBody；无手势组则 Idle
-        modelMotionAny(['Tap', 'TapBody', 'Idle', 'idle'], Math.floor(Math.random() * 2));
-      }
-      modelResetExpression();                                              // 回到专注表情
+      modelMotionAny(['Tap', 'TapBody', 'Idle', 'idle'], Math.floor(Math.random() * 2));
+      modelResetExpression();
     } else if (k === 'slack') {
       if (prev === 'working' || prev === 'thinking') announce(pick(LINES.slack), 4800);
       modelResetExpression();
@@ -304,7 +262,6 @@
     // thinking 为本地瞬时态，优先级最高；结束后回退到最近状态
     var key = state.thinking ? 'thinking' : state.key;
     el.pet.setAttribute('data-state', key);
-    el.pet.setAttribute('data-posture', state.posture || 'type');
     paintModeButtons();
     // 隐藏时恢复显示（若处于收起态则保持，由按钮控制）
     if (state.thinking) {
@@ -424,17 +381,28 @@
       state.app = app;
       PIXI.live2d.Live2DModel.from(CFG.modelJson).then(function (model) {
         state.model = model;
-        // from() 完成时 scale=1 → model.width/height 即原生尺寸（不同模型差异大，
-        // 如 Cubism2 Koharu 原生 1600x2000），记录后布局按原生尺寸缩放，
-        // 避免用"缩放后的 world 尺寸"反推 scale 导致越算越大
-        state.origW = model.width;
-        state.origH = model.height;
+        // 布局基准取 internalModel 的布局尺寸（与姿势/首帧渲染时机无关）：
+        // model.width/height 走 getBounds()，在模型尚未完成首帧更新或容器尚未布局时
+        // 可能偏小甚至为 0 → scale 被放大 → 角色超出画布、头顶被裁（刷新后偶发"看不到头"）。
+        var im0 = model.internalModel || {};
+        state.origW = im0.width || model.width;
+        state.origH = im0.height || model.height;
         app.stage.addChild(model);   // 必须入舞台才会渲染
         state.renderer = 'ready';
         if (el.fallback) el.fallback.hidden = true;
         console.info('[xm-pet] LIVE2D 模型加载成功：' + CFG.modelJson
           + '（原生 ' + Math.round(state.origW) + 'x' + Math.round(state.origH) + '）');
         layoutModel();
+        // 首帧后再布局一次：resolve 瞬间容器 clientHeight 可能仍为 0（fixed 容器尚未沉降），
+        // 二次布局用真实尺寸自愈，避免按 254 兜底值缩放导致头顶被裁。
+        requestAnimationFrame(function () { layoutModel(); });
+        // 容器尺寸变化（字体加载、布局沉降、收起/展开、缩放）时重新布局
+        if (typeof ResizeObserver !== 'undefined' && el.canvas && !state.ro) {
+          try {
+            state.ro = new ResizeObserver(function () { layoutModel(); });
+            state.ro.observe(el.canvas);
+          } catch (e) { state.ro = null; }
+        }
         model.on('hit', function (areas) { onModelHit(areas); });
         // 视线跟随鼠标（模型原生支持时启用）
         try { model.autoInteract = true; } catch (e) { /* ignore */ }
@@ -465,8 +433,15 @@
     try {
       var w = el.canvas ? el.canvas.clientWidth || CFG.stageW : CFG.stageW;
       var h = el.canvas ? el.canvas.clientHeight || CFG.stageH : CFG.stageH;
-      var origH = state.origH || m.height;
+      // 基准高度优先取 internalModel.height（布局尺寸，稳定且与姿势无关），
+      // 退回加载时记录的原生高度，最后才用 getBounds 的 m.height。
+      var im = m.internalModel || {};
+      var origH = im.height || state.origH || m.height;
+      // 尺寸未就绪（0/NaN）时不布局，等下一帧或 ResizeObserver 再试，
+      // 否则 scale=Infinity/巨大 → 模型被放大到只剩脚、头顶飞出画布。
+      if (!origH || !isFinite(origH) || origH <= 0) return;
       var scale = (h * (CFG.fitFactor || 0.98)) / origH;   // 以原生尺寸为基准，底部居中
+      if (!isFinite(scale) || scale <= 0) return;
       m.scale.set(scale, scale);
       m.anchor.set(0.5, 1);
       m.position.set(w / 2, h);
@@ -591,17 +566,12 @@
           // 睡眠：重播睡觉动作（Senko Tick_5=Sleeping），保持安睡不说话
           modelMotionAny(['Tick_5', 'Idle', 'idle'], 0);
         } else if (state.key === 'working') {
-          if (state.posture === 'read') {
-            // 阅读：只做安静待机，不敲键盘不做手势，偶尔报一句阅读进度
-            modelMotionAny(['Idle', 'idle'], Math.floor(Math.random() * 2));
-            if (Math.random() < 0.22) announce(stateLine(), 4600);
-          } else if (Math.random() < 0.45) {
-            // Senko=Tap(Anim_1 互动手势) / Haru=TapBody
+          if (Math.random() < 0.45) {
             modelMotionAny(['Tap', 'TapBody', 'Idle', 'idle'], Math.floor(Math.random() * 2));
           } else {
             modelMotionAny(['Idle', 'idle'], Math.floor(Math.random() * 3));
           }
-          if (state.posture !== 'read' && Math.random() < 0.3) announce(stateLine(), 4600);
+          if (Math.random() < 0.3) announce(stateLine(), 4600);
         } else if (state.key === 'slack') {
           // 摸鱼偶尔哼歌：Senko Taphead[0]=Singing；Haru TapHead 同理
           if (Math.random() < 0.22) {
@@ -808,6 +778,7 @@
     clearInterval(state.timer);
     clearTimeout(state.idleTimer);
     clearTimeout(state.sleepTimer);
+    if (state.ro) { try { state.ro.disconnect(); } catch (e) { /* ignore */ } state.ro = null; }
     window.removeEventListener('resize', onResize);
     if (state.app) { try { state.app.stop(); } catch (e) { /* ignore */ } }    // 暂停渲染循环
     if (el.pet) { el.pet.classList.add('is-min'); el.pet.setAttribute('aria-hidden', 'true'); }

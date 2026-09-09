@@ -11,6 +11,10 @@
     {"id": "tea",        "label": "☕ 喝奶茶", "weight": 8,  "duration_min": 10, "duration_max": 25,  "require_llm": false},
     {"id": "drawing",    "label": "🎨 画画",   "weight": 5,  "duration_min": 30, "duration_max": 60,  "require_llm": false},
     {"id": "social",     "label": "📱 刷朋友圈", "weight": 8,  "duration_min": 8,  "duration_max": 20,  "require_llm": false},
+    {"id": "weibo_browse", "label": "📱 逛微博",  "weight": 8,  "duration_min": 15, "duration_max": 40,  "require_llm": true},
+    {"id": "xhs_browse",   "label": "📕 逛小红书", "weight": 8,  "duration_min": 15, "duration_max": 40,  "require_llm": true},
+    {"id": "zhihu_browse", "label": "🔵 逛知乎", "weight": 8,  "duration_min": 15, "duration_max": 40,  "require_llm": true},
+    {"id": "xueqiu_browse", "label": "🟡 逛雪球", "weight": 8,  "duration_min": 15, "duration_max": 40,  "require_llm": true},
     {"id": "cleaning",   "label": "🧹 收拾房间", "weight": 4,  "duration_min": 15, "duration_max": 30,  "require_llm": false},
     {"id": "takeout",    "label": "🍜 叫外卖", "weight": 6,  "duration_min": 8,  "duration_max": 20,  "require_llm": false},
     {"id": "nap",        "label": "💤 补觉",   "weight": 6,  "duration_min": 20, "duration_max": 60,  "require_llm": false},
@@ -28,6 +32,10 @@
   "unread_bonus": {
     "target": "reading",
     "per_article_weight": 3
+  },
+  "browse_bonus": {
+    "targets": ["weibo_browse", "xhs_browse", "zhihu_browse", "xueqiu_browse"],
+    "per_platform_weight": 2
   },
   "cooldown": {
     "max_repeat": 2

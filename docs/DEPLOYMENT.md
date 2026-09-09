@@ -98,7 +98,6 @@ OpenViking 可用**火山引擎云服务**（`api.vikingdb.cn-beijing.volces.com
 
 ```bash
 # 最小：dsh --profile xiaoman "用 viking_search 搜一条记忆"
-python scripts/cloud_sync.py --download --dry-run   # 无关，仅示意
 # 或直接在小满会话里 viking_remember / viking_search 往返
 ```
 
@@ -107,93 +106,28 @@ python scripts/cloud_sync.py --download --dry-run   # 无关，仅示意
 ### 与本地版的关系
 
 - 配置 `ovcli.conf` 指向云后，本地 `openviking-server` 可**不启动**（`start_all.ps1` 的 openviking 服务可跳过）；本地版仍可作回退。
-- 本地旧数据（仓库 `data/`、`~/.openviking/data/`）云版不读取；如需清理见 `scripts/cloud_clean_local.ps1`。
+- 本地旧数据（仓库 `data/`、`~/.openviking/data/`）云版不读取；如需清理可手动删除这些目录（2026-09-07 起 TOS 备份已下线，删除不可云端恢复，请先确认不需要）。
 
-## 5. 数据云备份（火山引擎 TOS，免费级）
+## 5. 数据云备份（已下线 — 火山引擎 TOS）
 
-将报告 / SQLite / 日志 / OpenViking 数据同步到云端（数据总量约 16MB，月成本 ≈ ¥0.002）。
+> **2026-09-07 下线**：云权威库已迁移至火山 Supabase 版 Postgres（见 `docs/2026-09-07-云端数据库迁移方案.md`），
+> TOS 对象存储（桶 `astock-data`）已停用：`scripts/config/cloud.json` 凭据已清空，`cloud_store.py`、
+> `cloud_sync.py`、`cloud_clean_local.ps1` 等 TOS 代码已移除。权威数据全部在 Supabase 云库，
+> 本地 `reports/`、`my_doc/每日复盘/`（持仓/调仓/复盘报告）为工作副本。
+> 若需彻底删除 TOS 桶，见下方「清理 TOS 桶」步骤。
 
-### 开通（一次）
-
-1. 火山引擎控制台 → **对象存储 TOS** → 创建桶 `astock-data`（地域 cn-beijing）
-2. 控制台 → **访问控制 → AccessKey** → 创建 AK/SK（记下）
-3. 配置：
-   ```powershell
-   Copy-Item scripts\config\cloud.json.example scripts\config\cloud.json
-   # 编辑填入 ak / sk（endpoint/bucket 默认即可）
-   ```
-   > 或设置环境变量 `CLOUD_AK` / `CLOUD_SK`（二选一）
-
-### 执行
+### 清理 TOS 桶（可选，不可逆）
 
 ```powershell
-python scripts/cloud_sync.py            # 同步全部（sqlite 一致性快照 + 报告 + 日志 + OpenViking）
-python scripts/cloud_sync.py --dry-run  # 试跑，只打印不上传
+# 1. 确认无代码再写 TOS（本仓库已移除全部 TOS 调用）
+# 2. 火山引擎控制台 → 对象存储 TOS → 桶 astock-data：
+#    - 全选对象 → 删除（含 648 个对象，约 739 MB，其中 sqlite/ 旧快照 728 MB）
+#    - 桶清空后删除桶本身
+# 3. 可选：访问控制 → AccessKey → 停用/删除对应 AK/SK（若仅此桶使用）
 ```
 
-### 定时（每 30 分钟）
-
-```powershell
-schtasks /Create /TN "astock-cloud-sync" /TR "python E:\ideaworkspace\astock-anayisis\scripts\cloud_sync.py" /SC MINUTE /MO 30 /F
-```
-
-### 云端结构
-
-```
-bucket astock-data/
-├── sqlite/<时间戳>/cache.db, agent.db   # 一致性快照（保留所有历史版本）
-├── report/  daily-reports/              # 回测 + 每日复盘报告
-├── logs/etf/  logs/harness/             # 日志
-└── openviking/                           # OpenViking 向量数据
-```
-
-### 恢复（新机器 / 本地数据已删除）
-
-```powershell
-# 方式1：启动时自动恢复（dashboard 与 agent 进程，环境变量开启）
-$env:CLOUD_RESTORE_ON_START = "1"
-python etf-strategies/dashboard/app.py   # 启动即从 TOS 拉取最新数据
-
-# 方式2：手动恢复
-python scripts/cloud_sync.py --download
-```
-
-### 清理本地（数据由 TOS 兜底）
-
-```powershell
-# 先确保 TOS 是最新
-python scripts/cloud_sync.py
-python scripts/cloud_sync.py --download --dry-run   # 确认恢复清单
-
-# 删除本地可恢复数据（报告/日志/SQLite/OpenViking；保留配置与持仓 md）
-powershell -ExecutionPolicy Bypass -File scripts/cloud_clean_local.ps1
-# 加 -IncludeHoldings 连持仓 md 一起删（由 TOS 恢复）
-```
-
-> 凭据：`scripts/config/cloud.json` 已入 .gitignore（见 docs/SECURITY.md）。
-
-## 6. 严格零本地模式（数据全在云端）
-
-设置以下环境变量后，本地不持久化数据（一切以 TOS 为准）：
-
-| 变量 | 作用 |
-|---|---|
-| `DB_MODE=memory` | SQLite 改 `:memory:` 内存库（启动从 TOS 载入快照、定时回传；磁盘零文件） |
-| `CLOUD_RESTORE_ON_START=1` | dashboard/agent/start_all 启动时自动从 TOS 恢复 |
-| `LOGS_PURGE_LOCAL=1`（默认开） | cloud_sync 上传日志后清空本地 |
-
-**数据读写路径（云模式）**：
-- 持仓/调仓：TOS `holdings/` 直读写（portfolio）
-- 回测报告：生成→传 TOS `report/`，展示从云端读（`GET /api/report/file/{name}`）
-- 复盘报告：导入从 TOS `daily-reports/`（指纹守卫）
-- SQLite：`:memory:` + 快照 `sqlite/<ts>/{cache,agent}.db`（serialize 上传 / backup 载入）
-- 日志：上传后清空本地
-- OpenViking：启动拉取 `openviking/` → 本地临时 → 停止清理（Windows 极限）
-
-**切换**：不设置这些变量 = 原文件模式（降级/开发/测试）；设置后 = 严格零本地。
-
-> 已知坑：Python 3.11 `sqlite3.deserialize()` 对 WAL 快照半成功（连接损坏）——
-> 快照恢复统一走「临时文件 + sqlite3.backup 载入内存，即时删除」（`_deserialize_mem`）。
+> 数据安全：删桶前确认本地 `reports/`、`my_doc/每日复盘/每日调仓.md`、`harness/config/持仓.md` 均在，
+> Supabase 云库报告/持仓齐全 —— 删 TOS 不丢权威数据。
 
 ## 7. 注意事项
 

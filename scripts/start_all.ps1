@@ -65,11 +65,6 @@ function Is-Running([string]$pidFile) {
 }
 
 if ($Action -eq "stop") {
-  # 严格零本地：停止前先把内存库/日志快照回传 TOS（若启用云恢复）
-  if ($env:CLOUD_RESTORE_ON_START -eq "1") {
-    Write-Host "Uploading latest state to cloud before stop..."
-    python (Join-Path $scriptRoot "cloud_sync.py") 2>&1 | Select-Object -Last 2
-  }
   foreach ($s in $services) {
     $pf = Get-PidFile $s.PidFile
     if (Is-Running $pf) {
@@ -77,14 +72,6 @@ if ($Action -eq "stop") {
       Write-Host "stopped: $($s.Name)"
     } else { Write-Host "not running: $($s.Name)" }
     Remove-Item $pf -ErrorAction SilentlyContinue
-  }
-  # OpenViking 数据退出清理（Windows 极限：运行中临时目录，停止后零残留）
-  if ($env:CLOUD_RESTORE_ON_START -eq "1") {
-    $ovData = Join-Path $repoRoot "data"
-    if (Test-Path $ovData) {
-      Remove-Item $ovData -Recurse -Force -ErrorAction SilentlyContinue
-      Write-Host "cleaned OpenViking local data (backed up to cloud)"
-    }
   }
   exit 0
 }
@@ -101,11 +88,6 @@ if ($Action -eq "status") {
 }
 
 # start
-# 云恢复：CLOUD_RESTORE_ON_START=1 时启动前从 TOS 拉取（含 openviking data/、sqlite、持仓）
-if ($env:CLOUD_RESTORE_ON_START -eq "1") {
-  Write-Host "Restoring from cloud (TOS)..."
-  python (Join-Path $scriptRoot "cloud_sync.py") --download 2>&1 | Select-Object -Last 3
-}
 $started = @{}   # name -> pid（仅记录本次实际拉起的服务）
 foreach ($s in $services) {
   $pf = Get-PidFile $s.PidFile

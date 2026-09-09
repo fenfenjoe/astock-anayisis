@@ -116,7 +116,237 @@
       "yellow_reason": "Calmar 2.55优秀且25轮双周期验证，溢价闸门呼应趋势；但年化/回撤未披露，定投形态需评估转化路径",
       "added": "2026-09-01",
       "last_eval": "2026-09-01"
+    },
+    {
+      "id": "2026-09-08-01",
+      "source": {
+        "platform": "zhihu",
+        "url": "https://zhuanlan.zhihu.com/p/635005704",
+        "author": "未披露（知乎专栏）",
+        "title": "年化38.4%,回撤不到20%,夏普比1.45的ETF动量策略(附代码)"
+      },
+      "strategy": {
+        "name": "ETF动量(38.4%)",
+        "type": "momentum"
+      },
+      "metrics": {
+        "annual_return": 0.384,
+        "sharpe": 1.45,
+        "max_drawdown": -0.20,
+        "backtest_years": null
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化/夏普/回撤均绿灯且附完整代码，但回测周期未披露（需≥5年方可绿灯），核心公式未详述",
+      "added": "2026-09-08",
+      "last_eval": "2026-09-08"
+    },
+    {
+      "id": "2026-09-08-02",
+      "source": {
+        "platform": "zhihu",
+        "url": "https://zhuanlan.zhihu.com/p/721058059",
+        "author": "未披露（Quantlab）",
+        "title": "Quantlab5.12源码发布:策略优化至年化收益61.9%,最大回撤-13.3%(python代码+数据)"
+      },
+      "strategy": {
+        "name": "Quantlab优化(61.9%)",
+        "type": "etf_rotation"
+      },
+      "metrics": {
+        "annual_return": 0.619,
+        "sharpe": null,
+        "max_drawdown": -0.133,
+        "backtest_years": null
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化61.9%落在50%-100%黄灯区间；回撤-13.3%优秀，但夏普/回测周期/核心逻辑未披露",
+      "added": "2026-09-08",
+      "last_eval": "2026-09-08"
+    },
+    {
+      "id": "2026-09-08-03",
+      "source": {
+        "platform": "zhihu",
+        "url": "https://zhuanlan.zhihu.com/p/2036063884918924086",
+        "author": "次方量化",
+        "title": "ETF动量轮动策略,年化60%回撤14%"
+      },
+      "strategy": {
+        "name": "ETF动量轮动(60%)",
+        "type": "etf_rotation"
+      },
+      "metrics": {
+        "annual_return": 0.60,
+        "sharpe": null,
+        "max_drawdown": -0.14,
+        "backtest_years": null
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化60%落在50%-100%黄灯区间；回撤-14%优秀，但夏普/回测周期/代码未披露",
+      "added": "2026-09-08",
+      "last_eval": "2026-09-08"
+    },
+    {
+      "id": "2026-09-08-04",
+      "source": {
+        "platform": "zhihu",
+        "url": "https://zhuanlan.zhihu.com/p/1925582485137384667",
+        "author": "未披露（知乎专栏）",
+        "title": "ETF动量轮动策略,带止盈:年化65%"
+      },
+      "strategy": {
+        "name": "ETF动量轮动带止盈(65%)",
+        "type": "etf_rotation"
+      },
+      "metrics": {
+        "annual_return": 0.65,
+        "sharpe": null,
+        "max_drawdown": null,
+        "backtest_years": null
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化65%落在50%-100%黄灯区间；止盈机制是差异化点，但夏普/回撤/周期/代码均未披露",
+      "added": "2026-09-08",
+      "last_eval": "2026-09-08"
+    },
+    {
+      "id": "2026-09-08-05",
+      "source": {
+        "platform": "zhihu",
+        "url": "https://zhuanlan.zhihu.com/p/665264886",
+        "author": "未披露（知乎专栏）",
+        "title": "十年年化42.4%(不止损55.7%):ETF动量轮动+卡曼滤波+RSRS择时止损(代码+数据)"
+      },
+      "strategy": {
+        "name": "动量轮动+卡曼滤波+RSRS",
+        "type": "momentum"
+      },
+      "metrics": {
+        "annual_return": 0.424,
+        "sharpe": null,
+        "max_drawdown": null,
+        "backtest_years": 10
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化42.4%绿灯区间+十年长周期，但含卡曼滤波新元素且与KB S18 RSRS因子重叠，参数复杂度高、夏普/回撤未披露",
+      "added": "2026-09-08",
+      "last_eval": "2026-09-08"
+    },
+    {
+      "id": "2026-09-08-06",
+      "source": {
+        "platform": "zhihu",
+        "url": "https://zhuanlan.zhihu.com/p/1949885278463460837",
+        "author": "未披露（知乎专栏）",
+        "title": "一套跑通 2012–2025 的 ETF 多因子策略:年化 15%,最大回撤 16%"
+      },
+      "strategy": {
+        "name": "ETF多因子(15%)",
+        "type": "multi_factor"
+      },
+      "metrics": {
+        "annual_return": 0.15,
+        "sharpe": null,
+        "max_drawdown": -0.16,
+        "backtest_years": 13
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化15%压绿灯下限但13年长周期回测非常有价值，因子组合/夏普/代码未披露",
+      "added": "2026-09-08",
+      "last_eval": "2026-09-08"
+    },
+    {
+      "id": "2026-09-08-07",
+      "source": {
+        "platform": "github",
+        "url": "https://github.com/guoyaohua/etf-adaptive-rotation-qmt",
+        "author": "guoyaohua",
+        "title": "etf-adaptive-rotation-qmt（自适应ETF轮动，QMT）"
+      },
+      "strategy": {
+        "name": "自适应ETF轮动(adaptive)",
+        "type": "etf_rotation"
+      },
+      "metrics": {
+        "annual_return": null,
+        "sharpe": null,
+        "max_drawdown": null,
+        "backtest_years": null
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "仓库有完整STRATEGY.md文档与源码、多次跨平台命中，但A股回测指标未披露需补跑验证；自适应概念与KB S14部分重叠",
+      "added": "2026-09-08",
+      "last_eval": "2026-09-08"
+    },
+    {
+      "id": "2026-09-08-08",
+      "source": {
+        "platform": "zhihu",
+        "url": "https://zhuanlan.zhihu.com/p/1936028592686503140",
+        "author": "未披露（知乎专栏）",
+        "title": "年化30%ETF轮动策略的notebook代码,基于backtrader通用模板,附python代码"
+      },
+      "strategy": {
+        "name": "ETF轮动backtrader(30%)",
+        "type": "etf_rotation"
+      },
+      "metrics": {
+        "annual_return": 0.30,
+        "sharpe": null,
+        "max_drawdown": null,
+        "backtest_years": null
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化30%绿灯区间且附backtrader完整代码，但夏普/回撤/回测周期未披露",
+      "added": "2026-09-08",
+      "last_eval": "2026-09-08"
+    },
+    {
+      "id": "2026-09-08-09",
+      "source": {
+        "platform": "zhihu",
+        "url": "https://zhuanlan.zhihu.com/p/25912734294",
+        "author": "未披露（知乎专栏）",
+        "title": "年化29.8%,回撤14.?,比较稳健的策略:综合评分加EPO权重优化(python策略+数据)"
+      },
+      "strategy": {
+        "name": "综合评分+EPO权重(29.8%)",
+        "type": "multi_factor"
+      },
+      "metrics": {
+        "annual_return": 0.298,
+        "sharpe": null,
+        "max_drawdown": -0.14,
+        "backtest_years": null
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化29.8%绿灯区间、回撤约14%优秀且附代码，但EPO权重优化为新概念需确认可实现性，夏普/回测周期未披露",
+      "added": "2026-09-08",
+      "last_eval": "2026-09-08"
+    },
+    {
+      "id": "2026-09-08-10",
+      "source": {
+        "platform": "zhihu",
+        "url": "https://zhuanlan.zhihu.com/p/24432537558",
+        "author": "未披露（知乎专栏）",
+        "title": "年化29.6%:基于ETF评分的轮动策略加止损风控版本,更稳健(python代码+数据)"
+      },
+      "strategy": {
+        "name": "ETF评分轮动+止损(29.6%)",
+        "type": "etf_rotation"
+      },
+      "metrics": {
+        "annual_return": 0.296,
+        "sharpe": null,
+        "max_drawdown": null,
+        "backtest_years": null
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化29.6%绿灯区间且附代码、止损风控有价值，但夏普/回撤/回测周期未披露",
+      "added": "2026-09-08",
+      "last_eval": "2026-09-08"
     }
   ],
-  "last_updated": "2026-09-01"
+  "last_updated": "2026-09-08"
 }

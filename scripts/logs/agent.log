@@ -1,1 +1,3 @@
 [agent] 小满常驻进程启动（tick 间隔见 config）
+[agent]   社交平台可访问性判定完成：0/7 可达
+[agent]   WARNING: Cookie 待办生成失败（不影响启动）: 'str' object has no attribute 'get'

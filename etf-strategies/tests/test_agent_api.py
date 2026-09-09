@@ -60,6 +60,37 @@ def test_mood_demo():
     assert api_mod._mood("on", None, False)["label"] == "未上线"
 
 
+def test_profile_social_platforms(client):
+    """认识小满页：/api/agent/profile 返回 social_platforms（7 个爱逛的地方）。"""
+    r = client.get("/api/agent/profile")
+    assert r.status_code == 200
+    data = r.json()
+    sps = data.get("social_platforms", [])
+    ids = [s["id"] for s in sps]
+    # 微博/小红书/X/知乎/雪球/财联社/华尔街见闻 七处齐全
+    assert set(ids) == {
+        "weibo", "xhs", "x", "zhihu", "xueqiu", "cls", "wallstreetcn",
+    }
+    for s in sps:
+        assert "name" in s and "url" in s and "icon" in s
+        assert "needs_cookie" in s and "playable" in s
+        assert "reachable" in s and "reason" in s
+    # 保守默认：无缓存时全部不可达（宁可置灰）
+    assert all(not s["reachable"] for s in sps)
+    # X 固定 playable=False（未实施访问逻辑）
+    x = next(s for s in sps if s["id"] == "x")
+    assert x["playable"] is False
+    # 微博/小红书 playable=True（可采集）
+    weibo = next(s for s in sps if s["id"] == "weibo")
+    assert weibo["playable"] is True
+    assert weibo["needs_cookie"] is True
+    # 财联社/华尔街见闻为 RSS 源（playable=False，非 Playwright 采集）
+    cls_ = next(s for s in sps if s["id"] == "cls")
+    assert cls_["playable"] is False and cls_["needs_cookie"] is False
+    # 旧的 sites 字段已移除（合并进 social_platforms）
+    assert "sites" not in data
+
+
 def test_state_derivation():
     """桌宠状态机四态推导：offline 优先 → leave → working → slack。"""
     from dashboard import api_agent as api_mod

@@ -10,8 +10,10 @@
 
 import json
 import re
+import sys
 import threading
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -90,20 +92,40 @@ def _meta_num(key: str, default=None):
 
 
 def _build_portfolio_response() -> dict:
-    """组装 GET /api/portfolio 的完整响应（持仓 + 估值 + meta + 东财状态）。"""
+    """组装 GET /api/portfolio 的完整响应（持仓 + 估值 + meta + 东财状态）。
+
+    2026-09-08 性能优化：原先逐个 meta_get（云模式 N 次 HTTPS 往返，实测单次
+    ~0.08-0.8s，页面 8s+）→ 改 meta_get_all() 一次批量取回全部 portfolio_meta，
+    再加 holdings/trades 两次读，整个接口仅 3 次云往返（复用连接后 ~0.3s）。
+    """
+    meta_all = db.meta_get_all()
+
+    def _m(key, default=None):
+        v = meta_all.get(key)
+        return v if v is not None else default
+
+    def _m_num(key, default=None):
+        v = meta_all.get(key)
+        if v is None or v == "":
+            return default
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return default
+
     meta = {
-        "total_assets": _meta_num("total_assets"),
-        "available_cash": _meta_num("available_cash"),
-        "account_source": db.meta_get("account_source", "manual"),
-        "last_refresh_at": db.meta_get("last_refresh_at"),
+        "total_assets": _m_num("total_assets"),
+        "available_cash": _m_num("available_cash"),
+        "account_source": _m("account_source", "manual"),
+        "last_refresh_at": _m("last_refresh_at"),
     }
-    snapshot_raw = db.meta_get("valuation_snapshot")
+    snapshot_raw = _m("valuation_snapshot")
     try:
         snapshot = json.loads(snapshot_raw) if snapshot_raw else None
     except (json.JSONDecodeError, TypeError):
         snapshot = None
 
-    has_creds = db.meta_get("eastmoney_has_creds") == "1"
+    has_creds = _m("eastmoney_has_creds") == "1"
     trades = db.portfolio_trades_get_all()
     return {
         "holdings": db.portfolio_holdings_get_all(),
@@ -113,9 +135,9 @@ def _build_portfolio_response() -> dict:
         "valuation": snapshot,
         "eastmoney": {
             "has_creds": has_creds,
-            "account_suffix": db.meta_get("eastmoney_account_suffix"),
-            "note": db.meta_get("eastmoney_note"),
-            "last_error": db.meta_get("last_eastmoney_error"),
+            "account_suffix": _m("eastmoney_account_suffix"),
+            "note": _m("eastmoney_note"),
+            "last_error": _m("last_eastmoney_error"),
             "experimental": True,
         },
         "server_time": _now_str(),
@@ -469,29 +491,242 @@ def _parse_signals(markdown: str) -> list[dict]:
 
 @router.get("/daily-signals")
 def get_daily_signals(date: str | None = None):
-    """每日信号：?date=YYYYMMDD（默认最新）。返回 {date, markdown, parsed, types}。"""
+    """每日信号：?date=YYYYMMDD（默认最新）。返回 {date, signals, markdown, parsed, types}。
+
+    2026-09-08 信号云库化（方案 v1.10 §9.2/9.3）：数据源从「markdown 解析」升级为
+    **云库 `signal_tracking` 表优先**（全量 25 字段）；markdown 过渡期保留作人读视图/兜底。
+    signals = 云库当日信号（结构化行，含复盘回填评价列）；parsed = markdown 解析结果（兜底）。
+    """
+    today_ymd = datetime.now().strftime("%Y%m%d")
+    target_date = date or today_ymd
+
+    # 云库优先：按 signal_date 查 signal_tracking 表
+    cloud_rows = _cloud_signal_rows(target_date)
+    if cloud_rows:
+        # 云库有数据 → 直接返回结构化信号（markdown 仍尝试给全文视图）
+        md = _report_markdown(target_date)
+        parsed = _parse_signals(md) if md else []
+        return {
+            "date": target_date,
+            "signals": cloud_rows,
+            "markdown": md or "",
+            "parsed": parsed,
+            "types": _report_types(target_date),
+            "source": "cloud",
+        }
+
+    # 云库无数据 → 回退 markdown 解析（过渡期既有路径）
+    return _daily_signals_from_markdown(target_date)
+
+
+@router.get("/signal-quality")
+def get_signal_quality(period: str = "day", date: str | None = None):
+    """信号质量评估：?period=day|week|all（默认 day）。
+
+    复用 harness 的 `lib/signal_quality.py` 8 项指标 + P0 执行率，消费云库 `signal_tracking` 表
+    （云库不可用时降级读本地 signal_tracking.json 缓存）。方案 v1.10 §9.3。
+    返回 {period, metrics: {...}, p0_execution, signals_included, source}。
+    """
+    # 1. 取信号集（云库优先 → 本地缓存兜底）
+    sigs = _load_tracking_signals()
     if date:
-        report = db.report_get(date, "每日信号")
+        iso = f"{date[:4]}-{date[4:6]}-{date[6:8]}"
+        sigs = [s for s in sigs if s.get("trigger_date") == iso or s.get("signal_date") == iso]
+
+    if period == "day":
+        today_iso = datetime.now().strftime("%Y-%m-%d")
+        sigs = [s for s in sigs if (s.get("trigger_date") or s.get("signal_date")) == today_iso]
+    elif period == "week":
+        # 最近 7 个自然日
+        from datetime import timedelta
+        cutoff = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        sigs = [s for s in sigs if (s.get("trigger_date") or s.get("signal_date")) >= cutoff]
+    # period=all 保留全部
+
+    if not sigs:
+        return {
+            "period": period, "metrics": None, "p0_execution": None,
+            "signals_included": 0, "source": _quality_source(),
+        }
+
+    settled = [s for s in sigs if s.get("status") == "settled"]
+    metrics = _quality_metrics(sigs, settled)
+    p0 = _p0_execution(sigs)
+    return {
+        "period": period,
+        "metrics": metrics,
+        "p0_execution": p0,
+        "signals_included": len(sigs),
+        "settled_included": len(settled),
+        "source": _quality_source(),
+    }
+
+
+def _load_tracking_signals() -> list[dict]:
+    """取信号集：云库 signal_tracking → 本地 signal_tracking.json 兜底。"""
+    try:
+        import cloud_db
+        if cloud_db.enabled():
+            rows = cloud_db.select("signal_tracking", order="signal_id")
+            if rows:
+                out = []
+                for r in rows:
+                    d = dict(r)
+                    if d.get("signal_date") and "trigger_date" not in d:
+                        d["trigger_date"] = d["signal_date"]
+                    out.append(d)
+                return out
+    except Exception:
+        pass
+    # 本地兜底
+    local = Path(__file__).resolve().parent.parent.parent / "my_doc" / "每日复盘" / "harness" / "automation" / "config" / "signal_tracking.json"
+    try:
+        data = json.loads(local.read_text(encoding="utf-8"))
+        return data.get("signals", [])
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def _quality_source() -> str:
+    try:
+        import cloud_db
+        if cloud_db.enabled() and cloud_db.select("signal_tracking", columns="signal_id", limit=1):
+            return "cloud"
+    except Exception:
+        pass
+    return "local-cache"
+
+
+def _quality_metrics(sigs: list[dict], settled: list[dict]) -> dict:
+    """复用 harness lib/signal_quality.py 计算 8 项指标（导入失败则内联计算）。"""
+    try:
+        _inject_harness_lib()
+        from lib import signal_quality as sq
+        return sq.generate_quality_dashboard(sigs, settled, "")
+    except Exception:
+        return _inline_quality_metrics(sigs, settled)
+
+
+def _inline_quality_metrics(sigs, settled):
+    """signal_quality.py 不可导入时的内联 8 项指标（口径一致）。"""
+    trig_statuses = {"triggered", "executed", "partial_executed", "settled"}
+    def trig(s): return s.get("status") in trig_statuses
+    pool = sigs
+    trigger_rate = round(sum(1 for s in pool if trig(s)) / len(pool) * 100, 1) if pool else 0.0
+    hits = [s for s in settled if s.get("outcome") == "hit"]
+    target_hit_rate = round(len(hits) / len(settled) * 100, 1) if settled else 0.0
+    hit_days = [s.get("holding_days") for s in hits if s.get("holding_days") is not None]
+    avg_hit_days = round(sum(hit_days) / len(hit_days), 1) if hit_days else 0.0
+    wins = [s.get("pnl", 0.0) for s in settled if (s.get("pnl") or 0) > 0]
+    losses = [s.get("pnl", 0.0) for s in settled if (s.get("pnl") or 0) < 0]
+    avg_pl = round((sum(wins) / len(wins)) / abs(sum(losses) / len(losses)), 2) if wins and losses else 0.0
+    correct = total = 0
+    for s in settled:
+        if s.get("trade_type") not in ("buy", "sell"): continue
+        is_buy = s.get("trade_type") == "buy"
+        if (is_buy and (s.get("settle_price") or 0) >= (s.get("entry_price") or 0)) or \
+           (not is_buy and (s.get("settle_price") or 0) <= (s.get("entry_price") or 0)):
+            correct += 1
+        total += 1
+    direction_acc = round(correct / total * 100, 1) if total else 0.0
+    exp_rows = [s for s in sigs if s.get("expected_trigger_rate") is not None]
+    actual_rate = round(sum(1 for r in exp_rows if trig(r)) / len(exp_rows) * 100, 1) if exp_rows else 0.0
+    avg_exp = sum(r.get("expected_trigger_rate", 0) for r in exp_rows) / len(exp_rows) if exp_rows else 0.0
+    exp_vs_actual = round(actual_rate - avg_exp, 1) if exp_rows else None
+    expected_value = round(sum(s.get("pnl", 0.0) for s in settled) / len(settled), 2) if settled else 0.0
+    pnls = [s.get("pnl", 0.0) for s in settled]
+    max_loss = round(min(pnls), 2) if pnls and min(pnls) < 0 else 0.0
+    return {
+        "trigger_rate_p1": round(sum(1 for s in sigs if s.get("priority") == "P1" and trig(s)) /
+                                 max(sum(1 for s in sigs if s.get("priority") == "P1"), 1) * 100, 1),
+        "trigger_rate_all": trigger_rate,
+        "target_hit_rate": target_hit_rate,
+        "avg_hit_days": avg_hit_days,
+        "avg_profit_loss_ratio": avg_pl,
+        "direction_accuracy": direction_acc,
+        "expected_vs_actual": {"rows": [], "avg_gap": exp_vs_actual},
+        "signal_expected_value": expected_value,
+        "max_loss": max_loss,
+    }
+
+
+def _p0_execution(sigs: list[dict]) -> dict:
+    """P0 执行率：P0 信号中 status ∈ {executed, settled} 的比例 + 明细。"""
+    p0s = [s for s in sigs if s.get("priority") == "P0"]
+    if not p0s:
+        return {"rate": None, "executed": 0, "total": 0, "pending": []}
+    executed = [s for s in p0s if s.get("status") in ("executed", "settled")]
+    pending = [s for s in p0s if s.get("status") not in ("executed", "settled")]
+    rate = round(len(executed) / len(p0s) * 100, 1)
+    return {
+        "rate": rate,
+        "executed": len(executed),
+        "total": len(p0s),
+        "pending": [{"signal_id": s.get("signal_id"), "name": s.get("name"),
+                     "status": s.get("status")} for s in pending],
+    }
+
+
+def _inject_harness_lib():
+    """把 harness automation 目录加入 sys.path（导入 lib.signal_quality）。"""
+    lib_dir = Path(__file__).resolve().parent.parent.parent / "my_doc" / "每日复盘" / "harness" / "automation"
+    if str(lib_dir) not in sys.path:
+        sys.path.insert(0, str(lib_dir))
+
+
+def _cloud_signal_rows(signal_date: str) -> list[dict]:
+    """从云库 signal_tracking 表读取某日信号（signal_date 为 YYYYMMDD → 转 YYYY-MM-DD）。"""
+    try:
+        import cloud_db
+    except ImportError:
+        return []
+    if not cloud_db.enabled():
+        return []
+    iso = f"{signal_date[:4]}-{signal_date[4:6]}-{signal_date[6:8]}"
+    try:
+        rows = cloud_db.select(
+            "signal_tracking",
+            filters=[("signal_date", "eq", iso)],
+            order="signal_id",
+        )
+        return rows
+    except Exception:
+        return []
+
+
+def _report_markdown(signal_date: str) -> str | None:
+    """读 daily_reports 中某日 每日信号 markdown（YYYYMMDD）。"""
+    iso = f"{signal_date[:4]}-{signal_date[4:6]}-{signal_date[6:8]}"
+    report = db.report_get(iso, "每日信号")
+    return report["markdown"] if report else None
+
+
+def _report_types(signal_date: str) -> list[str]:
+    iso = f"{signal_date[:4]}-{signal_date[4:6]}-{signal_date[6:8]}"
+    return db.report_types_for_date(iso)
+
+
+def _daily_signals_from_markdown(target_date: str) -> dict:
+    """过渡期兜底：markdown 解析路径（原 get_daily_signals 逻辑）。"""
+    if target_date:
+        report = db.report_get(target_date, "每日信号")
         if report is None:
             # BUG-FIX(2026-09-07)：原引用不存在的 date_str → NameError 500，应为 404
-            raise HTTPException(404, f"未找到 {date} 的每日信号")
+            raise HTTPException(404, f"未找到 {target_date} 的每日信号")
     else:
-        # 取最近一个有每日信号的日期
-        dates = db.report_get_dates()
-        found = None
-        for d in dates:
-            if "每日信号" in db.report_types_for_date(d):
-                found = d
-                break
+        dates_map = db.report_dates_with_types()
+        found = next((d for d, types in dates_map.items() if "每日信号" in types), None)
         if found is None:
             raise HTTPException(404, "暂无每日信号数据")
         report = db.report_get(found, "每日信号")
 
     return {
         "date": report["report_date"],
+        "signals": [],
         "markdown": report["markdown"],
         "parsed": _parse_signals(report["markdown"]),
         "types": db.report_types_for_date(report["report_date"]),
+        "source": "markdown",
     }
 
 
@@ -535,10 +770,9 @@ def get_report(report_date: str, report_type: str):
 
 @router.post("/reports/import")
 def post_reports_import():
-    """手动重扫 reports/ 目录（幂等 upsert）：先上传本地新报告到云，再云优先导入。"""
-    upload = scheduler.upload_reports_to_cloud()
+    """手动重扫 reports/ 目录（幂等 upsert）。"""
     result = scheduler.import_reports_from_disk()
-    return {"ok": True, **result, "uploaded": upload.get("uploaded", 0)}
+    return {"ok": True, **result}
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -630,6 +864,12 @@ def get_scheduler_tasks():
         "next_trading_day": (scheduler.next_trading_day(today) or today).isoformat(),
         "auto_enabled": scheduler.engine.auto_enabled(),
         "online": online,
+        "sched_running": scheduler.engine._thread is not None
+        and scheduler.engine._thread.is_alive(),
+        "last_tick": scheduler.engine.last_tick,
+        "last_error": scheduler.engine.last_error,
+        "tick_seconds": scheduler.TICK_SECONDS,
+        "current_task": scheduler.current_task(),
         "tasks": tasks,
         "daily_tasks": daily_tasks,
         "other_tasks": other_tasks,

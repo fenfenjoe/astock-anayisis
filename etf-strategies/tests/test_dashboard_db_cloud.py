@@ -16,8 +16,10 @@ from dashboard import db as ddb
 pytestmark = [
     pytest.mark.realcloud,
     pytest.mark.skipif(
-        not (os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_KEY")),
-        reason="未配置 SUPABASE_URL / SUPABASE_SERVICE_KEY，跳过云端 dashboard 集成测试",
+        not (os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_KEY"))
+        or os.environ.get("DASHBOARD_DB_BACKEND", "").lower() == "file",
+        reason="未配置 SUPABASE 凭据，或 conftest 已强制 DASHBOARD_DB_BACKEND=file（普通测试隔离），"
+               "跳过云端 dashboard 集成测试（用 `-m realcloud` + 后端=cloud 显式运行）",
     ),
 ]
 
@@ -71,6 +73,11 @@ def test_cloud_meta_and_seed(cloud):
     pref = ddb.meta_get_prefix("cloudtest-")
     assert pref.get("cloudtest-key") == "v2"
 
+    # 2026-09-08：批量读全部 meta（持仓页优化）
+    allm = ddb.meta_get_all()
+    assert allm.get("cloudtest-key") == "v2"
+    assert allm.get("cloudtest-a") == "x"
+
     assert ddb.is_seeded() is False or ddb.is_seeded() is True  # 不抛异常
     ddb.mark_seeded()
     assert ddb.is_seeded() is True
@@ -112,6 +119,11 @@ def test_cloud_reports(cloud):
     assert "morning" in types
     lst = ddb.report_list(report_type="morning")
     assert any(x["report_date"] == "2099-01-01" for x in lst)
+
+    # 2026-09-08：批量 日期→类型（每日信号页 N+1 优化）
+    dm = ddb.report_dates_with_types()
+    assert "morning" in dm.get("2099-01-01", [])
+    assert isinstance(dm, dict) and len(dm) >= 1
 
 
 def test_cloud_scheduler(cloud):

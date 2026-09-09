@@ -24,6 +24,10 @@ _STATE_LABELS = {
     "tea": "☕ 喝奶茶",
     "drawing": "🎨 画画",
     "social": "📱 刷朋友圈",
+    "weibo_browse": "📱 逛微博",
+    "xhs_browse": "📕 逛小红书",
+    "zhihu_browse": "🔵 逛知乎",
+    "xueqiu_browse": "🟡 逛雪球",
     "cleaning": "🧹 收拾房间",
     "takeout": "🍜 叫外卖",
     "nap": "💤 补觉",
@@ -33,7 +37,6 @@ _STATE_LABELS = {
     "writing": "📝 写文章",
     "thinking": "💡 思考",
 }
-
 
 def heartbeat(db=None):
     db = db or agent_db
@@ -138,10 +141,16 @@ def tick(now=None, db=None, llm_fn=None):
         except Exception as e:
             result["custom"] = {"error": str(e)}
 
-    # 2.5 遗留清理：阅读/写文章是动作事件，绝不该跨 tick 还"未结束"（老模型遗留行在此关闭）
+    # 2.5 遗留清理：阅读/写文章/逛社交是动作事件，绝不该跨 tick 还"未结束"（老模型遗留行在此关闭）
     _stale = db.activity_open()
-    if _stale and _stale["kind"] in ("reading", "writing"):
-        db.activity_close_open(now.strftime("%Y-%m-%d %H:%M:%S"))
+    if _stale:
+        _kind = _stale["kind"]
+        _browse_kind = (
+            config.browse_state_to_platform(_kind) is not None  # 状态 id 形（weibo_browse）
+            or _kind.startswith("browse_")                      # 活动 kind 形（browse_weibo）
+        )
+        if _kind in {"reading", "writing"} or _browse_kind:
+            db.activity_close_open(now.strftime("%Y-%m-%d %H:%M:%S"))
 
     # 3. 状态机
     state_current = db.meta_get("xiaoman_current_state")
@@ -190,6 +199,27 @@ def tick(now=None, db=None, llm_fn=None):
             cur = result.get("read") or {}
             result["read"] = {**cur, "after_read_state_error": str(e)}
 
+    # 逛社交执行（动作事件模型，方案 v1.10 §9.4）：
+    # 状态为"逛微博/逛小红书/逛知乎/逛雪球"且本段尚未逛过 → Playwright 采集 + 复用阅读管道浏览
+    # + 动态直接发；完成后回到常驻随机状态。一次只逛一个平台（当前状态的平台，同轮串行）。
+    browse_done_seq = db.meta_get("xiaoman_browse_done_seq") or ""
+    _browse_platform = config.browse_state_to_platform(state_cur)
+    if _browse_platform and seq and seq != browse_done_seq:
+        platform_id = _browse_platform
+        try:
+            result["browse"] = behavior.execute_browse(
+                platform_id, db=db, llm_fn=llm_fn
+            )
+            db.meta_set("xiaoman_browse_done_seq", seq)
+        except Exception as e:
+            result["browse"] = {"error": str(e)}
+        try:
+            behavior.switch_state(behavior.pick_random_state(db=db, now=now),
+                                  now=now, db=db, source="auto")
+        except Exception as e:
+            cur = result.get("browse") or {}
+            result["browse"] = {**cur, "after_browse_state_error": str(e)}
+
     # 4. 每日发文（写文章是动作事件：期间状态临时显示"正在写文章"，结束后恢复原常驻状态）
     _prev_state = db.meta_get("xiaoman_current_state")
     _prev_until = db.meta_get("xiaoman_state_until")
@@ -212,11 +242,6 @@ def tick(now=None, db=None, llm_fn=None):
         if _prev_until:
             db.meta_set("xiaoman_state_until", _prev_until)
 
-    # 5. cloud backup
-    try:
-        result["backup"] = agent_db.cloud_backup()
-    except Exception as e:
-        result["backup"] = {"error": str(e)}
     return result
 
 

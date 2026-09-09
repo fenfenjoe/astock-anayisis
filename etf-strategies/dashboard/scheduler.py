@@ -17,22 +17,14 @@ bug_inspect_logic / strategy_scan_weekly，2026-08-27 用户决策全部随 Web 
 
 import hashlib
 import json
-
-# 云端存储（严格零本地报告源；未配置云置 None → 降级本地扫描）
-try:
-    from cloud_store import (
-        get_text as _cs_get,
-        put_text as _cs_put,
-        list_objects as _cs_list,
-    )
-except ImportError:
-    _cs_get = _cs_put = _cs_list = None
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import threading
+import time as _time
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
@@ -96,6 +88,30 @@ DSH_SEM_ACQUIRE_TIMEOUT = 30  # 信号量获取超时（s），超时放弃本�
 # dsh 执行并发信号量（全局，跨任务共享）
 _dsh_sem = threading.BoundedSemaphore(DSH_MAX_CONCURRENT)
 
+_ONLINE_CACHE_SECONDS = 5  # agent_online() 短缓存：_tick 每 20s 调一次，5s 够用了
+
+
+class _SimpleCache:
+    __slots__ = ("ts", "val")
+
+    def __init__(self):
+        self.ts = 0.0
+        self.val = False
+
+
+_online_cache = _SimpleCache()
+
+
+# load_schedule() 文件缓存（mtime 守卫，120s 保底刷新）
+@dataclass
+class _ScheduleCache:
+    mtime: float = 0.0
+    ts: float = 0.0
+    val: list = field(default_factory=list)
+
+
+_schedule_cache = _ScheduleCache()
+
 # 调度窗口容差（分钟）：None = 用 task_schedule.json 的 window_minutes（默认 7）。
 # 迁移自 Windows 计划任务后，如遇夜间休眠恢复错过窗口，可设
 # DASHBOARD_SCHEDULER_WINDOW_MINUTES=30 放宽（与 dsh_trigger ±3h 语义对齐）。
@@ -146,35 +162,43 @@ def next_trading_day(from_date: date | None = None) -> date | None:
 
 
 def agent_online() -> bool:
-    """小满是否上线（上班状态）— 读 agent db 的 xiaoman_online。
-
-    BUG-FIX(2026-09-07)：dashboard db（portfolio_meta）里从未写入过
-    xiaoman_online 这个 key —— api_agent /online、/offline 只写 agent db
-    （agent_metadata）。旧代码在 _tick 闸门从 dashboard db 读该 key，永远
-    返回 None → auto 调度被永久短路（早盘/盘中/复盘不自动执行，仅手动可跑）。
-    改为与 UI（api_daily /scheduler/tasks 的 online 字段）同源：读 agent db。
-    读不到/异常按"未上线"处理（fail-safe：宁可不自动调度，不误触发）。
-    """
+    """小满是否上线 — 读 agent db（带短缓存，防 _tick 高频轮询反复建连接）。"""
+    now = _time.time()
+    if _online_cache.ts and now - _online_cache.ts < _ONLINE_CACHE_SECONDS:
+        return _online_cache.val
     try:
         from agent import db as agent_db
 
-        return agent_db.meta_get("xiaoman_online") == "1"
+        val = agent_db.meta_get("xiaoman_online") == "1"
     except Exception:
-        return False
-
-
-# ───────────────────────────────────────────────────────────────────
-# 调度定义与窗口语义（照抄 task_scheduler.py）
-# ───────────────────────────────────────────────────────────────────
+        val = False
+    _online_cache.ts = now
+    _online_cache.val = val
+    return val
 
 
 def load_schedule() -> list[dict]:
-    """读 task_schedule.json 的 tasks 列表；失败返回空列表。"""
+    """读 task_schedule.json 的 tasks 列表（内存缓存，mtime 守卫）。"""
+    now = _time.time()
+    try:
+        mtime = SCHEDULE_PATH.stat().st_mtime
+    except OSError:
+        return []
+    if (
+        _schedule_cache.mtime == mtime
+        and _schedule_cache.ts
+        and now - _schedule_cache.ts < 120
+    ):
+        return _schedule_cache.val
     try:
         with open(SCHEDULE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f).get("tasks", [])
+            data = json.load(f).get("tasks", [])
     except (OSError, json.JSONDecodeError):
-        return []
+        data = []
+    _schedule_cache.mtime = mtime
+    _schedule_cache.ts = now
+    _schedule_cache.val = data
+    return data
 
 
 def in_scope(task: dict) -> bool:
@@ -227,8 +251,8 @@ def task_due_now(task: dict, now: datetime) -> bool:
 def import_reports_from_disk(force: bool = False) -> dict:
     """导入复盘报告到 daily_reports。
 
-    严格零本地：云模式从 TOS（daily-reports/ 前缀）拉取导入，指纹守卫；
-    云未配置时降级扫描本地 reports/（mtime 守卫）。
+    2026-09-07 移除 TOS：云权威库已迁移 Supabase，报告以本地 reports/ 为准
+    （mtime 守卫，幂等 upsert）。
     """
     from dashboard import db
 
@@ -242,49 +266,7 @@ def import_reports_from_disk(force: bool = False) -> dict:
     scanned = 0
     changed: dict[str, float | str] = {}
 
-    # ── 云源（TOS daily-reports/，内容指纹守卫）──
-    cloud_keys = []
-    if _cs_list is not None:
-        try:
-            cloud_keys = _cs_list("daily-reports/")
-        except Exception:
-            cloud_keys = []
-    if cloud_keys:
-        for key in sorted(cloud_keys):
-            rel = key[len("daily-reports/") :]
-            parts = rel.split("/")
-            if len(parts) != 2 or not parts[1].endswith(".md"):
-                continue
-            date_part, fname = parts
-            report_type = _report_type_from_name(fname)
-            if not report_type:
-                continue
-            if date_part == "weekly":
-                # 周报在 weekly/ 目录，日期从文件名解析（与本地分支 _weekly_date 一致）
-                date_part = _weekly_date(fname) or ""
-                if not date_part:
-                    continue
-            elif not (date_part.isdigit() and len(date_part) == 8):
-                continue
-            try:
-                text = _cs_get(key)
-            except Exception:
-                continue
-            if text is None:
-                continue
-            scanned += 1
-            fp = f"tos:{hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]}"
-            if not force and state.get(f"tos:{rel}") == fp:
-                continue
-            db.report_upsert(date_part, report_type, text, source_file=f"tos:{key}")
-            imported += 1
-            changed[f"tos:{rel}"] = fp
-        if changed:
-            state.update(changed)
-            db.meta_set("reports_scan_state", json.dumps(state, ensure_ascii=False))
-        return {"imported": imported, "scanned": scanned, "source": "tos"}
-
-    # ── 降级：本地扫描（mtime 守卫）──
+    # ── 本地扫描（mtime 守卫）──
     if not REPORTS_DIR.exists():
         return {"imported": 0, "error": "reports 目录不存在"}
 
@@ -345,74 +327,6 @@ def _report_type_from_name(filename: str, fallback: str = "") -> str | None:
         if known in stem:
             return known
     return fallback or None
-
-
-def upload_reports_to_cloud(force: bool = False) -> dict:
-    """本地 reports/ 新报告 → TOS daily-reports/（mtime 守卫，幂等）。
-
-    设计（2026-08-31 用户确认）：导入器保持"只扫云"不变（云上有对象就不扫
-    本地）。因此定时任务产出后必须先把本地新报告上传云，云优先导入才能拉到。
-    上传与 cloud_sync.py 的 SYNC_MAP 映射一致（reports/ → daily-reports/）：
-      reports/20260831/早盘报告.md → daily-reports/20260831/早盘报告.md
-      reports/weekly/xxx.md        → daily-reports/weekly/xxx.md
-    影子文件（-填充版/-影子 后缀）不上传（与 _report_type_from_name 一致）。
-    云未配置（_cs_put is None）→ 返回 0 上传不报错（降级，引擎重扫照常）。
-    """
-    from dashboard import db
-
-    if _cs_put is None:
-        return {"uploaded": 0, "scanned": 0, "source": "local_only"}
-
-    raw_state = db.meta_get("reports_upload_state")
-    try:
-        state = json.loads(raw_state) if raw_state else {}
-    except (json.JSONDecodeError, TypeError):
-        state = {}
-
-    if not REPORTS_DIR.exists():
-        return {"uploaded": 0, "scanned": 0, "error": "reports 目录不存在"}
-
-    uploaded = 0
-    scanned = 0
-    changed: dict[str, float] = {}
-
-    def _upload_file(f: Path, key: str) -> None:
-        """单文件：mtime 未变则跳过；变化/新增则上传并记录。失败不阻断整体。"""
-        nonlocal uploaded, scanned
-        scanned += 1
-        try:
-            mtime = f.stat().st_mtime
-        except OSError:
-            return
-        if not force and state.get(key) == mtime:
-            return
-        try:
-            _cs_put(key, f.read_text(encoding="utf-8"))
-        except Exception:
-            return  # 单文件失败跳过（下次重扫再试）
-        uploaded += 1
-        changed[key] = mtime
-
-    for sub in sorted(REPORTS_DIR.iterdir()):
-        if not sub.is_dir():
-            continue
-        if sub.name == "weekly":
-            for f in sorted(sub.glob("*.md")):
-                if _report_type_from_name(f.name) is None:
-                    continue
-                _upload_file(f, f"daily-reports/weekly/{f.name}")
-            continue
-        if not sub.name.isdigit() or len(sub.name) != 8:
-            continue
-        for f in sorted(sub.glob("*.md")):
-            if _report_type_from_name(f.name) is None:
-                continue
-            _upload_file(f, f"daily-reports/{sub.name}/{f.name}")
-
-    if changed:
-        state.update(changed)
-        db.meta_set("reports_upload_state", json.dumps(state, ensure_ascii=False))
-    return {"uploaded": uploaded, "scanned": scanned, "source": "tos"}
 
 
 def _weekly_date(filename: str) -> str | None:
@@ -751,6 +665,33 @@ def _read_run_output(out_path: str | None, err_path: str | None) -> str:
     return out
 
 
+def _extract_tokens_from_output(output: str) -> int | None:
+    """从 dsh/claude 输出中提取真实 token 用量。
+
+    dsh 输出的常见格式（在尾部几行）：
+      Tokens: 12345 input / 678 output
+      Token usage: 12345
+      total_tokens: 12345
+    """
+    import re
+
+    if not output:
+        return None
+    patterns = [
+        r"(?:tokens|token)\s*[：:=]\s*(\d[\d,]*)\s*(?:input|total|token|\b)",
+        r"total_tokens[：:=\s]+(\d[\d,]*)",
+        r"(\d[\d,]*)\s*(?:tokens|token)",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, output[-4096:], re.IGNORECASE)
+        if m:
+            try:
+                return int(m.group(1).replace(",", ""))
+            except ValueError:
+                continue
+    return None
+
+
 def _run_prompt(task: dict, run_id: int) -> None:
     """后台线程执行体：按当前引擎（dsh/claude）跑 prompt，结束后导入产物。
 
@@ -760,21 +701,20 @@ def _run_prompt(task: dict, run_id: int) -> None:
     from dashboard import db
 
     started = datetime.now()
-    # 2026-08-31 修复：TOS 模式下复盘/早盘/盘中/周报 prompt 读取本地 每日调仓.md/持仓.md，
-    # 运行前先把云端权威副本拉回本地，避免复盘读到过期持仓/调仓（dashboard 录入只写云端）。
+    task_label = f"📊 {task.get('description') or task.get('name') or task['task_id']}"
+    activity_id = None
     try:
-        from dashboard import portfolio
+        from agent import db as agent_db
 
-        pulled = portfolio.pull_holdings_to_local()
-        if pulled.get("pulled"):
-            print(
-                f"[scheduler] run#{run_id} cloud→local holdings synced: {pulled['pulled']}"
-            )
-    except Exception as e:
-        print(
-            f"[scheduler] run#{run_id} cloud→local holdings sync failed: {e}",
-            file=sys.stderr,
+        agent_db.activity_close_open(started.strftime("%Y-%m-%d %H:%M:%S"), tokens=None)
+        activity_id = agent_db.activity_start(
+            "scheduled",
+            task_label,
+            started.strftime("%Y-%m-%d %H:%M:%S"),
+            source="auto",
         )
+    except Exception:
+        pass
 
     engine = resolve_engine()
     if engine == "dsh":
@@ -782,10 +722,16 @@ def _run_prompt(task: dict, run_id: int) -> None:
     else:
         status, out = _exec_claude(task, started)
 
-    # 无论结果如何，收走 agent 可能已写出的报告/持仓
+    ended = datetime.now()
     try:
-        # 先上传本地新报告到云（保持"导入只扫云"设计），再云优先导入
-        upload_reports_to_cloud()
+        from agent import db as agent_db
+
+        tokens = _extract_tokens_from_output(out) if status == "success" else None
+        agent_db.activity_close_open(ended.strftime("%Y-%m-%d %H:%M:%S"), tokens=tokens)
+    except Exception:
+        pass
+
+    try:
         import_reports_from_disk()
         import_holdings_from_md()
     except Exception as e:
@@ -982,10 +928,11 @@ class SchedulerEngine:
         self._stop.set()
 
     def status(self) -> dict:
+        auto = self.auto_enabled()
         return {
             "running": self._thread is not None and self._thread.is_alive(),
-            "auto_enabled": self.auto_enabled(),
-            "attendance": "on" if self.auto_enabled() else "leave",
+            "auto_enabled": auto,
+            "attendance": "on" if auto else "leave",
             "engine": resolve_engine(),
             "last_tick": self.last_tick,
             "last_error": self.last_error,
@@ -1011,14 +958,12 @@ class SchedulerEngine:
 
         # 报告增量重扫：无论 auto 开关都执行（兼容过渡期外部/Windows 任务
         # 写入 reports/ 的新报告；mtime 守卫，无变化时零 IO 零写库）。
-        # 先上传本地新报告到云（保持"导入只扫云"设计），再云优先导入。
         if (
             self._last_report_scan_dt is None
             or (now - self._last_report_scan_dt).total_seconds()
             >= REPORT_RESCAN_SECONDS
         ):
             try:
-                upload_reports_to_cloud()
                 r = import_reports_from_disk()
                 self.last_report_scan = now.strftime("%Y-%m-%d %H:%M:%S")
                 self._last_report_scan_dt = now

@@ -1,4 +1,5 @@
 """agent/core/persona.py — 人设卡加载 / system prompt 注入 / 合规与观点自洽校验。"""
+
 import sys
 from pathlib import Path
 
@@ -24,19 +25,8 @@ def test_load_persona_missing_raises():
 
 def test_build_system_prompt_contains_boundaries():
     prompt = persona.build_system_prompt("xiaoman")
-    assert "不构成投资建议" in prompt
     assert "事实" in prompt and "观点" in prompt
     assert "数据" in prompt  # 数据纪律（来源标注）
-
-
-def test_append_disclaimer():
-    out = persona.append_disclaimer("今天聊聊白酒。")
-    assert "不构成投资建议" in out
-
-
-def test_append_disclaimer_idempotent():
-    text = "聊聊宏观。\n\n以上仅为小满的个人学习笔记与观点，不构成投资建议。"
-    assert persona.append_disclaimer(text).count("不构成投资建议") == 1
 
 
 def test_sanitize_flags_forbidden_verbs():
@@ -65,5 +55,7 @@ def test_check_consistency_returns_history(tmp_path):
 def test_check_conflict_detection():
     hist = [{"topic": "白酒", "opinion": "我看好白酒长期"}]
     assert persona.check_conflict("白酒", "我不看好白酒长期", hist) is True
-    assert persona.check_conflict(
-        "白酒", "白酒估值需要消化，但长期逻辑还在", hist) is False
+    assert (
+        persona.check_conflict("白酒", "白酒估值需要消化，但长期逻辑还在", hist)
+        is False
+    )

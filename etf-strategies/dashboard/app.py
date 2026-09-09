@@ -16,7 +16,7 @@ _PARENT = Path(__file__).resolve().parent.parent
 if str(_PARENT) not in sys.path:
     sys.path.insert(0, str(_PARENT))
 
-# 加载 etf-strategies/.env（DB_MODE 等在 db 模块 import 前生效）
+# 加载 etf-strategies/.env（云后端/凭据 等在 db 模块 import 前生效）
 try:
     from load_env import load_env_file
     load_env_file()
@@ -55,12 +55,11 @@ async def lifespan(app: FastAPI):
     """Startup: restore-from-cloud (optional) → init DB, seed, pre-load modules.
 
     测试免疫（2026-08-31 事故修复）：pytest 环境（PYTEST_CURRENT_TEST 存在）
-    下跳过全部启动副作用——云恢复下载会覆盖本地真实账本，import_* 会用真实
-    文件覆盖真实 DB，upload 会把本地报告推上云。测试进程必须零副作用。
+    下跳过全部启动副作用——import_* 会用真实文件覆盖真实 DB，调度器会真实跑任务。
+    测试进程必须零副作用。
 
-    启动提速（2026-09-02）：重负载的「cloud_sync --download 全量恢复 + 每日复盘
-    导入 + 调度器/通知启动」移入后台 daemon 线程，uvicorn 立即绑定端口即可访问；
-    内存库（cache.db 快照）恢复仍在 init_db() 同步完成，保证 API 读到数据。
+    启动提速（2026-09-02）：重负载的「每日复盘导入 + 调度器/通知启动」移入后台
+    daemon 线程，uvicorn 立即绑定端口即可访问。
     """
     _in_test = os.environ.get("PYTEST_CURRENT_TEST") is not None \
         or os.environ.get("DSH_TEST") == "1"
@@ -75,6 +74,19 @@ async def lifespan(app: FastAPI):
         agent_db.init_db()
     except Exception as e:
         print(f"[app]   WARNING: agent.db init failed: {e}")
+
+    # ── 预热云端 DB 连接池（2026-09-08 性能优化）──
+    #    云后端首请求需建立 TCP+TLS 连接（实测单次冷连接 0.7~15s）；启动时先打一发
+    #    请求让 per-thread requests.Session 建立 keep-alive 连接，重启后第一个页面
+    #    不再被冷连接拖慢。非云/无凭据时静默跳过。
+    if not _in_test:
+        try:
+            import cloud_db as _cd
+            if _cd.enabled():
+                _cd.select("portfolio_meta", columns="key,value", limit=1)
+                print("[app]   cloud DB connection pool warmed")
+        except Exception as e:
+            print(f"[app]   WARNING: cloud DB prewarm failed: {e}")
 
     # ── Seed default admin user if no users exist ──
     if not _in_test and user_count() == 0:
@@ -144,10 +156,8 @@ async def lifespan(app: FastAPI):
         # ── 2. 每日复盘集成：导入历史报告/持仓/交易（可与引擎并行）──
         print("[app] Importing 每日复盘 data (reports/holdings/trades)...")
         try:
-            up = daily_scheduler.upload_reports_to_cloud()
             r = daily_scheduler.import_reports_from_disk()
-            print(f"[app]   reports uploaded: {up.get('uploaded', 0)}, "
-                  f"imported: {r.get('imported', 0)}")
+            print(f"[app]   reports imported: {r.get('imported', 0)}")
         except Exception as e:
             print(f"[app]   WARNING: reports import failed: {e}")
         try:
@@ -849,8 +859,7 @@ async def trigger_backtest():
 async def generate_report(sid: str):
     """Generate one-year backtest HTML report for a strategy.
 
-    严格零本地：生成后上传 TOS（report/），本地文件删除（云模式）；
-    云未配置时保留本地（降级）。
+    报告写入本地 report/（2026-09-07 移除 TOS 云上传）。
     """
     sid = sid.upper()
     try:
@@ -861,15 +870,6 @@ async def generate_report(sid: str):
         sname, strat = STRAT_MAP[sid]
         filepath = gen_report(sid, strat)
         stored = "local"
-        try:
-            from cloud_store import put_object
-            name = os.path.basename(str(filepath))
-            with open(filepath, "rb") as f:
-                put_object(f"report/{name}", f.read())
-            Path(filepath).unlink(missing_ok=True)   # 云模式：本地不落盘
-            stored = "tos"
-        except Exception:
-            pass  # 云未配置/失败 → 保留本地文件
         return JSONResponse({
             "status": "done", "strategy_id": sid,
             "strategy_name": sname, "report_path": str(filepath),
@@ -885,16 +885,9 @@ async def generate_report(sid: str):
 
 @protected.get("/report/file/{name}")
 async def get_report_file(name: str):
-    """读取回测报告 HTML（云模式从 TOS 读；降级读本地 report/）。"""
+    """读取回测报告 HTML（本地 report/）。"""
     if "/" in name or ".." in name or not name.endswith(".html"):
         raise HTTPException(400, "非法文件名")
-    try:
-        from cloud_store import get_object
-        data = get_object(f"report/{name}")
-        if data is not None:
-            return Response(content=data, media_type="text/html; charset=utf-8")
-    except Exception:
-        pass
     local = Path(__file__).resolve().parent.parent / "report" / name
     if local.exists():
         return Response(content=local.read_bytes(),

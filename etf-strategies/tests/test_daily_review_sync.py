@@ -22,17 +22,12 @@ from dashboard import scheduler_cli as cli  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
-def _no_cloud(monkeypatch):
-    """禁用云端存储（_cs_* 置 None → portfolio/scheduler 走本地降级模式）。
-
-    本机 cloud.json 已配置真实 AK 时，否则测试会误连 TOS（读写云端而非 tmp 文件）。
+def _no_cloud():
+    """2026-09-07 已移除 TOS：portfolio/scheduler 不再有 _cs_* 云存储，
+    本地文件读写即为唯一路径，无需（也无法）monkeypatch 云对象。此 fixture 保留
+    为 no-op 占位，便于未来若引入新云层时在此统一隔离。
     """
-    monkeypatch.setattr(portfolio, "_cs_get", None)
-    monkeypatch.setattr(portfolio, "_cs_put", None)
-    monkeypatch.setattr(portfolio, "_cs_del", None)
-    monkeypatch.setattr(portfolio, "_cs_list", None)
-    monkeypatch.setattr(scheduler, "_cs_get", None)
-    monkeypatch.setattr(scheduler, "_cs_list", None)
+    yield
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -520,139 +515,3 @@ def _in_memory_db(monkeypatch):
 
     monkeypatch.setattr(db_mod, "get_conn", _get_conn)
     return mem_conn
-
-
-# ═══════════════════════════════════════════════════════════════
-# S5: 报告上传云（upload_reports_to_cloud）
-# ═══════════════════════════════════════════════════════════════
-# 设计（用户确认 2026-08-31）：保持"导入只扫云"不变——定时任务产出后
-# 先把本地新报告上传 TOS daily-reports/，云优先导入自然能拉到。
-# 上传用 mtime 守卫幂等；云未配置 → 0 上传不报错（降级）。
-
-class _FakeCloud:
-    """内存 fake TOS：put/get/list 同一份 dict。"""
-
-    def __init__(self):
-        self.objects: dict[str, str] = {}
-
-    def put(self, key: str, text: str):
-        self.objects[key] = text
-
-    def get(self, key: str) -> str | None:
-        return self.objects.get(key)
-
-    def list(self, prefix: str) -> list[str]:
-        return sorted(k for k in self.objects if k.startswith(prefix))
-
-
-class TestReportUploadToCloud:
-    def _setup(self, tmp_path, monkeypatch):
-        from dashboard import db as db_mod
-        in_mem = _in_memory_db(monkeypatch)
-        db_mod.init_db()
-        monkeypatch.setattr(scheduler, "REPORTS_DIR", tmp_path)
-        cloud = _FakeCloud()
-        monkeypatch.setattr(scheduler, "_cs_put", cloud.put)
-        monkeypatch.setattr(scheduler, "_cs_get", cloud.get)
-        monkeypatch.setattr(scheduler, "_cs_list", cloud.list)
-        return tmp_path, cloud, in_mem
-
-    def test_upload_new_reports(self, tmp_path, monkeypatch):
-        _, cloud, in_mem = self._setup(tmp_path, monkeypatch)
-        d = tmp_path / "20260831"
-        d.mkdir()
-        (d / "早盘报告.md").write_text("# 早盘", encoding="utf-8")
-        (d / "每日信号.md").write_text("# 信号", encoding="utf-8")
-
-        r = scheduler.upload_reports_to_cloud()
-        assert r["uploaded"] == 2
-        assert "daily-reports/20260831/早盘报告.md" in cloud.objects
-        assert "daily-reports/20260831/每日信号.md" in cloud.objects
-        in_mem.close()
-
-    def test_upload_skips_unchanged(self, tmp_path, monkeypatch):
-        _, cloud, in_mem = self._setup(tmp_path, monkeypatch)
-        d = tmp_path / "20260831"
-        d.mkdir()
-        (d / "早盘报告.md").write_text("# 早盘", encoding="utf-8")
-
-        assert scheduler.upload_reports_to_cloud()["uploaded"] == 1
-        assert scheduler.upload_reports_to_cloud()["uploaded"] == 0  # mtime 未变
-        in_mem.close()
-
-    def test_upload_changed_file_reupload(self, tmp_path, monkeypatch):
-        _, cloud, in_mem = self._setup(tmp_path, monkeypatch)
-        d = tmp_path / "20260831"
-        d.mkdir()
-        f = d / "每日信号.md"
-        f.write_text("# v1", encoding="utf-8")
-        scheduler.upload_reports_to_cloud()
-        assert cloud.objects["daily-reports/20260831/每日信号.md"] == "# v1"
-
-        f.write_text("# v2（盘中更新）", encoding="utf-8")
-        assert scheduler.upload_reports_to_cloud()["uploaded"] == 1
-        assert cloud.objects["daily-reports/20260831/每日信号.md"] == "# v2（盘中更新）"
-        in_mem.close()
-
-    def test_upload_weekly(self, tmp_path, monkeypatch):
-        _, cloud, in_mem = self._setup(tmp_path, monkeypatch)
-        w = tmp_path / "weekly"
-        w.mkdir()
-        (w / "2026-08-27_周报.md").write_text("# 周报", encoding="utf-8")
-        r = scheduler.upload_reports_to_cloud()
-        assert r["uploaded"] == 1
-        assert "daily-reports/weekly/2026-08-27_周报.md" in cloud.objects
-        in_mem.close()
-
-    def test_upload_no_cloud_degrades(self, tmp_path, monkeypatch):
-        from dashboard import db as db_mod
-        in_mem = _in_memory_db(monkeypatch)
-        db_mod.init_db()
-        monkeypatch.setattr(scheduler, "REPORTS_DIR", tmp_path)
-        monkeypatch.setattr(scheduler, "_cs_put", None)
-        d = tmp_path / "20260831"
-        d.mkdir()
-        (d / "早盘报告.md").write_text("# 早盘", encoding="utf-8")
-        r = scheduler.upload_reports_to_cloud()
-        assert r["uploaded"] == 0
-        in_mem.close()
-
-    def test_upload_then_import_picks_from_cloud(self, tmp_path, monkeypatch):
-        """组合验证：本地新报告上传云后，云优先导入能入库（保持只扫云设计）。"""
-        from dashboard import db as db_mod
-        _, cloud, in_mem = self._setup(tmp_path, monkeypatch)
-        d = tmp_path / "20260831"
-        d.mkdir()
-        (d / "早盘报告.md").write_text("# 早盘报告内容", encoding="utf-8")
-        (d / "每日信号.md").write_text("# 每日信号内容", encoding="utf-8")
-
-        # 云上已有历史对象（触发云优先分支）
-        cloud.put("daily-reports/20260828/早盘报告.md", "# 旧")
-
-        scheduler.upload_reports_to_cloud()
-        result = scheduler.import_reports_from_disk()
-        assert result["source"] == "tos"
-        rep = db_mod.report_get("20260831", "早盘报告")
-        assert rep is not None
-        assert "# 早盘报告内容" in rep["markdown"]
-        in_mem.close()
-
-    def test_upload_weekly_then_import_from_cloud(self, tmp_path, monkeypatch):
-        """周报上传云（daily-reports/weekly/）后，云优先导入也能入库（云分支支持 weekly）。"""
-        from dashboard import db as db_mod
-        _, cloud, in_mem = self._setup(tmp_path, monkeypatch)
-        w = tmp_path / "weekly"
-        w.mkdir()
-        (w / "2026-08-27_周报.md").write_text("# 周报内容", encoding="utf-8")
-
-        # 云上已有历史对象（触发云优先分支）
-        cloud.put("daily-reports/20260828/早盘报告.md", "# 旧")
-
-        scheduler.upload_reports_to_cloud()
-        result = scheduler.import_reports_from_disk()
-        assert result["source"] == "tos"
-        rep = db_mod.report_get("20260827", "周报")
-        assert rep is not None
-        assert "# 周报内容" in rep["markdown"]
-        assert rep["source_file"] == "tos:daily-reports/weekly/2026-08-27_周报.md"
-        in_mem.close()

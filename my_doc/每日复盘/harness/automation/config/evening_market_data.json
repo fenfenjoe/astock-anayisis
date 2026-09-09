@@ -1,0 +1,28 @@
+{
+ "sentiment": {
+  "date": "20260907",
+  "zt_count": 93,
+  "zb_count": 19,
+  "dt_count": 2,
+  "break_rate": 17.0,
+  "max_height": 6,
+  "ladder": {
+   "1": 80,
+   "2": 9,
+   "3": 3,
+   "6": 1
+  }
+ },
+ "yzt": {
+  "count": 39,
+  "jinji": 13,
+  "rate": 33.3
+ },
+ "hot_count": 95,
+ "northbound": {
+  "n_points": 262,
+  "last_time": "15:00",
+  "last_hgt": -9.28,
+  "last_sgt": 379.75
+ }
+}

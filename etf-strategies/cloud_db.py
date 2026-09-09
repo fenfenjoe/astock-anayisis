@@ -27,10 +27,32 @@ _KEY = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
 _ENABLED = bool(_URL and _KEY and requests is not None)
 
 # 与 SQLite 版一致的 JSON 文本字段（行级自动解析）
-_JSON_FIELDS = ("sources", "topics")
+_JSON_FIELDS = ("sources", "topics", "todo_data")
 
 _lock = threading.RLock()
 _warned = set()
+
+# ── HTTP 连接池（2026-09-08 性能优化）───────────────────────────
+# 根因：原 `requests.request(...)` 每次调用都新建 TCP 连接 + TLS 握手，
+# 公网 HTTPS 到火山 Supabase 单次冷连接实测 ~0.8s（首连甚至 15s），
+# 每个页面 4~11 次串行请求 → 页载数秒。改用 per-thread requests.Session
+# （keep-alive 连接复用）后，复用请求实测 ~0.09s（~9x 提速）。
+# requests.Session 非线程安全 → 用 threading.local 每线程一个池，天然并发安全。
+_tls = threading.local()
+
+
+def _session() -> "requests.Session":
+    s = getattr(_tls, "session", None)
+    if s is None:
+        s = requests.Session()
+        # 调大连接池与重试（网络抖动容忍），保持 keep-alive 复用
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=8, pool_maxsize=16, max_retries=1,
+        )
+        s.mount("https://", adapter)
+        s.mount("http://", adapter)
+        _tls.session = s
+    return s
 
 
 def _warn_once(tag: str, msg: str) -> None:
@@ -67,7 +89,8 @@ def _req(method: str, path: str, *, params: dict | None = None,
             url += "?" + qs
 
     try:
-        resp = requests.request(
+        # 走 per-thread 连接池（keep-alive），避免每次新建 TCP+TLS 连接
+        resp = _session().request(
             method, url, headers=headers, json=json_body,
             params=None, timeout=timeout,
         )
@@ -195,10 +218,14 @@ def insert_many(table: str, rows: list[dict], *, chunk: int = 200) -> int:
 
 
 def update(table: str, row: dict, *, filters=None, columns="*") -> list:
-    """UPDATE：filters 形如 [(col, op, val)]。返回受影响行。"""
+    """UPDATE：filters 形如 [(col, op, val)]。返回受影响行。
+
+    注意：row 中值为 None 的字段也会提交（PostgREST 把 null 解释为 SQL NULL，
+    用于显式清空某列，如 read_at）；调用方如不想动某列就不要放进 row。
+    """
     if not _ENABLED:
         return []
-    body = {k: v for k, v in row.items() if v is not None}
+    body = {k: v for k, v in row.items()}
     for f in _JSON_FIELDS:
         if f in body and isinstance(body[f], (list, dict)):
             body[f] = json.dumps(body[f], ensure_ascii=False)

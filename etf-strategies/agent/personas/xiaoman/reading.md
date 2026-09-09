@@ -55,6 +55,6 @@
     {"title": "原文标题", "url": "原文链接", "viewpoint": "核心观点（30字内）", "emotion": "excited|angry|curious|calm|skeptical", "memory": "你的个人感受（50字内）"}
   ],
   "posts": [
-    {"content": "动态全文（含不构成投资建议声明）"}
+    {"content": "动态全文"}
   ]
 }

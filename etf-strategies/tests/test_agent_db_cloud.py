@@ -16,8 +16,10 @@ from agent import db as agent_db
 pytestmark = [
     pytest.mark.realcloud,
     pytest.mark.skipif(
-        not (os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_KEY")),
-        reason="未配置 SUPABASE_URL / SUPABASE_SERVICE_KEY，跳过云端 agent 集成测试",
+        not (os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_SERVICE_KEY"))
+        or os.environ.get("AGENT_DB_BACKEND", "").lower() == "file",
+        reason="未配置 SUPABASE 凭据，或 conftest 已强制 AGENT_DB_BACKEND=file（普通测试隔离），"
+               "跳过云端 agent 集成测试（用 `-m realcloud` + 后端=cloud 显式运行）",
     ),
 ]
 
@@ -150,3 +152,39 @@ def test_cloud_metadata_and_sources(cloud):
     assert agent_db.source_get(s)["enabled"] is False
     # enabled_only=False 时可见
     assert any(x["id"] == s for x in agent_db.source_list(enabled_only=False))
+
+
+# ── 2026-09-08 修复回归测试 ──────────────────────────────────────
+
+
+def test_cloud_activity_count_works(cloud):
+    """做过的事加载失败回归：activity_count 云分支曾用 select= 关键字（TypeError）。
+
+    现在必须正常返回 int，且带日期过滤时不抛异常。
+    """
+    n = agent_db.activity_count()
+    assert isinstance(n, int) and n >= 0
+    n2 = agent_db.activity_count(date_filter="2026-09-08")
+    assert isinstance(n2, int) and n2 >= 0
+    n3 = agent_db.activity_count(date_filter="1999-01-01")  # 无数据日期
+    assert n3 == 0
+
+
+def test_cloud_article_create_sets_published_at(cloud):
+    """我的动态时间缺失回归：云分支 article_create 必须显式写入 published_at。"""
+    aid = agent_db.article_create(
+        "cloudtest-时间戳", "摘要", "正文", topics=["动态"], kind="post"
+    )
+    a = agent_db.article_get(aid)
+    assert a["published_at"], "云分支 article_create 必须写入 published_at"
+    assert a["published_at"][:10] == _now()[:10]  # 至少日期一致
+
+
+def test_cloud_meta_get_many(cloud):
+    """agent_status 批量读回归：meta_get_many 一次取多个 key。"""
+    agent_db.meta_set("cloudtest-m1", "a")
+    agent_db.meta_set("cloudtest-m2", "b")
+    got = agent_db.meta_get_many(["cloudtest-m1", "cloudtest-m2", "cloudtest-缺失"])
+    assert got["cloudtest-m1"] == "a"
+    assert got["cloudtest-m2"] == "b"
+    assert got["cloudtest-缺失"] is None

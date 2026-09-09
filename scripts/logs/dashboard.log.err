@@ -1,10 +1,234 @@
-INFO:     Started server process [2924]
+INFO:     Started server process [34300]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8010 (Press CTRL+C to quit)
-[scheduler] start: 回收 1 条中断遗留的 running 记录 → failed
-[scheduler] run#834 harness_bug_auto_fix → success (284.1s, engine=dsh)
-[scheduler] run#835 intraday_1430 → success (560.2s, engine=dsh)
-[scheduler] run#836 bug_auto_fix → success (84.8s, engine=dsh)
-[scheduler] run#837 pending_remind → success (64.2s, engine=dsh)
-[scheduler] run#838 harness_bug_auto_fix → success (109.3s, engine=dsh)
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 670, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 2734, in app
+    await route.handle(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 1780, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 2789, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 1800, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 1279, in handle
+    await app(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 158, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 144, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 706, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\miniconda3\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\miniconda3\Lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\miniconda3\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\ideaworkspace\astock-anayisis\etf-strategies\dashboard\api_agent.py", line 464, in notice_reply
+    res = notices_mod.dispatch_todo_reply(n, reply)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\ideaworkspace\astock-anayisis\etf-strategies\agent\core\notices.py", line 105, in dispatch_todo_reply
+    return handler(notice, reply, db)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\ideaworkspace\astock-anayisis\etf-strategies\agent\core\notices.py", line 117, in _handle_cookie_provide
+    platform_id = data.get("platform_id")
+                  ^^^^^^^^
+AttributeError: 'str' object has no attribute 'get'
+[scheduler] run#914 bug_auto_fix → success (132.7s, engine=dsh)
+[scheduler] run#917 harness_bug_auto_fix → failed (31.5s, engine=dsh)
+[scheduler] run#918 harness_bug_auto_fix → failed (31.3s, engine=dsh)
+[scheduler] run#915 bug_inspect_data → success (872.2s, engine=dsh)
+[scheduler] run#916 bug_inspect_code → success (699.2s, engine=dsh)
+[scheduler] run#919 experience_health → success (867.4s, engine=dsh)
+[scheduler] run#920 req_implement → success (602.8s, engine=dsh)
+[scheduler] run#921 bug_auto_fix → success (352.1s, engine=dsh)
+[scheduler] run#922 pending_remind → success (332.6s, engine=dsh)
+[scheduler] run#923 harness_bug_auto_fix → success (169.9s, engine=dsh)
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 670, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 2734, in app
+    await route.handle(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 1780, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 2789, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 1800, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 1279, in handle
+    await app(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 158, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 144, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 706, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\miniconda3\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\miniconda3\Lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\miniconda3\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\ideaworkspace\astock-anayisis\etf-strategies\dashboard\api_agent.py", line 464, in notice_reply
+    n = agent_db.notice_get(nid)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\ideaworkspace\astock-anayisis\etf-strategies\agent\core\notices.py", line 105, in dispatch_todo_reply
+    return handler(notice, reply, db)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\ideaworkspace\astock-anayisis\etf-strategies\agent\core\notices.py", line 117, in _handle_cookie_provide
+    platform_id = data.get("platform_id")
+                  ^^^^^^^^
+AttributeError: 'str' object has no attribute 'get'
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\uvicorn\protocols\http\httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\uvicorn\middleware\proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\routing.py", line 670, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 2734, in app
+    await route.handle(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 1780, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 2789, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 1800, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 1279, in handle
+    await app(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 158, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 144, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 706, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\fastapi\routing.py", line 354, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Users\dongyz8\AppData\Roaming\Python\Python311\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\miniconda3\Lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\miniconda3\Lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "D:\miniconda3\Lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\ideaworkspace\astock-anayisis\etf-strategies\dashboard\api_agent.py", line 464, in notice_reply
+    n = agent_db.notice_get(nid)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\ideaworkspace\astock-anayisis\etf-strategies\agent\core\notices.py", line 105, in dispatch_todo_reply
+    return handler(notice, reply, db)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\ideaworkspace\astock-anayisis\etf-strategies\agent\core\notices.py", line 117, in _handle_cookie_provide
+    platform_id = data.get("platform_id")
+                  ^^^^^^^^
+AttributeError: 'str' object has no attribute 'get'
+[scheduler] run#924 intraday_1330 → success (603.8s, engine=dsh)

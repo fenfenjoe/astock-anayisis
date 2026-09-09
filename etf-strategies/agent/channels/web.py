@@ -5,6 +5,7 @@
 dsh 化后：人设由 `dsh --profile xiaoman` 注入（system-prompt persona），
 聊天只需组装「历史 + 用户消息」作为 task 文本。
 """
+
 from agent import db as agent_db
 from agent.core import memory
 
@@ -21,8 +22,7 @@ def chat_task(session_id, user_input, db=None):
     lines = []
     if knowledge:
         lines.append("今天学到的素材（可引用，注意区分事实与观点）：")
-        lines.extend(
-            f"- [{k['source']}] {k['title']} ({k['url']})" for k in knowledge)
+        lines.extend(f"- [{k['source']}] {k['title']} ({k['url']})" for k in knowledge)
         lines.append("")
     for m in history:
         speaker = "用户" if m["role"] == "user" else "小满"
@@ -43,20 +43,30 @@ def chat_task(session_id, user_input, db=None):
         "6. 先接住对方再说事：对方吐槽/分享，先共情一句再回应，别急着分析复盘；"
         "对方只回「嗯/哦/哈哈」就放慢节奏，别轰炸、别追问；闲聊就别硬塞知识点。\n"
         "7. 聊天里永远不出现「不构成投资建议」之类声明句；但也不给确定性买卖指令"
-        "（真被问到就说「我会盯着/值得研究」）；数据给不准就直说「我这边没查到实时数」。"
+        "（真被问到就说「我会盯着/值得研究」）；数据给不准就直说「我这边没查到实时数」。\n"
+        "8. 经验引用（仅财经/行情话题）：如果用户聊的是 A股/ETF/板块/行情/复盘/策略等"
+        "财经话题，且你记住了相关量化经验（复盘发现/经验教训/操作纪律），可以用自然的口吻"
+        "带出来（如「我最近复盘发现…」「上次这样吃过亏…」），但：\n"
+        "   - 只在相关且真记得时引用，别硬套、别掉书袋；\n"
+        "   - 用朋友口吻带经验，不是播报研究报告；\n"
+        "   - 闲聊（天气/日常/情感等非财经话题）不要检索或引用经验；\n"
+        "   - 若聊天中用户纠正了你的某个经验/认知，记住这修正（可沉淀为新的经验）。"
     )
     return "\n".join(lines), knowledge
 
 
 def article_card(article):
     """文章/动态呈现数据（列表项用）。"""
+    kind = article.get("kind") or "article"
+    content = (article.get("content") or "")[:500]
     return {
         "id": article["id"],
         "title": article["title"],
         "summary": article.get("summary") or "",
+        "content": content if kind == "post" else "",
         "published_at": article.get("published_at"),
         "topics": article.get("topics") or [],
         "sources": article.get("sources") or [],
         "status": article.get("status"),
-        "kind": article.get("kind") or "article",
+        "kind": kind,
     }

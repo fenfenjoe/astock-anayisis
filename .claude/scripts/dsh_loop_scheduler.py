@@ -13,6 +13,7 @@
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -58,6 +59,19 @@ def build_directive(result: dict) -> str:
     return f"执行 {prompt_file} 的全部内容。{suffix}"
 
 
+def build_env() -> dict:
+    """构造 headless 子进程环境：继承父环境并注入 OpenViking 记忆 peer 作用域。
+
+    定时任务 agent 通过 @openviking/dsh-memory-plugin 使用记忆；所有任务会话
+    统一归入 xiaoman peer（与 dashboard 小满融合），且 recall 隔离在本 peer
+    （OPENVIKING_RECALL_PEER_SCOPE=actor），避免互相污染。
+    """
+    env = dict(os.environ)
+    env["OPENVIKING_PEER_ID"] = "xiaoman"
+    env["OPENVIKING_RECALL_PEER_SCOPE"] = "actor"
+    return env
+
+
 def dispatch(result: dict) -> str:
     """以独立 headless 进程派发任务，返回日志文件路径。
 
@@ -86,6 +100,7 @@ def dispatch(result: dict) -> str:
             stdin=subprocess.DEVNULL,
             stdout=out,
             stderr=subprocess.STDOUT,
+            env=build_env(),
             creationflags=flags,
             startupinfo=startupinfo,
         )

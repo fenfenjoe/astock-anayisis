@@ -194,6 +194,20 @@ print(f'整体: {probe[\"overall\"]} ({probe[\"ok_count\"]}/{probe[\"total_sourc
 
 ---
 
+## 第三步半：经验注入（分析前，新增 — 记忆体系 Phase 2）
+
+> **目的**：把 OpenViking 里沉淀的量化经验注入本次复盘，作为评估/沉淀的对照基准（叠加插件自动 recall）。
+> **工具**：`viking_search`（或 `search_experience`），按当日相关领域检索；本会话 peer=xiaoman。
+
+1. 检索领域（选 2-3 个）：**市场环境**（市场判断/超跌反弹/跨市场映射）、**持仓板块**（逐持仓检索）、
+   **做T**（今日做过T的标的）、**信号设计**（今日信号质量校准）、**数据纪律**（涉北向/代码映射）。
+2. 命中后如需要 `viking_read` 展开关键条目；把 top-N（≤5 条）要点记入内部对照基准。
+3. 检索为空 → 不强制引用（正常复盘）。
+4. **对照用途**：第九步反思协议以本步检索结果为"既有经验"基准——本次发现的规律若与检索结果重复则不
+   新建（合并/更新），若冲突则走 T2 贝叶斯校准。
+
+---
+
 ## 第四步：盘面回顾
 
 ### 4.1 市场整体表现
@@ -290,7 +304,7 @@ def board_scan(fs: str = "m:90+t:2", pz: int = 200) -> list:
 
 > **根因类型分类**：板块行情 / 政策催化 / 外部冲击（美债/财报/地缘）/ 资金行为 / 市场情绪 / 技术面突破 / 商品价格联动 / 题材退潮 / 未知
 
-### 5.4 经验沉淀
+### 5.4 经验沉淀（并入第九步反思协议）
 
 从今日行业/题材异动扫描中提炼可复用的经验：
 
@@ -299,7 +313,8 @@ def board_scan(fs: str = "m:90+t:2", pz: int = 200) -> list:
 3. **操作含义**：如果早盘识别到这些异动，是否有可执行的操作机会？异动板块是否在早盘非持仓扫描或关注列表中？
 4. **框架改进**：当前分析框架是否遗漏了今日异动板块所属的主题/类型？是否需要扩展扫描范围？
 
-将可复用的经验追加记录到 `my_doc/每日复盘/harness/experience/投资经验.md` 的"全市场异动扫描"相关章节（若该章节不存在则新建）。写入规则与第九步一致：无日期标签、合并而非追加、冲突则修正、简洁（3-5句）、可操作。
+**本步只做提炼与判断，不直接写文件**——沉淀动作统一在**第九步反思协议**执行（领域=板块扫描/
+全市场异动；触发 T1/T2 才写入 OpenViking + 镜像本地 `投资经验.md`）。
 
 ---
 
@@ -432,33 +447,33 @@ def board_scan(fs: str = "m:90+t:2", pz: int = 200) -> list:
 - 持有天数：触发日到结算日之间的交易日数
 - 紧急度校准：✅正确 / ⚠️偏高（过早结算）/ ⚠️偏低（追踪过长）
 
-### 8.6 更新信号追踪数据库（v2.0 新增核心步骤）
+### 8.6 更新信号追踪数据库（v2.0 新增核心步骤；Phase 3 云库化）
 
-> 本节将当日信号数据持久化到 `signal_tracking.json`，并结算到期的持仓信号。
+> 本节将当日信号数据持久化到**云库 `signal_tracking` 表**（方案 v1.10 §9.2，signal_id 主键，
+> 全量 25 字段），并结算到期的持仓信号。**本地 `signal_tracking.json` 过渡期仅作只读缓存
+> （云库不可达时兜底），一次同步后废弃。**
 
-#### 7.6.1 读取当日信号并写入追踪库
+#### 7.6.1 读取当日信号并写入追踪库（云库优先 + 本地镜像）
 
 > ✅ **2026-08-07 修复（BUG-XXX）**：旧版嵌入式脚本是骨架（解析逻辑全是注释），导致 `signal_tracking.json` 的 `signals` 从未被写入。已改为调用 `lib/signal_tracking.py` 的 `parse_signal_markdown` + `merge_new_signals`。解析逻辑已下沉到 lib 并有单测覆盖（test_signal_tracking_parse.py）。
+> ✅ **2026-09-08 云库化（Phase 3）**：解析出的记录改走 `lib/signal_tracking_cloud.upsert_signals`
+> （写云库 + 镜像本地 JSON），本地 JSON 不再是权威源。
 
-用Python脚本扫描当日信号文件，将触发/执行的信号录入追踪库：
+用Python脚本扫描当日信号文件，将触发/执行的信号录入追踪库（云库）：
 
 ```bash
 
 python -c "
 import sys, json
-sys.path.insert(0, 'my_doc/每日复盘/harness/automation/lib')
-from signal_tracking import parse_signal_markdown, merge_new_signals, update_aggregation
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.signal_tracking import parse_signal_markdown, merge_new_signals, update_aggregation
+from lib.signal_tracking_cloud import upsert_signals, cloud_load_signals
 from datetime import date
 
 today = date.today().strftime('%Y%m%d')  # ⚠️ 必须用 yyyyMMdd，不能用 isoformat()！
-tracking_file = 'my_doc/每日复盘/harness/automation/config/signal_tracking.json'
 signal_file = f'my_doc/每日复盘/reports/{today}/每日信号.md'
 
-# 1. 加载追踪数据库
-with open(tracking_file, 'r', encoding='utf-8') as f:
-    db = json.load(f)
-
-# 2. 解析当日信号文件 → 提取已触发/已执行/部分执行的信号
+# 1. 解析当日信号文件 → 提取已触发/已执行/部分执行的信号
 with open(signal_file, 'r', encoding='utf-8') as f:
     md_text = f.read()
 
@@ -467,22 +482,21 @@ print(f'解析出可追踪信号: {len(new_records)} 条')
 for r in new_records:
     print(f\"  {r['signal_id']} {r['name']}({r['ticker']}) {r['trade_type']} 触发价={r['entry_price']}\")
 
-# 3. 合并入追踪库（按 signal_id 去重）+ 更新聚合
-merge_new_signals(db, new_records)
-db = update_aggregation(db)
+# 2. 写入云库（on_conflict=signal_id 幂等）+ 镜像本地 JSON（过渡期）
+ok = upsert_signals(new_records, mirror_local=True)
+print(f'云库写入: {ok} 条')
 
-# 4. 写回
-with open(tracking_file, 'w', encoding='utf-8') as f:
-    json.dump(db, f, indent=2, ensure_ascii=False)
-
-print(f'信号追踪库已更新: {len(db[\"signals\"])} 条记录 (新增 {len(new_records)} 条)')
-print(f'聚合: 追踪={db[\"aggregates\"][\"total_signals_tracked\"]} 已结算={db[\"aggregates\"][\"total_resolved\"]} P&L={db[\"aggregates\"][\"total_pnl_amount\"]}')
+# 3. 读回云库全量并重算聚合（写回本地 JSON 缓存）
+cloud_signals = cloud_load_signals()
+print(f'云库信号总数: {len(cloud_signals)} 条')
 "
 ```
 
 **执行结果判定**：
 - `解析出可追踪信号: N 条`，N=当日实际触发的信号数（未触发=0 属正常，只有触发了才追踪收益）
+- `云库写入: N 条`，N=成功写入条数（幂等，重跑为 0~N）
 - 若信号文件不存在 → 跳过本步，写日志"信号文件缺失，跳过信号追踪"
+- **云库不可达降级**：`upsert_signals` 自动回退只写本地 JSON（mirror_local 仍生效），不中断流程
 
 **操作规则**：
 - 新触发信号（已触发/已执行/部分执行）= 创建记录，status="triggered"
@@ -502,21 +516,25 @@ print(f'聚合: 追踪={db[\"aggregates\"][\"total_signals_tracked\"]} 已结算
   - 对状态="已升级"的原观察信号 → 在原记录中追加 `upgraded_to` 字段，存储新操作信号ID
   - 这建立双向链接，便于跨日追踪升级信号的质量（升级后信号盈利=升级决策正确）
 
-#### 7.6.2 结算到期信号
+#### 7.6.2 结算到期信号（云库优先 + 本地镜像）
 
-扫描追踪库中 status ∈ {open, triggered, executed, partial_executed} 的信号，检查是否满足结算条件并结算：
+扫描追踪库（云库）中 status ∈ {open, triggered, executed, partial_executed} 的信号，检查是否满足结算条件并结算：
 
 ```bash
 python -c "
 import sys, json
-sys.path.insert(0, 'my_doc/每日复盘/harness/automation/lib')
-from signal_tracking import settle_due_signals, update_aggregation
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.signal_tracking import settle_due_signals, update_aggregation
+from lib.signal_tracking_cloud import cloud_load_signals, cloud_upsert_signals, local_load_signals
 from datetime import date
 
-tracking_file = 'my_doc/每日复盘/harness/automation/config/signal_tracking.json'
-
-with open(tracking_file, 'r', encoding='utf-8') as f:
-    db = json.load(f)
+# 0. 读信号库（云库优先，云库不可用 → 本地 JSON 兜底）
+signals = cloud_load_signals()
+from_cloud = True
+if not signals:
+    signals = local_load_signals()
+    from_cloud = False
+db = {'signals': signals}
 
 # 1. 构建每日收盘价表 {ticker: {date: close}}（v2.0 目标价结算需要窗口内每日收盘价）
 #    ⚠️ 需要你先用 a-stock-data（腾讯日K）拉取每个待结算信号 触发日→窗口末（触发日+2交易日）的每日收盘价。
@@ -530,16 +548,15 @@ price_history = {
 before = sum(1 for s in db['signals'] if s.get('status') == 'settled')
 db = settle_due_signals(db, price_history, date.today().isoformat())
 after = sum(1 for s in db['signals'] if s.get('status') == 'settled')
+newly_settled = after - before
 
-# 3. 更新聚合统计
-db = update_aggregation(db)
+# 3. 结算结果写回云库（只 upsert 本次新结算 + 变更的信号）
+if newly_settled > 0:
+    changed = [s for s in db['signals'] if s.get('status') == 'settled' and s.get('settle_date') == date.today().isoformat()]
+    cloud_upsert_signals(changed)
+    print(f'云库结算写回: {len(changed)} 条')
 
-with open(tracking_file, 'w', encoding='utf-8') as f:
-    json.dump(db, f, indent=2, ensure_ascii=False)
-
-print(f'到期结算完成: 本次新结算 {after - before} 条, 累计已结算 {after} 条')
-print(f'追踪={db[\"aggregates\"][\"total_signals_tracked\"]} 已结算={db[\"aggregates\"][\"total_resolved\"]} '
-      f'P&L={db[\"aggregates\"][\"total_pnl_amount\"]} 胜率={db[\"aggregates\"][\"win_rate\"]}')
+print(f'到期结算完成: 本次新结算 {newly_settled} 条, 累计已结算 {after} 条 (来源: {\"云库\" if from_cloud else \"本地缓存\"})')
 "
 ```
 
@@ -549,10 +566,11 @@ print(f'追踪={db[\"aggregates\"][\"total_signals_tracked\"]} 已结算={db[\"a
 - 触发止损价 → **stopped**（按止损价结算）
 - 未达目标 → **miss**（按窗口末日收盘结算）
 - P&L：买入=(结算价-入场价)×份额；卖出=(卖出价-成本)×份额，避免损失=(卖出价-结算价)×份额
+- **云库不可达降级**：`cloud_upsert_signals` 返回 0 不抛错，本次结算结果仅镜像到本地 JSON（下次任务补写云库）
 
 #### 7.6.3 填充信号收益追踪章节
 
-根据 `signal_tracking.json` 的最新数据，在复盘报告中输出：
+根据**云库 `signal_tracking`（不可达时本地 JSON 缓存）**的最新数据，在复盘报告中输出：
 
 ```markdown
 ## 信号收益追踪
@@ -568,11 +586,16 @@ print(f'追踪={db[\"aggregates\"][\"total_signals_tracked\"]} 已结算={db[\"a
 |------|:---:|
 | 累计追踪信号数 | {N} |
 | 已结算 | {N}（持仓中: {N}） |
-| 累计已实现P&L | {±XXX.XX}元 |
+| 累计已执行P&L（实盘） | {±XXX.XX}元 |
+| 未执行模拟P&L（假设口径） | {±XXX.XX}元 |
 | 累计避免损失 | {XXX.XX}元 |
-| 总胜率 | {XX}%（{W}/{L}） |
+| 总胜率（仅已执行样本） | {XX}%（{W}/{L}） |
 | 高紧急度: 胜率 / 平均持有天数 | {XX}% / {X.X}天 |
 | 低紧急度: 胜率 / 平均持有天数 | {XX}% / {X.X}天 |
+
+> **口径说明（REQ-006）**：`累计已执行P&L（实盘）` 仅统计 status_history 含 executed/partial_executed 的真实执行样本；
+> `未执行模拟P&L（假设口径）` 为 status=triggered 且从未执行的信号按 T+3 假设结算的结果，只用于信号质量评估
+> （方向/目标达成率），**不计入账户级累计 P&L / 胜率 / 期望价值**。
 
 #### 7.6.4 信号质量仪表盘（v2.0 核心）
 
@@ -599,14 +622,22 @@ print(json.dumps(generate_quality_dashboard(db['signals'], settled), ensure_asci
 |------|------|------|----------|:---:|
 | 触达 | P1 触发率（累计）| {trigger_rate_p1}% | ≥40% | ✅/⚠️ |
 | 触达 | 全量触发率 | {trigger_rate_all}% | — | — |
-| 结果 | 目标达成率 | {target_hit_rate}% | ≥50% | ✅/⚠️ |
-| 结果 | 平均达标天数 | {avg_hit_days} 天 | 1-2 天 | ✅/⚠️ |
-| 结果 | 平均盈亏比 | {avg_profit_loss_ratio} | ≥1.5 | ✅/⚠️ |
-| 结果 | 单笔最大亏损 | {max_loss} 元 | 风控线内 | ✅/⚠️ |
-| 方向 | 方向准确率 | {direction_accuracy}% | ≥60% | ✅/⚠️ |
+| 结果 | 目标达成率（已执行）| {target_hit_rate}% | ≥50% | ✅/⚠️ |
+| 结果 | 平均达标天数（已执行）| {avg_hit_days} 天 | 1-2 天 | ✅/⚠️ |
+| 结果 | 平均盈亏比（已执行）| {avg_profit_loss_ratio} | ≥1.5 | ✅/⚠️ |
+| 结果 | 单笔最大亏损（已执行）| {max_loss} 元 | 风控线内 | ✅/⚠️ |
+| 方向 | 方向准确率（已执行）| {direction_accuracy}% | ≥60% | ✅/⚠️ |
 | 校准 | 预期vs实际偏差 | {avg_gap}pp | ±20pp 内 | ✅/⚠️ |
-| 价值 | 信号期望价值 | {signal_expected_value} 元/单 | 为正 | ✅/⚠️ |
+| 价值 | 信号期望价值（已执行）| {signal_expected_value} 元/单 | 为正 | ✅/⚠️ |
+| 模拟 | 未执行模拟样本数 | {simulated_count} | — | — |
+| 模拟 | 未执行模拟P&L（假设口径）| {simulated_pnl_amount} 元 | — | — |
+| 模拟 | 未执行模拟期望价值 | {simulated_expected_value} 元/单 | — | — |
 ```
+
+> **口径说明（REQ-006）**：账户级指标（目标达成率/盈亏比/最大亏损/方向准确率/期望价值）仅统计**已执行样本**
+> （status_history 含 executed/partial_executed）；`模拟` 三行为 status=triggered 且从未执行的信号按假设结算的
+> **模拟口径**，只用于方向/目标达成率评估，**不并入账户级 P&L / 胜率 / 期望价值**。
+> 若 `simulated_count` 较大（≥2 或 ≥已执行 30%），复盘需回答：为何 P0/P1 信号未执行？执行缺失是否系统性？
 
 > 目标/止损 来自信号表的 `目标/止损` 列（12 列信号表第 9 列），目标达成率评估依据；目标价设定是否过高看"目标达成率"与"平均达标天数"。
 
@@ -614,7 +645,7 @@ print(json.dumps(generate_quality_dashboard(db['signals'], settled), ensure_asci
 - P1 周触发率 <40% → ⚠️ 预警：触发条件过严或信号类型需调整（给出具体建议）
 - 目标达成率 <50% → 检查目标价设定是否过高（对照实际 T+3 走势）
 - 预期触发率系统性高估（avg_gap < −20）→ 生成者偏乐观，建议下调预期
-- 将校准结论沉淀到 `harness/experience/投资经验.md` 信号设计章节
+- **校准结论（领域=信号设计）统一在第九步反思协议沉淀**（触发 T1/T2 才写 OpenViking + 镜像 `投资经验.md` 信号设计章节），此处只作判断
 
 ### 关注列表升级专项统计（v2.0）
 
@@ -776,38 +807,49 @@ else:
 
 ---
 
-## 第九步：经验沉淀
+## 第九步：经验反思协议（记忆体系 Phase 2 — 事件驱动 + 贝叶斯更新）
 
-从今日复盘提取可复用的经验，按以下规则写入 `harness/experience/`：
+> **2026-09-08 改造**：原"写入 `harness/experience/`"升级为**反思协议**——经验统一沉淀到
+> **OpenViking**（本会话 peer=xiaoman），按事件驱动触发（T1 新规律 / T2 旧经验被证伪），
+> 冲突按**贝叶斯原则**调整置信度。**过渡期**同时镜像更新本地 `harness/experience/*.md`（供
+> 既有消费方读取；远期镜像停更后全部切 OpenViking）。
 
-### 9.1 写入 `投资经验.md`
-提取条件：
-- 新的市场规律/模式发现
-- 分析框架的修正
-- 跨市场映射的新关联
-- 信号设计的新认知
+### 9.0 检索既有经验（融会贯通前置）
 
-写入规则：
-- **无日期标签** — 只写规律本身
-- **合并而非追加** — 如果与已有条目相关，合并到已有条目中
-- **冲突则修正** — 新经验与旧经验矛盾时，重新评估并重写
-- **简洁** — 每条约 3-5 句话
-- **可操作** — 每条必须能直接指导未来交易决策
+先用 `viking_search` 检索与今日复盘相关的既有经验（市场判断/做T/信号设计/板块扫描/数据纪律等
+领域，top-5），作为反思的对照基准——避免重复沉淀、支持"与久经验融会贯通"（新增证据更新旧条目，
+而非另起炉灶）。
 
-### 9.2 写入 `短线机会经验.md`
-提取条件：
-- 新的 T 交易技术/模式
-- 跷跷板/跨市场套利的新触发条件
-- 事件套利的新识别方法
-- 胜率校准数据
+### 9.1 事件驱动判定（铁律：不是每次复盘都沉淀）
 
-写入规则同上。
+| 触发 | 定义 | 动作 |
+|------|------|------|
+| **T1 新规律** | 今日复盘发现可复用新规律（与 9.0 检索无重复） | 新建经验条目 |
+| **T2 证伪/校准** | 今日事实与既有经验冲突 / 为新规律提供新证据 | 更新旧条目（证据链+置信度） |
+| 两者皆无 | — | **跳过，不写**（禁止为了"完成任务"而沉淀） |
 
-### 9.3 写入 `报告审阅经验.md`
-提取条件：
-- 今日复盘中发现的新错误模式
-- 需要加入质量检查清单的新项目
-- 数据验证的新陷阱
+### 9.2 沉淀内容（各来源统一并入反思协议）
+
+今日复盘以下来源的发现**一起进入本步**（不分散在各自步骤写文件）：
+- **全市场异动扫描**（5.4 原"经验沉淀"→ 并入本步，标注领域=板块扫描/全市场异动）
+- **信号执行复盘 / 信号收益追踪**（第八步 + 信号收益追踪 → 校准结论并入，标注领域=信号设计）
+- **逐仓复盘 / 做T校准**（第六步 → 领域=做T/持仓）
+- **早盘预测回顾**（第七步 Generator-Evaluator 结论 → 领域=市场判断/超跌反弹）
+
+### 9.3 写入规则（按 `harness/experience/_schema.md` 模板）
+
+- **T1 新建**：`viking_remember`（category=experiences），内容 = 标题 + Situation（触发场景）+
+  Approach（应对/纪律，3-5 句可操作）+ Reflect（置信度默认**中**、证据链记本次 + 来源/领域/状态元数据）。
+- **T2 更新**：`viking_read` 旧条目 → 追加证据链记录 `{YYYY-MM-DD} 复盘 {事实} {置信度调整}` →
+  **贝叶斯更新置信度**：单次验证 中→高（不一次打满）；单次证伪 中→低（不删除）；低置信度再证伪→
+  `deprecated`；冲突双方都保留各标 `conflict_with`。
+- **镜像导出（过渡期）**：写入 OpenViking 后，同步把新条目/更新追加到对应本地
+  `harness/experience/{投资经验,短线机会经验,报告审阅经验}.md`（按领域归属），保持镜像一致。
+
+### 9.4 失败容错
+
+OpenViking 不可达 → 降级写入本地临时文件 `harness/experience/_pending.md`（下次任务补写），
+不阻塞主流程。
 
 ---
 
@@ -1105,6 +1147,11 @@ ls -la "harness/archive/{today}/"
 > 再按占位符（`{today_date}`/`{tomorrow_date}`）填充生成，每日覆盖。
 
 重新生成（每日覆盖），包含明日早盘分析所需的全部上下文（模板结构见 staging_templates.md 模板一）：
+
+**新增（记忆体系 Phase 2）：经验并入 staging**——生成时用 `viking_search` 检索与**明日**场景
+可能相关的量化经验（市场环境/持仓板块/做T纪律/信号设计领域，top-5），把命中的经验要点作为
+**"纪律参考"小节**写入 staging（供明日早盘"第三步半 经验注入"直接使用；也兼容早盘模板
+`早盘分析-模板.md` 第 205 行的纪律来源——见 Phase 3 改造）。检索为空则省略该小节，不阻塞。
 
 ---
 
