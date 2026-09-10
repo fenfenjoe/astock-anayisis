@@ -174,6 +174,24 @@ CREATE TABLE IF NOT EXISTS agent_notices (
     source      TEXT,                         -- 生成来源（evening_review / agent / manual…）
     created_at  TEXT DEFAULT (datetime('now','localtime'))
 );
+
+-- 工单（BUG/REQ 管理；BUG-037：与 scripts/cloud_schema.sql 云表 DDL 对齐）
+CREATE TABLE IF NOT EXISTS tickets (
+    id          TEXT PRIMARY KEY,
+    kind        TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    description TEXT,
+    severity    TEXT NOT NULL DEFAULT 'p2',
+    status      TEXT NOT NULL DEFAULT 'open',
+    source_task TEXT,
+    assignee    TEXT DEFAULT 'xiaoman',
+    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    result      TEXT,
+    log_entries TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
 """
 
 _JSON_FIELDS = ("sources", "topics", "todo_data")
@@ -693,7 +711,8 @@ def meta_get_many(keys: list[str]) -> dict:
         return {}
     if USE_CLOUD:
         rows = _cd_select(
-            "agent_metadata", columns="key,value",
+            "agent_metadata",
+            columns="key,value",
             # PostgREST in 过滤：key=in.(k1,k2)。key 为内部标识符（无逗号/括号）
             filters=[("key", "in", "(" + ",".join(keys) + ")")],
         )
@@ -1084,7 +1103,9 @@ def title_similar(title, threshold=None, limit=500):
     """
     import difflib
 
-    threshold = threshold if threshold is not None else config.TITLE_SIMILARITY_THRESHOLD
+    threshold = (
+        threshold if threshold is not None else config.TITLE_SIMILARITY_THRESHOLD
+    )
     title = (title or "").strip()
     if not title:
         return []
@@ -1124,7 +1145,9 @@ def notice_create(kind, title, content, todo_type=None, source=None, todo_data=N
                 "title": title,
                 "content": content,
                 "todo_type": todo_type,
-                "todo_data": json.dumps(todo_data, ensure_ascii=False) if todo_data else None,
+                "todo_data": json.dumps(todo_data, ensure_ascii=False)
+                if todo_data
+                else None,
                 "source": source,
             },
         )
@@ -1134,7 +1157,10 @@ def notice_create(kind, title, content, todo_type=None, source=None, todo_data=N
             "INSERT INTO agent_notices(kind, status, title, content, todo_type, todo_data, source) "
             "VALUES (?, 'open', ?, ?, ?, ?, ?)",
             (
-                kind, title, content, todo_type,
+                kind,
+                title,
+                content,
+                todo_type,
                 json.dumps(todo_data, ensure_ascii=False) if todo_data else None,
                 source,
             ),
@@ -1158,13 +1184,15 @@ def notice_list(kind=None, status=None, limit=50, offset=0):
     未处理 = read_at IS NULL 且 status='open'；已处理 = 已阅/已回复/已忽略。
     """
     if USE_CLOUD:
-        rows = _cd_select("agent_notices", columns="*")  # 全量拉取（量小），Python 侧排序
+        rows = _cd_select(
+            "agent_notices", columns="*"
+        )  # 全量拉取（量小），Python 侧排序
         rows = _sort_notices(rows)
         if kind:
             rows = [r for r in rows if r.get("kind") == kind]
         if status:
             rows = [r for r in rows if r.get("status") == status]
-        return rows[offset:offset + limit]
+        return rows[offset : offset + limit]
     sql = "SELECT * FROM agent_notices"
     conds, args = [], []
     if kind:
@@ -1173,8 +1201,10 @@ def notice_list(kind=None, status=None, limit=50, offset=0):
         conds.append("status=?"), args.append(status)
     if conds:
         sql += " WHERE " + " AND ".join(conds)
-    sql += (" ORDER BY CASE WHEN read_at IS NULL AND status='open' THEN 0 ELSE 1 END, "
-            "id DESC LIMIT ? OFFSET ?")
+    sql += (
+        " ORDER BY CASE WHEN read_at IS NULL AND status='open' THEN 0 ELSE 1 END, "
+        "id DESC LIMIT ? OFFSET ?"
+    )
     args += [limit, offset]
     with get_conn() as conn:
         rows = conn.execute(sql, tuple(args)).fetchall()
@@ -1282,15 +1312,25 @@ def notice_reply(notice_id, reply, result=None, success=True):
         if success:
             _cd_update(
                 "agent_notices",
-                {"reply": reply, "reply_at": now, "result": result, "status": "done",
-                 "read_at": now},
+                {
+                    "reply": reply,
+                    "reply_at": now,
+                    "result": result,
+                    "status": "done",
+                    "read_at": now,
+                },
                 filters=[("id", "eq", notice_id)],
             )
         else:
             _cd_update(
                 "agent_notices",
-                {"reply": reply, "reply_at": now, "result": result, "status": "open",
-                 "read_at": None},
+                {
+                    "reply": reply,
+                    "reply_at": now,
+                    "result": result,
+                    "status": "open",
+                    "read_at": None,
+                },
                 filters=[("id", "eq", notice_id)],
             )
         return
@@ -1322,3 +1362,99 @@ def notice_set_status(notice_id, status):
         conn.execute(
             "UPDATE agent_notices SET status=? WHERE id=?", (status, notice_id)
         )
+
+
+def ticket_upsert(ticket: dict):
+    """写入工单（云端 upsert，主键为 id）。"""
+    if USE_CLOUD:
+        _cd_upsert("tickets", ticket, conflict="id")
+        return
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO tickets
+                (id, kind, title, description, severity, status,
+                 source_task, assignee, created_at, updated_at, result, log_entries)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """,
+            (
+                ticket["id"],
+                ticket["kind"],
+                ticket["title"],
+                ticket.get("description", ""),
+                ticket.get("severity", "p2"),
+                ticket.get("status", "open"),
+                ticket.get("source_task", ""),
+                ticket.get("assignee", "xiaoman"),
+                ticket.get("created_at", ""),
+                ticket.get("updated_at", ""),
+                ticket.get("result", ""),
+                ticket.get("log_entries", "[]"),
+            ),
+        )
+        conn.commit()
+
+
+_TICKET_COLS = "id,kind,title,description,severity,status,source_task,assignee,created_at,updated_at,result,log_entries"
+
+
+def ticket_list(limit: int = 50, offset: int = 0, **filters) -> list[dict]:
+    if USE_CLOUD:
+        f = []
+        for k, v in filters.items():
+            if v is not None and v != "":
+                f.append((k, "eq", v))
+        return _cd_select(
+            "tickets",
+            columns=_TICKET_COLS,
+            filters=f if f else None,
+            order="created_at.desc",
+            limit=limit,
+            offset=offset,
+        )
+    conds = []
+    params = []
+    for k, v in filters.items():
+        if v is not None and v != "":
+            conds.append(f"{k}=?")
+            params.append(v)
+    where = " AND ".join(conds)
+    sql = f"SELECT {_TICKET_COLS} FROM tickets"
+    if where:
+        sql += f" WHERE {where}"
+    sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+    with get_conn() as conn:
+        return [_row_dict(row) for row in conn.execute(sql, params).fetchall()]
+
+
+def ticket_count(**filters) -> int:
+    if USE_CLOUD:
+        f = []
+        for k, v in filters.items():
+            if v is not None and v != "":
+                f.append((k, "eq", v))
+        r = _cd_select("tickets", columns="id", filters=f if f else None)
+        return len(r) if r else 0
+    conds = []
+    params = []
+    for k, v in filters.items():
+        if v is not None and v != "":
+            conds.append(f"{k}=?")
+            params.append(v)
+    where = " AND ".join(conds)
+    sql = "SELECT COUNT(*) FROM tickets"
+    if where:
+        sql += f" WHERE {where}"
+    with get_conn() as conn:
+        return conn.execute(sql, params).fetchone()[0]
+
+
+def ticket_get(ticket_id: str) -> dict | None:
+    if USE_CLOUD:
+        return _cd_select_one("tickets", filters=[("id", "eq", ticket_id)])
+    with get_conn() as conn:
+        row = conn.execute(
+            f"SELECT {_TICKET_COLS} FROM tickets WHERE id=?", (ticket_id,)
+        ).fetchone()
+    return _row_dict(row) if row else None

@@ -4,7 +4,7 @@
 - notices.create_cookie_todo：无 Cookie 生成待办、有 Cookie/已有 open 待办去重
 - notices.create_review_done_notice：复盘完成提示
 - notices.dispatch_todo_reply：cookie_provide 回调（落库 + 重探测）、未知类型
-- API：/api/agent/notices 列表/未读数/标记已读/回复/dismiss
+- API：/api/agent/notices 列表/未读数/标记已读/回复/dismiss（直测 agent.api 进程内实现）
 
 无网络：探测 mock；db 用 tmp_path 本地。
 """
@@ -184,15 +184,13 @@ class TestReplyDispatch:
 
 @pytest.fixture()
 def client(monkeypatch):
+    """BUG-035：/api/agent/notices* 直测 Agent 进程内实现（Dashboard 已改为反向代理）。"""
     from fastapi.testclient import TestClient
 
-    from dashboard import app as app_mod
+    from agent import api as agent_api
 
-    app_mod.app.dependency_overrides[app_mod.get_current_user] = lambda: {
-        "id": 1, "username": "admin",
-    }
-    yield TestClient(app_mod.app)
-    app_mod.app.dependency_overrides.clear()
+    monkeypatch.setattr(agent_api, "API_KEY", "")  # 测试内关闭 X-Api-Key 校验
+    yield TestClient(agent_api.app)
 
 
 class TestNoticesAPI:

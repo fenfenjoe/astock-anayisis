@@ -1,6 +1,10 @@
-"""dashboard/api_agent.py — 小满 Web API（SSE 聊天 / 会话 / 文章 / 状态）。
+"""agent/api.py — 小满 Web API 进程内实现（SSE 聊天 / 会话 / 文章 / 状态 / 提示）。
 
-无网络：LLM 用 fake 流式生成器；agent.db 重定向到 tmp；认证用 dependency_overrides。
+BUG-035：dashboard/api_agent.py 已重构为反向代理（转发到 Agent 进程），
+原进程内实现整体迁至 agent/api.py —— 本文件改为直测新实现；
+Dashboard 代理层另有 TestDashboardProxyContract 锁定转发与降级契约。
+
+无网络：LLM 用 fake 流式生成器；agent.db 重定向到 tmp；API Key 校验在测试内关闭。
 """
 import json
 import sys
@@ -10,30 +14,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pytest
 
+from agent import api as agent_api
 from agent import db as agent_db
-from dashboard import api_agent as api_mod
-from dashboard import app as app_mod
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     agent_db.init_db(tmp_path / "agent.db")
-
-    async def _fake_user(request=None):
-        return {"username": "tester", "role": "admin", "display_name": "tester"}
-
-    app_mod.app.dependency_overrides[app_mod.get_current_user] = _fake_user
+    monkeypatch.setattr(agent_api, "API_KEY", "")  # 测试内关闭 X-Api-Key 校验
 
     def _fake_run_task(task, profile=None, cwd=None, timeout=None, run=None):
         return "success", "你好，我是小满。"
 
-    monkeypatch.setattr(api_mod.dsh_runner, "run_task", _fake_run_task)
+    monkeypatch.setattr(agent_api.dsh_runner, "run_task", _fake_run_task)
 
     # 不 with TestClient：不触发 lifespan（避免连真实 cache.db / 启动调度器）
-    yield TestClient(app_mod.app)
+    yield TestClient(agent_api.app)
 
-    app_mod.app.dependency_overrides.clear()
     agent_db.init_db(None)
 
 
@@ -52,12 +50,11 @@ def test_status_endpoint(client):
 
 
 def test_mood_demo():
-    from dashboard import api_agent as api_mod
-    assert api_mod._mood("leave", None, True)["label"] == "请假中"
-    assert api_mod._mood("on", None, True)["label"] == "摸鱼中"
-    mobj = api_mod._mood("on", {"name": "早盘分析", "started_at": "09:07"}, True)
+    assert agent_api._mood("leave", None, True)["label"] == "请假中"
+    assert agent_api._mood("on", None, True)["label"] == "摸鱼中"
+    mobj = agent_api._mood("on", {"name": "早盘分析", "started_at": "09:07"}, True)
     assert "正在做" in mobj["label"]
-    assert api_mod._mood("on", None, False)["label"] == "未上线"
+    assert agent_api._mood("on", None, False)["label"] == "未上线"
 
 
 def test_profile_social_platforms(client):
@@ -93,17 +90,16 @@ def test_profile_social_platforms(client):
 
 def test_state_derivation():
     """桌宠状态机四态推导：offline 优先 → leave → working → slack。"""
-    from dashboard import api_agent as api_mod
     # 未上线 / 进程未运行 → offline
-    assert api_mod._state(False, "on", {"task_id": "x", "name": "n"}, True) == "offline"
-    assert api_mod._state(True, "on", {"task_id": "x", "name": "n"}, False) == "offline"
+    assert agent_api._state(False, "on", {"task_id": "x", "name": "n"}, True) == "offline"
+    assert agent_api._state(True, "on", {"task_id": "x", "name": "n"}, False) == "offline"
     # 请假（在线）→ leave
-    assert api_mod._state(True, "leave", None, True) == "leave"
+    assert agent_api._state(True, "leave", None, True) == "leave"
     # 上班 + 有任务 → working
-    assert api_mod._state(True, "on",
-                          {"task_id": "morning_analysis", "name": "早盘分析"}, True) == "working"
+    assert agent_api._state(True, "on",
+                            {"task_id": "morning_analysis", "name": "早盘分析"}, True) == "working"
     # 上班 + 无任务 → slack
-    assert api_mod._state(True, "on", None, True) == "slack"
+    assert agent_api._state(True, "on", None, True) == "slack"
 
 
 def test_create_and_list_session(client):
@@ -161,7 +157,7 @@ def test_chat_multiline_reply_is_multi_messages(client, monkeypatch):
     def _multi(task, profile=None, cwd=None, timeout=None, run=None):
         return "success", "第一句。\n第二句呀～\n\n第三句！"
 
-    monkeypatch.setattr(api_mod.dsh_runner, "run_task", _multi)
+    monkeypatch.setattr(agent_api.dsh_runner, "run_task", _multi)
     sid = client.post("/api/agent/sessions", json={}).json()["id"]
     r = client.post(f"/api/agent/sessions/{sid}/messages",
                     json={"content": "在吗"})
@@ -195,9 +191,9 @@ def test_chat_missing_session_404(client):
 
 def test_chat_llm_error_returns_error_event(client, monkeypatch):
     def _boom(task, profile=None, cwd=None, timeout=None, run=None):
-        raise api_mod.dsh_runner.DshRunnerError("dsh failed: boom")
+        raise agent_api.dsh_runner.DshRunnerError("dsh failed: boom")
 
-    monkeypatch.setattr(api_mod.dsh_runner, "run_task", _boom)
+    monkeypatch.setattr(agent_api.dsh_runner, "run_task", _boom)
     sid = client.post("/api/agent/sessions", json={}).json()["id"]
     r = client.post(f"/api/agent/sessions/{sid}/messages", json={"content": "hi"})
     assert "boom" in r.text
@@ -318,3 +314,88 @@ def test_sources_validation(client):
         "name": "n", "url": "ftp://x"}).status_code == 400
     assert client.post("/api/agent/sources", json={
         "name": "n", "url": "http://ok", "kind": "bad"}).status_code == 400
+
+
+# ═══════════════════════════════════════════
+# Dashboard 反向代理层契约（BUG-035：Dashboard 不再直读 agent.db）
+# ═══════════════════════════════════════════
+
+
+@pytest.fixture()
+def proxy_client(monkeypatch):
+    """只挂 dashboard.api_agent.router 的最小 app（不触发 dashboard lifespan）。"""
+    from dashboard import api_agent as proxy_mod
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    app.include_router(proxy_mod.router)
+    app.dependency_overrides[proxy_mod.get_current_user] = lambda: {
+        "username": "tester", "role": "admin",
+    }
+    yield proxy_mod, TestClient(app)
+    app.dependency_overrides.clear()
+
+
+class TestDashboardProxyContract:
+    """锁定「转发上游 + 不可达降级」契约，防止代理层被改回进程内直读。"""
+
+    def test_status_passthrough_when_agent_up(self, proxy_client, monkeypatch):
+        proxy_mod, c = proxy_client
+        monkeypatch.setattr(
+            proxy_mod, "_proxy_get",
+            lambda path, params=None: {"alive": True, "state": "slack"},
+        )
+        r = c.get("/api/agent/status")
+        assert r.status_code == 200
+        assert r.json() == {"alive": True, "state": "slack"}
+
+    def test_status_offline_when_agent_down(self, proxy_client, monkeypatch):
+        proxy_mod, c = proxy_client
+        monkeypatch.setattr(proxy_mod, "_proxy_get", lambda path, params=None: None)
+        r = c.get("/api/agent/status")
+        assert r.status_code == 200          # 降级为 offline，不抛 5xx
+        assert r.json()["state"] == "offline"
+        assert r.json()["alive"] is False
+        assert r.json()["dsh_ready"] is False
+
+    def test_notices_degrades_to_empty(self, proxy_client, monkeypatch):
+        proxy_mod, c = proxy_client
+        monkeypatch.setattr(proxy_mod, "_proxy_get", lambda path, params=None: None)
+        d = c.get("/api/agent/notices").json()
+        assert d["notices"] == [] and d["unread_count"] == 0
+
+    def test_notices_passthrough_when_agent_up(self, proxy_client, monkeypatch):
+        proxy_mod, c = proxy_client
+        seen = {}
+
+        def _fake_get(path, params=None):
+            seen["path"] = path
+            seen["params"] = params
+            return {"notices": [{"id": 1}], "unread_count": 1, "total": 1}
+
+        monkeypatch.setattr(proxy_mod, "_proxy_get", _fake_get)
+        d = c.get("/api/agent/notices?page=2&page_size=5").json()
+        assert seen["path"] == "/notices"
+        assert seen["params"]["page"] == 2
+        assert d["unread_count"] == 1
+
+    def test_post_reply_proxies_body(self, proxy_client, monkeypatch):
+        proxy_mod, c = proxy_client
+        seen = {}
+
+        def _fake_post(path, body=None):
+            seen["path"] = path
+            seen["body"] = body
+            return {"ok": True, "message": "已收到"}
+
+        monkeypatch.setattr(proxy_mod, "_proxy_post", _fake_post)
+        d = c.post("/api/agent/notices/7/reply", json={"reply": "x"}).json()
+        assert seen["path"] == "/notices/7/reply"
+        assert seen["body"] == {"reply": "x"}
+        assert d["ok"] is True
+
+    def test_post_reply_reports_unreachable(self, proxy_client, monkeypatch):
+        proxy_mod, c = proxy_client
+        monkeypatch.setattr(proxy_mod, "_proxy_post", lambda path, body=None: None)
+        d = c.post("/api/agent/notices/7/reply", json={"reply": "x"}).json()
+        assert d["ok"] is False and d["message"] == "Agent 不可达"

@@ -346,3 +346,45 @@ def test_notice_count_filters(adb):
     assert agent_db.notice_count() == 2
     assert agent_db.notice_count(kind="todo") == 1
     assert agent_db.notice_count(status="open") == 2
+
+
+# ── 工单表（BUG-037：file 后端缺 tickets 表，四个 ticket_* 全部 OperationalError）──
+
+def test_tickets_table_created(adb):
+    assert "tickets" in agent_db.list_tables()
+
+
+def test_ticket_crud(adb):
+    adb.ticket_upsert({
+        "id": "abc123",
+        "kind": "bug",
+        "title": "调度任务失败",
+        "description": "来源调度任务: bug_auto_fix",
+        "severity": "p2",
+        "status": "open",
+        "source_task": "bug_auto_fix",
+        "created_at": "2026-09-10 12:00:00",
+        "updated_at": "2026-09-10 12:00:00",
+        "log_entries": "[]",
+    })
+    got = adb.ticket_get("abc123")
+    assert got is not None
+    assert got["kind"] == "bug" and got["status"] == "open"
+    assert adb.ticket_count() == 1
+    assert adb.ticket_count(status="open") == 1
+    assert adb.ticket_count(status="done") == 0
+    assert [t["id"] for t in adb.ticket_list()] == ["abc123"]
+
+    # 同 id upsert 为更新而非新增
+    adb.ticket_upsert({
+        "id": "abc123",
+        "kind": "bug",
+        "title": "调度任务失败",
+        "status": "done",
+        "created_at": "2026-09-10 12:00:00",
+        "updated_at": "2026-09-10 12:05:00",
+    })
+    assert adb.ticket_get("abc123")["status"] == "done"
+    assert adb.ticket_count() == 1
+
+    assert adb.ticket_get("nope") is None

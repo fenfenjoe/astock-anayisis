@@ -1,0 +1,18 @@
+[2026-09-10T10:07:41+08:00] AUTO_FIX 开始 — OPEN: 0, AUTO_FIX: 0, MANUAL_REVIEW: 0
+[2026-09-10T10:07:41+08:00] 无待处理 BUG，跳过（未生成报告）；BUG_INDEX OPEN=0，bugs/open 下 9 项（BUG-005/007/012/013/014/015/025/029/030）均为 MANUAL_REVIEW 且 auto_fix_eligible=false，均已含自动修复判定，无需处理
+[2026-09-10T10:07:41+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0
+[2026-09-10T11:07:56+08:00] AUTO_FIX 开始 — OPEN: 0, AUTO_FIX: 0, MANUAL_REVIEW: 0
+[2026-09-10T11:07:56+08:00] 无待处理 BUG，跳过（未生成报告）；BUG_INDEX OPEN=0，bugs/open 下 9 项（BUG-005/007/012/013/014/015/025/029/030）均为 MANUAL_REVIEW 且 auto_fix_eligible=false 且已含自动修复判定，无新增动作；bugs/closed 无 OPEN/IN_PROGRESS 遗留
+[2026-09-10T11:07:56+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0
+[2026-09-10T12:07:53+08:00] AUTO_FIX 开始 — OPEN: 0, AUTO_FIX: 0, MANUAL_REVIEW: 0
+[2026-09-10T12:07:53+08:00] 无待处理 BUG，跳过（未生成报告）；BUG_INDEX OPEN=0，bugs/open 下 9 项（BUG-005/007/012/013/014/015/025/029/030）均为 MANUAL_REVIEW 且 auto_fix_eligible=false，逐项核验均含「## 自动修复判定」章节，无新增动作；bugs/closed 下 22 项（FIXED 20 / VERIFIED 1 / WONT_FIX 1）无 OPEN/IN_PROGRESS 遗留（其中的 "OPEN" 字样均为对 REQ-001 状态的引用，非 BUG 状态）；统计口径核对一致（22 closed + 9 MANUAL_REVIEW = 31）
+[2026-09-10T12:07:53+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0
+[2026-09-10T13:17:00+08:00] AUTO_FIX 开始 — OPEN: 5, AUTO_FIX: 3, MANUAL_REVIEW: 2
+[2026-09-10T13:18:00+08:00] BUG-037: FIXED (agent/db.py SCHEMA 补 tickets 表 + 索引；tests/test_agent_db.py 新增 2 项防复发测试；运行时验证 tickets in tables=True)
+[2026-09-10T13:19:00+08:00] BUG-036: FIXED (调用点改 agent_db.notice_create("notice",...)，except 补 logging.warning；运行时验证失败任务生成 notice source=agent)
+[2026-09-10T13:20:00+08:00] BUG-035: FIXED (test_agent_api/test_agent_notices 改直测 agent/api.py 进程内实现 + 新增 TestDashboardProxyContract 6 项代理契约测试)
+[2026-09-10T13:24:00+08:00] BUG-038: MANUAL_REVIEW (不可自动修复 — 导入时序/后端选择策略决策)
+[2026-09-10T13:24:00+08:00] BUG-039: MANUAL_REVIEW (不可自动修复 — 架构迁移节奏决策)
+[2026-09-10T13:25:00+08:00] 全量回归: 534 passed, 3 failed, 18 skipped；余 3 项失败为 BUG-029/030 (MANUAL_REVIEW, auto_fix_eligible=false)，非本轮范围
+[2026-09-10T13:26:00+08:00] BUG-035/036/037 报告状态 FIXED 并移至 bugs/closed/；BUG_INDEX.md 更新完成 (OPEN 5→0, FIXED 22→25, MANUAL_REVIEW 8→10)
+[2026-09-10T13:17:00+08:00] AUTO_FIX 结束 — FIXED: 3, MANUAL_REVIEW: 2
