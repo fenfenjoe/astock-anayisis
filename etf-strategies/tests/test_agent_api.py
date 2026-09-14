@@ -22,6 +22,9 @@ from fastapi.testclient import TestClient
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     agent_db.init_db(tmp_path / "agent.db")
+    # BUG-042 (2026-09-14) 修复: 3bcc9d0 新增"上线/下线闸门"，
+    # xiaoman_online != "1" → chat 端点返回 429。按 BUG-024 同款契约设置在线标志。
+    agent_db.meta_set("xiaoman_online", "1")
     monkeypatch.setattr(agent_api, "API_KEY", "")  # 测试内关闭 X-Api-Key 校验
 
     def _fake_run_task(task, profile=None, cwd=None, timeout=None, run=None):
