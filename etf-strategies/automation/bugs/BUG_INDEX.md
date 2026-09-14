@@ -11,7 +11,7 @@
 |------|------|
 | OPEN | 0 |
 | IN_PROGRESS | 0 |
-| FIXED | 25 |
+| FIXED | 28 |
 | VERIFIED | 1 |
 | WONT_FIX | 1 |
 | MANUAL_REVIEW | 10 |
@@ -80,6 +80,9 @@
 | BUG-037 | 本地file后端SCHEMA缺tickets表:ticket_upsert/list/count/get全部OperationalError,工单功能在file模式(含全部pytest进程)完全不可用 | agent | MEDIUM | FIXED | 2026-09-10 |
 | BUG-038 | agent/__main__._ensure_cloud()晚于agent.db导入执行:USE_CLOUD导入时固化,「强制AGENT_DB_BACKEND=cloud」永远无效(靠.env掩盖) | agent | MEDIUM | MANUAL_REVIEW | 2026-09-10 |
 | BUG-039 | scheduler_agent声称「接管定时任务+tick loop驱动」实际未接入生命周期(dashboard scheduler仍在跑,仅HTTP手动触发可达) | agent | LOW | MANUAL_REVIEW | 2026-09-10 |
+| BUG-040 | 12/13活跃ETF缓存含09-14盘中partial bar(另6/13的09-11 bar亦为partial):违反DAT-001,第5次复发(BUG-016/019/026/034同根因),512660跨源-0.514% | data | HIGH | FIXED | 2026-09-14 |
+| BUG-041 | 5个非活跃cache缓存过期复发(002142/159227/159326/512100/601398, mtime=09-10, 缺09-10/09-11数据, BUG-032同集合第4次复发) | data | MEDIUM | FIXED | 2026-09-14 |
+| BUG-042 | test_agent_api chat测试未适配xiaoman_online上线闸门:client夹具未设meta,4项chat用例命中429(agent/api.py:453-457),BUG-035修复后暴露,同BUG-024族 | tests | MEDIUM | FIXED | 2026-09-14 |
 <!-- BUG_TABLE_END -->
 
 ---
@@ -129,6 +132,9 @@
 | 2026-09-10 | 数据巡检 | 1 | 1 | 0 |
 | 2026-09-10 | 代码巡检 | 5 | 1 | 13 |
 | 2026-09-10 | 自动修复 | 0 | 3 | 0 |
+| 2026-09-14 | 数据巡检 | 2 | 2 | 0 |
+| 2026-09-14 | 代码巡检 | 1 | 0 | 11 |
+| 2026-09-14 | 自动修复 | 0 | 1 | 0 |
 
 ---
 
