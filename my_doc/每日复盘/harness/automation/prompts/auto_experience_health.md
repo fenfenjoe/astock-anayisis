@@ -5,6 +5,13 @@
 > **2026-09-08 改造（记忆体系 Phase 3）**：检查对象从本地 `harness/experience/*.md` 文件改为
 > **OpenViking 经验库**（本会话通过环境变量归入 xiaoman peer，用 `viking_search`/`viking_read` 检索）。
 > 过渡期保留"镜像导出"：把 OpenViking 经验导出回本地文件，供既有文件消费方读取。
+> **2026-09-14 改造（REQ-009 补全迁移）**：
+> ① 镜像导出方向修正为 **本地 → OpenViking 补齐 + 双向校验**（OpenViking 条目为浓缩版，
+> 直接覆盖本地会丢失章节/细节；先补全 OpenViking 侧，再评估恢复 OpenViking→本地 定期导出）；
+> ② 全部经验条目已补齐 Schema 元数据（领域/状态/置信度/首次沉淀/最近更新），
+> 过时检测/置信度健康/领域完整性改由 `lib/openviking_health.py` 纯函数结构化执行；
+> ③ 新增 **T2 证据链更新机制**：复盘/周报发现新证据时更新 OpenViking 对应条目
+> 置信度（贝叶斯：中→高需 2+ 次独立验证；单次证伪中→低），不再只停留在本地文件。
 
 ---
 
@@ -83,7 +90,22 @@ limit=50 抽样），统计：
 ## 第四步：过时检测（OpenViking 版）
 
 ### 4.1 长期未更新检测
-检索经验条目的"最近更新"元数据，找出 **> 90 天未更新**的条目：
+读取经验条目的 `最近更新` 元数据，找出 **> 90 天未更新**的条目（REQ-009 已补齐元数据，
+过时检测可结构化执行）。用 `lib/openviking_health.py` 的 `detect_stale` 纯函数：
+
+```bash
+
+python -c "
+import sys, json
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.openviking_health import detect_stale
+# entries = [{'最近更新': 'YYYY-MM-DD', ...}, ...]  — 从 OpenViking 检索元数据组装
+stale = detect_stale(entries, max_days=90)
+for s in stale:
+    print(f\"过时: {s.get('name','')} 最近更新 {s.get('最近更新','')}\")
+"
+```
+
 - 低置信度 + 90 天无更新 → 建议标记 `deprecated`（方案 §5 贝叶斯规则）
 - 中/高置信度但 90 天无更新 → 置信度提示衰减（提醒重新验证），不直接废弃
 
@@ -103,40 +125,100 @@ limit=50 抽样），统计：
 
 ## 第五步：领域标签完整性检查（OpenViking 版）
 
-`viking_search` 逐领域检索，检查经验库领域标签分布是否齐全：
+`viking_search` 逐领域检索，收集现有条目覆盖的领域标签，用 `lib/openviking_health.py`
+的 `check_domain_completeness` 结构化检查缺失（REQ-009 已补全 8 个缺失领域 + 元数据）：
 
-### 5.1 投资分析领域（原 投资经验.md 章节）
+```bash
+
+python -c "
+import sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.openviking_health import check_domain_completeness, REQUIRED_DOMAINS
+# present_domains = [每条目的 元数据.领域, ...] — 从 OpenViking 检索元数据组装
+missing = check_domain_completeness(present_domains)
+print('缺失领域:', missing if missing else '无（21/21 完整）')
+"
+```
+
+### 5.1 投资分析领域（原 投资经验.md 章节，9 项）
 - 市场判断 / 跨市场映射 / 开盘前评估 / 数据纪律 / 早盘纪律设计 / 策略纪律 / 宏观数据公布日 / 超跌反弹 / 信号设计
 
-### 5.2 短线领域（原 短线机会经验.md 章节）
+### 5.2 短线领域（原 短线机会经验.md 章节，4 项）
 - 做T / 跷跷板套利 / 跨市场套利 / 事件套利
 
-### 5.3 审阅领域（原 报告审阅经验.md 章节）
+### 5.3 审阅领域（原 报告审阅经验.md 章节，8 项）
 - 审阅流程 / 数据核验清单 / 逻辑一致性检查 / 完整性检查 / 格式标准 / 常见错误模式 / 修正原则 / 每日信号审阅清单
 
-缺失领域 → 在输出报告中标记（不自动创建）。
+缺失领域 → 在输出报告中标记（不自动创建；缺失需人工评估补建 REQ）。
 
 ---
 
 ## 第五(A)步：镜像导出（过渡期，新增）+ 置信度健康（新增）
 
-### 5A.1 镜像导出：OpenViking → 本地 `harness/experience/*.md`（过渡期）
+### 5A.1 镜像导出：本地 → OpenViking 补齐 + 双向校验（REQ-009 方向修正）
 
-> **过渡期**：既有文件消费方（报告审阅第十三步、早盘模板等）仍读本地文件。本步把 OpenViking
-> 经验库导出回本地，保持镜像一致。**远期（Phase 4）镜像停更，全部消费方切 OpenViking。**
+> **过渡期**：既有文件消费方（报告审阅第十三步、早盘模板等）仍读本地文件。本地 `harness/experience/*.md`
+> 为**详细版权威镜像**（含案例、交叉引用、`<details>` 备份区），OpenViking 条目为**浓缩版**。
+> **REQ-009 方向修正**：不再做 OpenViking → 本地 覆盖导出（会丢失章节/细节），改为
+> **本地 → OpenViking 补齐 + 双向校验**，保证 OpenViking 侧领域完整、本地侧消费完整。
+> **远期（Phase 4）镜像停更，全部消费方切 OpenViking。**
 
-1. 按领域检索 OpenViking 经验（市场判断/做T/信号设计/板块扫描/审阅等）
-2. 把每条经验按 Schema 渲染为 markdown，同步到对应本地文件：
-   - 投资领域 → `harness/experience/投资经验.md`
-   - 短线领域 → `harness/experience/短线机会经验.md`
-   - 审阅领域 → `harness/experience/报告审阅经验.md`
-3. 导出前先备份当前本地文件（`.bak`），导出后校验非空且章节完整
+1. **本地 → OpenViking 补齐**：按领域比对，本地有章节但 OpenViking 无对应条目的 →
+   从本地对应章节迁移创建独立条目（保留原始规则内容完整，仅结构化整理）。
+2. **双向校验**：
+   - OpenViking 侧：领域完整性 = 21/21（`check_domain_completeness` 无缺失）+
+     全部条目元数据完整（`check_metadata_complete` 无缺失）。
+   - 本地侧：`test_experience_health.py` 门禁保持全绿（行数 ≤500 / 无重复头 /
+     必需章节齐全 / 北向标注 / 章节 ≤20 条）。
+3. 任一方向发现缺失 → 在输出报告标记并建议补建（不自动覆盖，防丢数据）。
 
 ### 5A.2 置信度健康
 
-统计经验库条目置信度分布（高/中/低）：
+用 `lib/openviking_health.py` 的 `compute_confidence_distribution` 统计（REQ-009 已结构化）：
+
+```bash
+
+python -c "
+import sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.openviking_health import compute_confidence_distribution
+# entries = [{'置信度': '中'}, ...] — 从 OpenViking 元数据组装
+dist = compute_confidence_distribution(entries)
+print(f\"高/中/低: {dist['高']}/{dist['中']}/{dist['低']}  高占比 {dist['high_pct']:.1f}% 低占比 {dist['low_pct']:.1f}%\")
+"
+```
+
 - **低置信度占比 > 30%** → ⚠️ 提示经验库需更多验证/清理（多为新沉淀未验证条目）
 - 高置信度占比过低（< 20%）→ 提示验证性复盘不足，建议加强 T2 证据链更新
+
+### 5A.3 T2 证据链更新机制（REQ-009 落地）
+
+> **T2 触发**：复盘/周报发现新证据（验证或证伪既有经验）时，更新 OpenViking 对应条目的
+> 证据链 + 置信度（贝叶斯调整），**不改写结论本身**。仅在 T1（新规律）/T2（旧经验被
+> 证伪/需校准）时沉淀，无事件不写（事件驱动，见 _schema.md 沉淀触发）。
+
+用 `lib/openviking_health.py` 的 `apply_t2_update` 计算置信度/状态变更：
+
+```bash
+
+python -c "
+import sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.openviking_health import apply_t2_update
+# 验证事件：中 → 高 需 2+ 次独立验证
+r = apply_t2_update('中', evidence_type='verify', verify_count=2)
+# 证伪事件：中 → 低；低被再证伪 → deprecated
+r = apply_t2_update('中', evidence_type='falsify')
+print(r['confidence'], r['status_change'], r['changed'])
+"
+```
+
+规则（对齐 `_schema.md` 贝叶斯更新落地规则）：
+- 新条目默认置信度 = **中**；单次验证不一次打满，**中 → 高 需 2+ 次独立验证**
+- 单次证伪：**中 → 低**（不删除）；低置信度再被证伪 → 状态 `deprecated`
+- 更新后把证据链（`{date} {来源} {事实} {置信度调整}`）与置信度写回 OpenViking 对应条目，
+  同步更新 `最近更新` 元数据；涉及写入按 `openviking-memory` skill 规范执行
+- 经验冲突：双方都保留（不删旧），各标 `conflict_with`，由本任务/用户裁决
 
 ---
 
@@ -330,8 +412,15 @@ else:
 ## 置信度健康
 - 高/中/低: {N}/{N}/{N} — {OK / ⚠️低置信度占比>30% / ⚠️高置信度<20%}
 
-## 镜像导出（过渡期）
-- 投资经验.md / 短线机会经验.md / 报告审阅经验.md: {已同步 / 已备份 .bak}
+## T2 证据链更新
+- 本期验证提升 {N} 条 / 证伪降级 {N} 条 / 冲突暂存 {N} 条:
+- {条目} {中→高} 证据: {date} {来源} {事实}
+
+## 镜像导出（过渡期，方向: 本地→OpenViking 补齐 + 双向校验）
+- OpenViking 领域完整性: {21/21 完整 / 缺少: [...]}
+- OpenViking 元数据完整性: {N/M 完整 / 缺失条目: [...]}
+- 本地镜像: 投资经验.md / 短线机会经验.md / 报告审阅经验.md: {门禁全绿 / 需人工修正}
+- 双向校验: {已一致 / 存在单侧缺失，未覆盖导出}
 
 ## Steering 系统健康
 - 僵死 REQ (OPEN>7天): {N} — {REQ-ID 列表}
@@ -356,12 +445,16 @@ else:
 自动执行以下操作（不需要人工确认）：
 - 完全重复条目（> 95% 相似）→ 标记 `merged`（关联指向保留条）
 - 领域标签完整性标记（仅标记缺少的领域，不自动创建）
-- 镜像导出（OpenViking → 本地文件，先备份 .bak）
+- 本地 → OpenViking 补齐：本地有章节但 OpenViking 无对应条目的 → 从本地迁移创建
+  （REQ-009 方向修正；保留原始规则内容完整，仅结构化整理）
+- T2 证据链更新：复盘/周报已提供证据（验证/证伪）的条目 → 按 `apply_t2_update`
+  更新 OpenViking 对应条目置信度 + 证据链 + 最近更新（写入按 openviking-memory 规范）
 
 以下操作**仅建议，不自动执行**（需要人工确认）：
 - 合并高度相似条目（80-95%）
 - 解决矛盾条目（贝叶斯裁决后仍冲突的暂存项 → 人工裁决）
 - 删除过时条目 / deprecated 清理
 - > 300 条规模的压缩合并
+- OpenViking → 本地 覆盖导出（仅当双向校验一致且本地缺失时才评估，需先备份 .bak）
 
 如果建议操作涉及架构性改动（如经验库重组、新领域体系设计），**创建 REQ 文档**到 `my_doc/每日复盘/harness/automation/steering/open/REQ-{NNN}.md`，按 `steering/REQ_TEMPLATE.md` 模板（模板已内置 superpowers 开发流程：brainstorming→writing-plans→TDD→executing-plans→code-review），并在 `steering/REQ_INDEX.md` 中登记。
