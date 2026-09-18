@@ -62,6 +62,7 @@ function switchView(viewId) {
   if (viewId === 'view-signals') { _viewInit.signals = true; sigLoad(true); sigqLoad('day'); }
   if (viewId === 'view-reports') { _viewInit.reports = true; repLoad(true); }
   if (viewId === 'view-scheduler') { _viewInit.scheduler = true; schedLoad(true); }
+  if (viewId === 'view-tickets') { _viewInit.tickets = true; Tickets.load(); }
   if (viewId === 'view-agent') { _viewInit.agent = true; Agent.load(true); }
 }
 
@@ -407,102 +408,159 @@ async function emRefresh() {
   }
 }
 
-
 // ═══════════════════════════════════════════════════════════════
-// 每日信号
+// 每日信号（任务4 重做 · 2026-09-14）
 // ═══════════════════════════════════════════════════════════════
 
-let sigView = 'markdown';  // markdown | table
+let sigEnums = null;          // /api/signal-enums 缓存
+let sigHistPage = 1;          // 历史查询当前页
+let sigHistState = {};        // 历史查询条件
 
 async function sigLoad(force) {
-  if (!force && !_viewInit.signals) return;
+  // 进入视图时同时加载今日信号 + 历史查询（sigqLoad 由 switchView 调用）
   try {
-    const rep = await apiGet('/api/reports?type=' + encodeURIComponent('每日信号') + '&limit=200');
-    const dates = rep.items.map((i) => i.report_date);
-    const sel = $el('sig-date');
-    if (sel && sel.options.length !== dates.length) {
-      sel.innerHTML = dates.map((d) => `<option value="${d}">${d}</option>`).join('');
-      if (dates.length) sel.value = dates[0];
+    if (!sigEnums) {
+      sigEnums = await apiGet('/api/signal-enums');
+      _fillSigSelects();
     }
-    // BUG-FIX(2026-09-07)：切换日期必须渲染用户选中的日期（sel.value），
-    // 原先硬编码 dates[0] 导致历史信号永远显示最新一天，日期选择器形同虚设。
-    const chosen = (sel && sel.options.length) ? sel.value : (dates[0] || null);
-    if (chosen) sigRender(chosen);
+    await sigTodayLoad();
+    await sigHistorySearch(1);
   } catch (e) {
     safeSetHTML('sig-content', '<p class="muted">加载信号失败: ' + escapeHtml(e.message) + '</p>');
   }
 }
 
-async function sigLoadLatest() {
-  try {
-    const d = await apiGet('/api/daily-signals');
-    const sel = $el('sig-date');
-    if (sel && d.date) sel.value = d.date;
-    sigRender(d.date);
-  } catch (e) {
-    safeSetHTML('sig-content', '<p class="muted">加载信号失败: ' + escapeHtml(e.message) + '</p>');
-  }
+function _fillSigSelects() {
+  const typeSel = $el('sig-hist-type');
+  const statusSel = $el('sig-hist-status');
+  if (!typeSel || !statusSel || !sigEnums) return;
+  typeSel.innerHTML = '<option value="">操作类型</option>' +
+    (sigEnums.trade_type || []).map((v) =>
+      '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>').join('');
+  statusSel.innerHTML = '<option value="">状态</option>' +
+    (sigEnums.status || []).map((v) =>
+      '<option value="' + escapeHtml(v) + '">' + escapeHtml(_statusCN(v)) + '</option>').join('');
 }
 
-async function sigRender(date) {
+function _tradeTypeLabel(t) {
+  return t === 'buy' ? '买入' : (t === 'sell' ? '卖出' : (t || '—'));
+}
+
+// 云库状态英文内部值 → 中文展示（与 每日信号.md 信号总表中文状态一致；v3.0：初始=未触发、新增已过期）
+const SIG_STATUS_CN = {
+  open: '未触发',
+  triggered: '已触发',
+  executed: '已执行',
+  partial_executed: '部分执行',
+  settled: '已结算',
+  expired: '已过期',
+};
+
+function _statusCN(s) {
+  if (!s) return '—';
+  return SIG_STATUS_CN[s] || s; // 未识别的值原样展示
+}
+
+function _statusClass(s) {
+  return 'sig-status ' + String(s || '').replace(/[^a-z]/g, '');
+}
+
+// ── 表1 今日信号 ──
+async function sigTodayLoad() {
+  const dateInput = $el('sig-date');
+  let date = dateInput && dateInput.value ? dateInput.value.replace(/-/g, '') : '';
   try {
-    const d = await apiGet('/api/daily-signals?date=' + encodeURIComponent(date));
+    const d = await apiGet('/api/daily-signals' + (date ? '?date=' + date : ''));
     const box = $el('sig-content');
     if (!box) return;
-    // Phase 3 云库化：云库有结构化信号（d.signals）→ 渲染含评价列的结构化表
-    if (d.signals && d.signals.length) {
-      box.innerHTML = renderCloudSignals(d.signals);
+    if (dateInput && d.date && !dateInput.value) dateInput.value = d.date.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
+    if (!d.signals || !d.signals.length) {
+      box.innerHTML = '<p class="muted">今日暂无信号（非交易日或无信号生成）</p>';
       return;
     }
-    if (sigView === 'table' && d.parsed && d.parsed.length) {
-      // 列与 每日信号.md v2.0 信号总表（12 列）对齐
-      // BUG-FIX(2026-09-07)：补回"触发条件"列（原先 11 列，触发条件被静默丢弃），
-      // 顺序与 _SIGNAL_COLUMNS 保持一致
-      const cols = ['优先级', '标的', '触发条件', '操作类型', '状态', '方向', '紧急度', '预期触发率', '目标/止损', '有效时段', '仓位', '信号ID'];
-      box.innerHTML = '<div class="table-wrap"><table class="data-table sig-table"><thead><tr>' +
-        cols.map((c) => '<th>' + escapeHtml(c) + '</th>').join('') +
-        '</tr></thead><tbody>' +
-        d.parsed.map((r) => '<tr>' + cols.map((c) => '<td>' + escapeHtml(r[c] || '') + '</td>').join('') + '</tr>').join('') +
-        '</tbody></table></div>';
-    } else {
-      box.innerHTML = renderMarkdown(d.markdown);
-    }
+    const cols = ['优先级', '标的', '操作类型', '仓位', '有效时段', '状态', '交易价', '目标价', '止损价', '信号ID'];
+    box.innerHTML = '<div class="table-wrap"><table class="data-table sig-table"><thead><tr>' +
+      cols.map((c) => '<th>' + escapeHtml(c) + '</th>').join('') +
+      '</tr></thead><tbody>' +
+      d.signals.map((s) => _sigRowHtml(s, cols, false)).join('') +
+      '</tbody></table></div>';
   } catch (e) {
-    safeSetHTML('sig-content', '<p class="muted">加载信号失败: ' + escapeHtml(e.message) + '</p>');
+    safeSetHTML('sig-content', '<p class="muted">加载失败: ' + escapeHtml(e.message) + '</p>');
   }
 }
 
-// ── 云库信号结构化表（含复盘回填评价列）──
-function renderCloudSignals(signals) {
-  const cols = ['信号ID', '日期', '优先级', '标的', '操作', '状态', '方向', '紧急度', '预期触发率', '目标/止损', '仓位', '决策质量', '执行质量', 'P&L'];
-  const rows = signals.map((s) => {
-    const target = s.target_price != null ? s.target_price : (s.target_pct != null ? s.target_pct + '%' : '—');
-    const stop = s.stop_price != null ? s.stop_price : (s.stop_pct != null ? s.stop_pct + '%' : '—');
-    const pnl = s.pnl != null ? '<span class="sig-pnl ' + (s.pnl >= 0 ? 'up' : 'down') + '">' + fmtMoney(s.pnl) + '</span>' : '—';
-    const statusClass = 'sig-status ' + String(s.status || '').replace(/[^a-z]/g, '');
-    return '<tr>' +
-      '<td>' + escapeHtml(s.signal_id || '') + '</td>' +
-      '<td>' + escapeHtml((s.signal_date || s.trigger_date || '').slice(0, 10)) + '</td>' +
-      '<td><span class="badge badge-' + escapeHtml(String(s.priority || '').toLowerCase()) + '">' + escapeHtml(s.priority || '') + '</span></td>' +
-      '<td>' + escapeHtml(s.name || '') + ' <span class="muted">' + escapeHtml(s.ticker || '') + '</span></td>' +
-      '<td>' + escapeHtml(s.trade_type === 'buy' ? '买入' : s.trade_type === 'sell' ? '卖出' : (s.trade_type || '')) + '</td>' +
-      '<td><span class="' + statusClass + '">' + escapeHtml(s.status || '') + '</span></td>' +
-      '<td>' + escapeHtml(s.direction === 'buy' ? '多' : s.direction === 'sell' ? '空' : '—') + '</td>' +
-      '<td>' + escapeHtml(String(s.urgency || '')) + '</td>' +
-      '<td>' + (s.expected_trigger_rate != null ? escapeHtml(String(s.expected_trigger_rate)) + '%' : '—') + '</td>' +
-      '<td>' + escapeHtml(String(target)) + ' / ' + escapeHtml(String(stop)) + '</td>' +
-      '<td>' + escapeHtml(s.position || '—') + '</td>' +
-      '<td class="muted">' + escapeHtml(s.eval_decision_quality || '—') + '</td>' +
-      '<td class="muted">' + escapeHtml(s.eval_execution_quality || '—') + '</td>' +
-      '<td>' + pnl + '</td>' +
-      '</tr>';
-  }).join('');
-  return '<div class="table-wrap"><table class="data-table sig-table"><thead><tr>' +
-    cols.map((c) => '<th>' + escapeHtml(c) + '</th>').join('') +
-    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+function _sigRowHtml(s, cols, withDate) {
+  const typeLabel = _tradeTypeLabel(s.trade_type);
+  const cells = {
+    '日期': withDate ? escapeHtml((s.signal_date || '').slice(5)) : '',
+    '优先级': escapeHtml(s.priority || '—'),
+    '标的': '<span class="sig-name">' + escapeHtml(s.name || s.ticker || '—') + '</span>' +
+      (s.ticker ? ' <span class="muted">' + escapeHtml(s.ticker) + '</span>' : ''),
+    '操作类型': '<span class="' + (s.trade_type === 'sell' ? 'num-danger' : 'num-positive') + '">' + escapeHtml(typeLabel) + '</span>',
+    '仓位': escapeHtml(s.position || '—'),
+    '有效时段': escapeHtml(s.valid_window || '—'),
+    '状态': '<span class="' + _statusClass(s.status) + '">' + escapeHtml(_statusCN(s.status)) + '</span>',
+    '交易价': s.trade_price != null && s.trade_price !== '' ? escapeHtml(s.trade_price) : '—',
+    '目标价': escapeHtml(s.target_price || '—'),
+    '止损价': escapeHtml(s.stop_price || '—'),
+    '信号ID': '<code class="sig-id">' + escapeHtml(s.signal_id || '—') + '</code>',
+  };
+  return '<tr>' + cols.map((c) => '<td>' + (cells[c] || '') + '</td>').join('') + '</tr>';
 }
 
-// ── 信号质量评估（Phase 3 · §9.3）──
+// ── 表2 历史信号查询 ──
+function _sigHistParams(page) {
+  const g = (id) => { const el = $el(id); return el ? el.value.trim() : ''; };
+  const p = new URLSearchParams();
+  if (g('sig-hist-date')) p.set('date', g('sig-hist-date').replace(/-/g, ''));
+  if (g('sig-hist-ticker')) p.set('ticker', g('sig-hist-ticker'));
+  if (g('sig-hist-type')) p.set('trade_type', g('sig-hist-type'));
+  if (g('sig-hist-status')) p.set('status', g('sig-hist-status'));
+  if (g('sig-hist-id')) p.set('signal_id', g('sig-hist-id'));
+  p.set('page', page || 1);
+  p.set('page_size', 20);
+  return p.toString();
+}
+
+async function sigHistorySearch(page) {
+  const pageno = page || 1;
+  const q = _sigHistParams(pageno);
+  try {
+    const d = await apiGet('/api/signal-history?' + q);
+    const box = $el('sig-hist-content');
+    const pager = $el('sig-hist-pager');
+    if (!box) return;
+    sigHistPage = pageno;
+    const cols = ['日期', '优先级', '标的', '操作类型', '仓位', '有效时段', '状态', '交易价', '目标价', '止损价', '信号ID'];
+    if (!d.items || !d.items.length) {
+      box.innerHTML = '<p class="muted">无符合条件的信号</p>';
+      if (pager) pager.style.display = 'none';
+      return;
+    }
+    box.innerHTML = '<div class="table-wrap"><table class="data-table sig-table"><thead><tr>' +
+      cols.map((c) => '<th>' + escapeHtml(c) + '</th>').join('') +
+      '</tr></thead><tbody>' +
+      d.items.map((s) => _sigRowHtml(s, cols, true)).join('') +
+      '</tbody></table></div>';
+    const totalPages = Math.max(1, Math.ceil((d.total || 0) / (d.page_size || 20)));
+    if (pager) {
+      pager.style.display = 'flex';
+      pager.innerHTML = '<span class="muted">共 ' + (d.total || 0) + ' 条 · 第 ' + sigHistPage + '/' + totalPages + ' 页</span>' +
+        '<button class="btn btn-sm" ' + (sigHistPage <= 1 ? 'disabled' : '') + ' onclick="sigHistorySearch(' + (sigHistPage - 1) + ')">◀ 上一页</button>' +
+        '<button class="btn btn-sm" ' + (sigHistPage >= totalPages ? 'disabled' : '') + ' onclick="sigHistorySearch(' + (sigHistPage + 1) + ')">下一页 ▶</button>';
+    }
+  } catch (e) {
+    safeSetHTML('sig-hist-content', '<p class="muted">加载失败: ' + escapeHtml(e.message) + '</p>');
+  }
+}
+
+function sigHistoryReset() {
+  ['sig-hist-date', 'sig-hist-ticker', 'sig-hist-type', 'sig-hist-status', 'sig-hist-id']
+    .forEach((id) => { const el = $el(id); if (el) el.value = ''; });
+  sigHistorySearch(1);
+}
+
+// ── 信号质量评估（表3，保留；2026-09-14 任务4 重写信号块时误删，已恢复）──
 async function sigqLoad(period) {
   document.querySelectorAll('#sigq-period .seg-item').forEach((b) => {
     b.classList.toggle('is-active', b.getAttribute('data-period') === period);
@@ -564,15 +622,6 @@ function renderQuality(d) {
     '<div class="qrow"><span class="qrow-label">P0 执行</span><div class="qrow-inline">' + p0Html + '</div></div>' +
     '<p class="muted qnote">信号数 ' + d.signals_included + ' · 已结算 ' + d.settled_included + ' · 指标由复盘/周三周报生产，本页只读聚合展示</p>';
 }
-
-function sigToggle() {
-  sigView = sigView === 'table' ? 'markdown' : 'table';
-  const btn = $el('sig-toggle');
-  if (btn) btn.textContent = sigView === 'table' ? '原文视图' : '表格视图';
-  const sel = $el('sig-date');
-  if (sel && sel.value) sigRender(sel.value);
-}
-
 
 // ═══════════════════════════════════════════════════════════════
 // 报告
@@ -699,10 +748,14 @@ async function schedLoad(force) {
     if (runsEl) {
       runsEl.innerHTML = runs.items.map((r) => {
         const st = { success: '✅', failed: '❌', timeout: '⏱️', running: '⏳', skipped: '⏭️' }[r.status] || '·';
+        const stopBtn = r.status === 'running'
+          ? `<button class="btn btn-sm btn-danger sched-stop-btn" onclick="event.stopPropagation();schedStop('${escapeHtml(r.task_id)}')">⏹ 停止</button>`
+          : '';
         return `<div class="sched-run" onclick="schedShowLog(${r.id})">
           <span>${st}</span> <b>${escapeHtml(r.task_id)}</b>
           <span class="muted">${r.trigger === 'manual' ? '手动' : '自动'} · ${escapeHtml(r.run_time || '')}</span>
           <span class="muted">${r.duration_sec != null ? r.duration_sec + 's' : ''}</span>
+          ${stopBtn}
         </div>`;
       }).join('') || '<p class="muted">暂无运行记录</p>';
     }
@@ -734,6 +787,17 @@ async function schedRun(taskId) {
     setTimeout(() => schedLoad(true), 4000);
   } catch (e) {
     toast('运行失败: ' + e.message, 'error');
+  }
+}
+
+async function schedStop(taskId) {
+  if (!confirm('确定停止任务「' + taskId + '」吗？正在进行的分析会被中断。')) return;
+  try {
+    const r = await apiPost('/api/scheduler/stop/' + encodeURIComponent(taskId), {});
+    toast('已请求停止 ' + taskId, 'success');
+    setTimeout(() => schedLoad(true), 2000);
+  } catch (e) {
+    toast('停止失败: ' + e.message, 'error');
   }
 }
 

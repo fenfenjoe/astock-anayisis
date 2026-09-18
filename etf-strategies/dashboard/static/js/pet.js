@@ -38,8 +38,10 @@
     // 暖橘毛色与小满蜜橘 accent 呼应；动作组 Idle/Tap/Taphead/Tick_5
     // （含 Singing 唱歌、Sleeping 睡觉趣味动作），无表情（表情联动自动跳过）
     modelJson: '/static/live2d/model/Senko/senko.model3.json',
-    stageW: 360, stageH: 254, // 与 pet.css 的 canvas 区域一致（舞台 360x300 减场景让位）
-    fitFactor: 1.08,          // 模型高占舞台比（bounds 内角色头顶约 16% 留白，1.08 不裁耳）
+    stageW: 360, stageH: 300, // 与 pet.css 的 .xm-pet-stage 尺寸一致（场景已移除，画布=舞台）
+    // 模型高占舞台比：<1 → 顶部对齐时头耳完整可见，不裁头顶（曾用 1.08 底部对齐 →
+    // 头顶 8% 超出画布被 overflow:hidden 裁掉 → "看不到头"。已改顶部对齐 + 留边）。
+    fitFactor: 0.96,
   };
 
   // ═══════════ 台词库（人设语气；仅状态播报/日常，不含投资指令）═══
@@ -124,7 +126,7 @@
   // ═══════════ DOM 助手 ═══════════
   function $(id) { return document.getElementById(id); }
   var el = {
-    pet: null, stage: null, canvas: null, fallback: null, scene: null,
+    pet: null, stage: null, canvas: null, fallback: null,
     bubble: null, mini: null, zzz: null, modes: null,
   };
   function cacheEls() {
@@ -132,7 +134,6 @@
     el.stage = $('xm-pet-stage');
     el.canvas = $('xm-pet-canvas');
     el.fallback = $('xm-pet-fallback');
-    el.scene = $('xm-pet-scene');
     el.bubble = $('xm-pet-bubble');
     el.zzz = $('xm-pet-zzz');
     el.mini = $('xm-pet-mini');
@@ -381,9 +382,10 @@
       state.app = app;
       PIXI.live2d.Live2DModel.from(CFG.modelJson).then(function (model) {
         state.model = model;
-        // 布局基准取 internalModel 的布局尺寸（与姿势/首帧渲染时机无关）：
-        // model.width/height 走 getBounds()，在模型尚未完成首帧更新或容器尚未布局时
-        // 可能偏小甚至为 0 → scale 被放大 → 角色超出画布、头顶被裁（刷新后偶发"看不到头"）。
+        // 布局基准说明：layoutModel 用 model.width/height（getBounds 视觉尺寸），
+        // 首帧未稳定时为 0 → 布局会跳过，由下方 rAF 二次布局 + ResizeObserver 补齐。
+        // 不再用 internalModel 的纹理尺寸（如 4096）当视觉高，避免模型被放大、
+        // 头顶超出画布被 overflow:hidden 裁掉（"看不到头"）。此处仅记录日志用。
         var im0 = model.internalModel || {};
         state.origW = im0.width || model.width;
         state.origH = im0.height || model.height;
@@ -394,7 +396,7 @@
           + '（原生 ' + Math.round(state.origW) + 'x' + Math.round(state.origH) + '）');
         layoutModel();
         // 首帧后再布局一次：resolve 瞬间容器 clientHeight 可能仍为 0（fixed 容器尚未沉降），
-        // 二次布局用真实尺寸自愈，避免按 254 兜底值缩放导致头顶被裁。
+        // 二次布局用真实尺寸自愈（顶部对齐 + fitFactor<1，不裁头顶）。
         requestAnimationFrame(function () { layoutModel(); });
         // 容器尺寸变化（字体加载、布局沉降、收起/展开、缩放）时重新布局
         if (typeof ResizeObserver !== 'undefined' && el.canvas && !state.ro) {
@@ -433,18 +435,26 @@
     try {
       var w = el.canvas ? el.canvas.clientWidth || CFG.stageW : CFG.stageW;
       var h = el.canvas ? el.canvas.clientHeight || CFG.stageH : CFG.stageH;
-      // 基准高度优先取 internalModel.height（布局尺寸，稳定且与姿势无关），
-      // 退回加载时记录的原生高度，最后才用 getBounds 的 m.height。
-      var im = m.internalModel || {};
-      var origH = im.height || state.origH || m.height;
-      // 尺寸未就绪（0/NaN）时不布局，等下一帧或 ResizeObserver 再试，
-      // 否则 scale=Infinity/巨大 → 模型被放大到只剩脚、头顶飞出画布。
-      if (!origH || !isFinite(origH) || origH <= 0) return;
-      var scale = (h * (CFG.fitFactor || 0.98)) / origH;   // 以原生尺寸为基准，底部居中
+      // 布局基准取模型的【局部包围盒】（getLocalBounds）—— 与当前 scale 无关、幂等。
+      // ⚠️ 不能用 m.width/m.height：PIXI Container 的 width 是 scale.x * getLocalBounds().width
+      // （v6.5.10），与当前 scale 自反馈 → scale' = K/scale 每次调用都在「适配缩放」与
+      // 「原生尺寸 1.0」间翻转；隐藏(display:none)→ResizeObserver 重布局后奇偶错位，
+      // 模型停在原生尺寸 → 头顶飞出画布被 overflow:hidden 裁掉（"看不到头"，必现）。
+      // getLocalBounds 对 Live2DModel 恒返回 internalModel 的固定画布尺寸 → 幂等稳定。
+      var lb = m.getLocalBounds();
+      var bw = lb.width, bh = lb.height;
+      if (!bh || !isFinite(bh) || bh <= 0) return;
+      if (!bw || !isFinite(bw) || bw <= 0) return;
+      // 完整放入画布：顶部对齐（anchor.y=0）+ 高度=画布高×fitFactor，
+      // 宽度也做适配（取两者较小者）—— 头顶/耳朵永远在画布内，不再被裁。
+      var scale = Math.min(
+        (w * 0.9) / bw,                    // 横向留边，防模型过宽被横裁
+        (h * (CFG.fitFactor || 0.96)) / bh // 纵向 fitFactor<1，顶部留白，不裁头
+      );
       if (!isFinite(scale) || scale <= 0) return;
       m.scale.set(scale, scale);
-      m.anchor.set(0.5, 1);
-      m.position.set(w / 2, h);
+      m.anchor.set(0.5, 0);                 // 顶部居中锚点
+      m.position.set(w / 2, 0);             // 顶部对齐画布顶
       if (w > 0 && h > 0) state.app.renderer.resize(w, h);
     } catch (e) { /* ignore */ }
   }
@@ -699,7 +709,9 @@
 
   function minimize() {
     if (!el.pet) return;
-    state.sessionHidden = false;
+    // 不覆盖 sessionHidden：hidePet() 置 true 后不得被 minimize() 重置为 false，
+    // 否则页面 remount（auth 刷新等）时 applyVisibility 会把桌宠重新放出来
+    // （2026-09-15 BUG-FIX：原 minimize 无脑置 false，掩盖"用户点 × 隐藏"意图）。
     hideBubble();
     el.pet.classList.add('is-min');
     el.mini.classList.add('show');

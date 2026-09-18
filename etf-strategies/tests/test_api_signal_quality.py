@@ -70,18 +70,35 @@ def client(tmp_path, monkeypatch):
             return True
 
         @staticmethod
-        def select(table, columns="*", filters=None, order=None, limit=None):
+        def select(table, columns="*", filters=None, order=None, limit=None,
+                   offset=None):
             assert table == "signal_tracking"
             out = cloud_rows
             if filters:
                 for col, op, val in filters:
                     if col == "signal_date" and op == "eq":
                         out = [r for r in out if r.get("signal_date") == val]
+                    elif col == "signal_id" and op == "like":
+                        pat = val.strip("*")
+                        out = [r for r in out if pat in r.get("signal_id", "")]
+                    elif col == "ticker" and op == "like":
+                        pat = val.strip("*")
+                        out = [r for r in out if pat in str(r.get("ticker", ""))]
+                    elif col == "status" and op == "eq":
+                        out = [r for r in out if r.get("status") == val]
+                    elif col == "trade_type" and op == "eq":
+                        out = [r for r in out if r.get("trade_type") == val]
             if order == "signal_id":
                 out = sorted(out, key=lambda r: r.get("signal_id", ""))
+            if offset:
+                out = out[offset:]
             if limit:
                 out = out[:limit]
             return out
+
+        @staticmethod
+        def update(table, row, filters=None, columns="*"):
+            return [{"signal_id": row.get("signal_id") or (filters or [("", "")])[0][2]}]
 
     import sys as _sys
     monkeypatch.setitem(_sys.modules, "cloud_db", FakeCloudDB)
@@ -136,9 +153,138 @@ def test_signal_quality_period_day(client):
 
 
 def test_daily_signals_markdown_fallback(client, monkeypatch):
-    """云库该日无数据 → source=markdown（回退路径）。"""
+    """云库该日无数据 → 空表（任务4 全云库化，无 markdown 兜底）。"""
     # 让云库对该日返回空（FakeCloudDB 按日期过滤已实现）
     r = client.get("/api/daily-signals?date=20260901")
     d = r.json()
-    # 20260901 不在样本 → 走 markdown 兜底（mock report 不存在 → 404 或空）
-    assert r.status_code in (200, 404)
+    assert r.status_code == 200
+    assert d["source"] == "cloud"
+    assert d["signals"] == []
+
+
+# ═══════════════════════════════════════════════════════════════
+# 任务4 新增接口（2026-09-14）
+# ═══════════════════════════════════════════════════════════════
+
+
+def test_signal_enums(client):
+    """/api/signal-enums 返回各字段枚举。"""
+    r = client.get("/api/signal-enums")
+    assert r.status_code == 200
+    e = r.json()
+    assert e["trade_type"] == ["buy", "sell"]
+    assert "triggered" in e["status"]
+    assert "expired" in e["status"]  # v3.0 新增
+    assert e["priority"] == ["P0", "P1", "P2"]
+    assert e["outcome"] == ["hit", "stopped", "miss"]
+
+
+def test_signal_history_pagination(client):
+    """/api/signal-history 分页 + 日期过滤 + 8 字段视图（v3.0 交易价/目标价/止损价）。"""
+    r = client.get("/api/signal-history?date=20260907&page=1&page_size=20")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["total"] == 2
+    items = d["items"]
+    assert len(items) == 2
+    # 8 字段视图：含 signal_id / trade_type / position / valid_window / trade_price
+    row = items[0]
+    assert row["signal_id"] == "SIG-20260907-01"
+    assert row["trade_type"] == "buy"
+    assert "signal_date" in row
+    assert "trade_price" in row      # v3.0 交易价
+    assert "target_price" in row     # v3.0 目标价
+    assert "stop_price" in row       # v3.0 止损价
+
+
+def test_signal_history_empty(client):
+    """/api/signal-history 无匹配 → 空列表。"""
+    r = client.get("/api/signal-history?ticker=999999")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["items"] == []
+    assert d["total"] == 0
+
+
+def test_signal_triggers_cloud_enabled(client):
+    """/api/signal-triggers 返回 trigger_price 非空的行（云库可用）。"""
+    r = client.get("/api/signal-triggers")
+    assert r.status_code == 200
+    d = r.json()
+    assert "items" in d
+
+
+def test_signal_trigger_post(client, monkeypatch):
+    """POST /api/signal-trigger 写云库触发价/触发时间（mock cloud_update_fields）。"""
+    import importlib
+    import types as _types
+
+    written = {}
+
+    class _FakeSTC:
+        @staticmethod
+        def cloud_enabled():
+            return True
+
+        @staticmethod
+        def cloud_update_fields(signal_id, fields):
+            written["signal_id"] = signal_id
+            written["fields"] = fields
+            return True
+
+    monkeypatch.setitem(__import__("sys").modules, "lib",
+                        _types.SimpleNamespace(signal_tracking_cloud=_FakeSTC))
+
+    r = client.post("/api/signal-trigger", json={"signal_id": "SIG-20260908-01",
+                                                 "trigger_price": 1.61, "trigger_time": "10:05"})
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+    assert written["signal_id"] == "SIG-20260908-01"
+    assert written["fields"]["trigger_price"] == 1.61
+    assert written["fields"]["trigger_time"] == "10:05"
+
+
+def test_signal_entry_post(client, monkeypatch):
+    """POST /api/signal-entry 写买入价/买入时间到云库。"""
+    import types as _types
+
+    written = {}
+
+    class _FakeSTC:
+        @staticmethod
+        def cloud_enabled():
+            return True
+
+        @staticmethod
+        def cloud_update_fields(signal_id, fields):
+            written["signal_id"] = signal_id
+            written["fields"] = fields
+            return True
+
+    monkeypatch.setitem(__import__("sys").modules, "lib",
+                        _types.SimpleNamespace(signal_tracking_cloud=_FakeSTC))
+
+    r = client.post("/api/signal-entry", json={"signal_id": "SIG-20260908-01",
+                                               "entry_price": 1.60, "entry_time": "10:00"})
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+    assert written["fields"]["entry_price"] == 1.60
+    assert written["fields"]["entry_time"] == "10:00"
+
+
+def test_signal_trigger_post_bad_status(client, monkeypatch):
+    """POST /api/signal-trigger 写非法枚举 → 422（校验在 lib 层抛 ValueError）。"""
+    import types as _types
+
+    def _bad(signal_id, fields):
+        raise ValueError("信号字段 trade_type 值 '坏值' 不在合法枚举内")
+
+    monkeypatch.setitem(__import__("sys").modules, "lib",
+                        _types.SimpleNamespace(signal_tracking_cloud=_types.SimpleNamespace(
+                            cloud_enabled=lambda: True,
+                            cloud_update_fields=_bad,
+                        )))
+
+    r = client.post("/api/signal-trigger", json={"signal_id": "SIG-X",
+                                                 "trigger_price": 1.0, "trigger_time": "10:00"})
+    assert r.status_code == 422

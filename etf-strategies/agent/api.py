@@ -99,15 +99,24 @@ def agent_status():
     state_until = meta.get("xiaoman_state_until")
     state_label = lifecycle._state_label(state_id)
 
+    # 定时任务进行中 → current_task 非空 → state=working（BUG-FIX 2026-09-15：
+    # 原来硬编码 current_task=None，调度任务执行时桌宠永远不显示"工作中"）。
+    try:
+        from agent.core import scheduler_agent
+
+        current_task = scheduler_agent.current_task() or None
+    except Exception:
+        current_task = None
+
     return {
         "alive": alive,
         "online": online,
-        "state": _state(alive, "on", None, online, state_id),
+        "state": _state(alive, "on", current_task, online, state_id),
         "heartbeat_age_seconds": hb_age,
         "dsh_ready": dsh_runner.find_dsh_bin() is not None,
         "attendance": "on",
-        "current_task": None,
-        "mood": _mood("on", None, online, state_id, state_label),
+        "current_task": current_task,
+        "mood": _mood("on", current_task, online, state_id, state_label),
         "published_on": meta.get("published_on")
         if meta.get("published_on") == datetime.now().strftime("%Y-%m-%d")
         else None,
@@ -450,6 +459,12 @@ async def chat_message(sid: int, request: Request):
     if not agent_db.session_get(sid):
         raise HTTPException(404, "会话不存在")
 
+    if agent_db.meta_get("xiaoman_online") != "1":
+        raise HTTPException(
+            429,
+            "小满现在已下班了，暂时无法回复~ 请在页面顶部点击【让小满上线】后再来聊天吧 💤",
+        )
+
     agent_db.message_add(sid, "user", content)
     task, knowledge = web.chat_task(sid, content)
     sources = [{"title": k["title"], "url": k["url"]} for k in knowledge]
@@ -559,6 +574,14 @@ async def scheduler_run_task(task_id: str, request: Request):
 
     result = scheduler_agent.execute_task(task_id, trigger=trigger)
     return result
+
+
+@app.post("/api/agent/scheduler/stop/{task_id}", dependencies=[protected])
+def scheduler_stop_task(task_id: str):
+    """停止正在执行的任务（用户从工作日志点击「停止」→ Dashboard → Agent）。"""
+    from agent.core import scheduler_agent
+
+    return scheduler_agent.stop_task(task_id)
 
 
 @app.get("/api/agent/scheduler/status", dependencies=[protected])

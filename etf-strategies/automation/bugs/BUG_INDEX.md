@@ -11,10 +11,10 @@
 |------|------|
 | OPEN | 0 |
 | IN_PROGRESS | 0 |
-| FIXED | 28 |
+| FIXED | 32 |
 | VERIFIED | 1 |
 | WONT_FIX | 1 |
-| MANUAL_REVIEW | 10 |
+| MANUAL_REVIEW | 8 |
 
 ---
 
@@ -31,10 +31,8 @@
 | BUG-013 | S12 KB"放量下跌自动切货币"未实现：仅0.3分惩罚 | 避险信号策略行为设计决策，auto_fix_eligible=false |
 | BUG-014 | S12/S13 KB因子口径与实现不符（年化收益/成交量因子） | 因子口径决策，auto_fix_eligible=false |
 | BUG-015 | S9/S13 KB资产池数量标注不符（6只 vs 实列5只） | KB 文档口径修订，auto_fix_eligible=false |
-| BUG-029 | pet.js 引用已移除的场景层挂载点 xm-pet-scene，dashboard.html 无该元素（前端契约断裂） | 前端契约决策（移除死引用 vs 恢复挂载点），auto_fix_eligible=false |
-| BUG-030 | pet.css 桌宠状态/姿态样式覆盖不完整：缺 data-state="working" 与全部 data-posture 规则 | 视觉设计决策 + posture 机制去留，auto_fix_eligible=false |
 | BUG-038 | agent/__main__._ensure_cloud() 晚于 agent.db 导入执行:USE_CLOUD 导入时固化，「强制 AGENT_DB_BACKEND=cloud」永远无效(靠.env掩盖) | 导入时序/后端选择策略决策（改导入顺序 vs 惰性求值 vs db.py 缺省兜底），auto_fix_eligible=false |
-| BUG-039 | scheduler_agent 声称「接管定时任务+tick loop驱动」实际未接入生命周期(dashboard scheduler仍在跑,仅HTTP手动触发可达) | 架构迁移节奏决策（谁是唯一调度方 + 防双跑互斥），auto_fix_eligible=false |
+| BUG-039 | scheduler_agent 与 tick loop 迁移收尾未完成:核心接线已落地(lifecycle.tick→scheduler_agent.tick),但 Dashboard scheduler 仍在跑且无互斥开关(双跑竞态待裁决) | 架构迁移节奏决策（谁是唯一调度方 + 防双跑互斥），auto_fix_eligible=false |
 
 ---
 
@@ -69,8 +67,8 @@
 | BUG-024 | test_agent_lifecycle tick测试未适配3bcc9d0上线/下线闸门(未设xiaoman_online=1, Rss断言失败) | tests | HIGH | FIXED | 2026-09-07 |
 | BUG-025 | 云端集成测试skipif只查env不查backend:cloud_db._ENABLED模块级常量在.env加载前导入时永久False,全量测试11项FAILED/ERROR | tests | MEDIUM | FIXED | 2026-09-10 |
 | BUG-026 | 9/13活跃ETF缓存09-07 bar为盘中partial快照(非官方收盘),跨源偏差最高+1.17%(159915),BUG-021盘中重拉引入 | data | HIGH | FIXED | 2026-09-08 |
-| BUG-029 | pet.js引用已移除场景层挂载点xm-pet-scene,dashboard.html无该元素(前端契约断裂,2测试FAILED) | dashboard | MEDIUM | MANUAL_REVIEW | 2026-09-08 |
-| BUG-030 | pet.css桌宠状态/姿态样式覆盖不完整:缺data-state=working与全部data-posture规则(1测试FAILED) | dashboard | MEDIUM | MANUAL_REVIEW | 2026-09-08 |
+| BUG-029 | pet.js 引用已移除场景层挂载点xm-pet-scene,dashboard.html无该元素(前端契约断裂,2测试FAILED) | dashboard | MEDIUM | FIXED | 2026-09-16 |
+| BUG-030 | pet.css桌宠状态/姿态样式覆盖不完整:缺data-state=working与全部data-posture规则(1测试FAILED) | dashboard | MEDIUM | FIXED | 2026-09-16 |
 | BUG-031 | test_scheduler_status fixture未重置agent_online()的_online_cache:测试跨用例缓存污染(顺序相关,2测试FAILED) | tests | MEDIUM | FIXED | 2026-09-08 |
 | BUG-032 | 5个非活跃cache缓存过期复发(002142/159227/159326/512100/601398, mtime=09-07, 数据只到09-04, BUG-022同集合第2次复发) | data | MEDIUM | FIXED | 2026-09-09 |
 | BUG-033 | 活跃ETF 513100缺09-09 bar(13活跃ETF唯一无当日数据,腾讯源09-09 bar异常OHLC全同+未收盘,收盘后补拉,同BUG-021模式) | data | MEDIUM | FIXED | 2026-09-09 |
@@ -79,10 +77,12 @@
 | BUG-036 | scheduler_agent失败通知调用create_review_done_notice签名不匹配(kind/title/content/source vs summary):TypeError被静默吞掉,任务失败通知永不生成 | agent | MEDIUM | FIXED | 2026-09-10 |
 | BUG-037 | 本地file后端SCHEMA缺tickets表:ticket_upsert/list/count/get全部OperationalError,工单功能在file模式(含全部pytest进程)完全不可用 | agent | MEDIUM | FIXED | 2026-09-10 |
 | BUG-038 | agent/__main__._ensure_cloud()晚于agent.db导入执行:USE_CLOUD导入时固化,「强制AGENT_DB_BACKEND=cloud」永远无效(靠.env掩盖) | agent | MEDIUM | MANUAL_REVIEW | 2026-09-10 |
-| BUG-039 | scheduler_agent声称「接管定时任务+tick loop驱动」实际未接入生命周期(dashboard scheduler仍在跑,仅HTTP手动触发可达) | agent | LOW | MANUAL_REVIEW | 2026-09-10 |
+| BUG-039 | scheduler_agent与tick loop迁移收尾未完成:核心接线已落地(lifecycle.tick→scheduler_agent.tick),但Dashboard scheduler仍在跑且无互斥开关(双跑竞态待裁决) | agent | LOW | MANUAL_REVIEW | 2026-09-10 |
 | BUG-040 | 12/13活跃ETF缓存含09-14盘中partial bar(另6/13的09-11 bar亦为partial):违反DAT-001,第5次复发(BUG-016/019/026/034同根因),512660跨源-0.514% | data | HIGH | FIXED | 2026-09-14 |
 | BUG-041 | 5个非活跃cache缓存过期复发(002142/159227/159326/512100/601398, mtime=09-10, 缺09-10/09-11数据, BUG-032同集合第4次复发) | data | MEDIUM | FIXED | 2026-09-14 |
 | BUG-042 | test_agent_api chat测试未适配xiaoman_online上线闸门:client夹具未设meta,4项chat用例命中429(agent/api.py:453-457),BUG-035修复后暴露,同BUG-024族 | tests | MEDIUM | FIXED | 2026-09-14 |
+| BUG-043 | 11/13活跃ETF缓存缺09-14官方收盘bar(另510300的09-14 bar为盘中partial,量能仅71.2%):缓存未随最后一个完整交易日推进,REQ-001同根因族第6次复发 | data | HIGH | FIXED | 2026-09-15 |
+| BUG-044 | 5个非活跃cache缓存缺09-14官方bar(002142/159227/159326/512100/601398,止于09-11,BUG-041同集合第5次复发) | data | MEDIUM | FIXED | 2026-09-15 |
 <!-- BUG_TABLE_END -->
 
 ---
@@ -135,6 +135,9 @@
 | 2026-09-14 | 数据巡检 | 2 | 2 | 0 |
 | 2026-09-14 | 代码巡检 | 1 | 0 | 11 |
 | 2026-09-14 | 自动修复 | 0 | 1 | 0 |
+| 2026-09-15 | 数据巡检 | 2 | 2 | 0 |
+| 2026-09-16 | 数据巡检 | 0 | 0 | 0 |
+| 2026-09-16 | 代码巡检 | 0 | 2 | 8 |
 
 ---
 

@@ -53,6 +53,7 @@ _COLUMN_MAP = {
     "direction": "direction",
     "urgency": "urgency",
     "expected_trigger_rate": "expected_trigger_rate",
+    "trade_price": "trade_price",
     "target_price": "target_price",
     "stop_price": "stop_price",
     "target_pct": "target_pct",
@@ -75,11 +76,20 @@ _COLUMN_MAP = {
 _EXTRA_COLUMNS = [
     "trigger_condition", "valid_window", "position", "source",
     "eval_decision_quality", "eval_execution_quality",
+    "trigger_price", "trigger_time", "entry_time",
 ]
 # 云表全部列（固定集合，保证批量 upsert 各行键一致）
 _ALL_COLUMNS = list(_COLUMN_MAP.values()) + _EXTRA_COLUMNS + ["created_at", "updated_at"]
 # 云表 → JSON 反向（signal_date → trigger_date）
 _INVERSE = {v: k for k, v in _COLUMN_MAP.items()}
+
+# 枚举约束复用 lib/signal_tracking.py 的权威定义（docs/signal-enums.md 同口径），避免双份漂移
+from lib.signal_tracking import assert_valid_signal_record  # noqa: E402
+
+
+def _validate_row(row: dict) -> dict:
+    """写入/更新前逐字段枚举/数值校验（复用权威 assert_valid_signal_record）。"""
+    return assert_valid_signal_record(row)
 
 
 def cloud_enabled() -> bool:
@@ -90,15 +100,24 @@ def cloud_enabled() -> bool:
 
 
 def to_row(sig: dict) -> dict:
-    """JSON 信号 → 云表行（固定列集合，None 补齐）。"""
-    row = {c: None for c in _ALL_COLUMNS}
+    """JSON 信号 → 云表行（写前枚举/数值校验）。
+
+    2026-09-14 任务4 关键改动：**跳过值为 None 的列**（不再全列填充 None）。
+    原因：upsert 是 merge-duplicates，只更新 payload 中出现的列；盘中已写的
+    trigger_price/trigger_time 与复盘已写的 entry_price/entry_time 若在这里以 None
+    出现，会把云库既有值覆盖清空。跳过 None 列 → 各阶段写入互补、互不清空。
+    """
+    row = {}
     for jkey, ckey in _COLUMN_MAP.items():
         val = sig.get(jkey)
         if val is not None:
             row[ckey] = val
+    for c in _EXTRA_COLUMNS:
+        if sig.get(c) is not None:
+            row[c] = sig.get(c)
+    _validate_row(row)
     now = date.today().isoformat()
-    if row["created_at"] is None:
-        row["created_at"] = now
+    row.setdefault("created_at", now)
     row["updated_at"] = now
     return row
 
@@ -141,7 +160,10 @@ def cloud_load_by_date(signal_date: str) -> list[dict]:
 
 
 def cloud_upsert_signals(records: list[dict]) -> int:
-    """把信号记录 upsert 到云库（on_conflict=signal_id，幂等）。返回成功条数。"""
+    """把信号记录 upsert 到云库（on_conflict=signal_id，幂等）。返回成功条数。
+
+    写入前逐条做枚举/数值校验：非法值抛 ValueError，由调用方决定中断或跳过。
+    """
     if not records:
         return 0
     if not cloud_enabled():
@@ -154,9 +176,10 @@ def cloud_upsert_signals(records: list[dict]) -> int:
 
 
 def cloud_update_fields(signal_id: str, fields: dict) -> bool:
-    """更新单条信号的部分字段（如复盘回填评价列）。"""
+    """更新单条信号的部分字段（如盘中触发价/复盘回填评价列）。含枚举/数值校验。"""
     if not cloud_enabled():
         return False
+    _validate_row(fields)
     allowed = {c: v for c, v in fields.items() if c in _ALL_COLUMNS}
     if not allowed:
         return False

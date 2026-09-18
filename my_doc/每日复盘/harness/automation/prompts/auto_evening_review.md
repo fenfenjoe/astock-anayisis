@@ -363,20 +363,30 @@ def board_scan(fs: str = "m:90+t:2", pz: int = 200) -> list:
 
 ## 第八步：信号执行复盘
 
-> 🚨 **关键约束：信号评价必须"原地写入"到 `每日信号.md` 文件中。**
-> 复盘报告（`复盘报告.md`）中可以有一个汇总版，但 `每日信号.md` 中的 `## 信号评价（复盘时填入）` 和 `## 当日信号统计` 两个节的表格**必须有实际数据行**，不能留空。
-> **这是硬性要求，不是建议。如果这两个节为空，复盘视为未完成。**
+> 🚨 **2026-09-14 任务4 变更**：`## 信号评价（复盘时填入）`、`## 当日信号统计`、
+> `## 信号收益追踪（复盘时填入）`、`## 信号数量检查`、`信号与早盘报告对照` **不再生成**
+> （CHAT.md 明确要求）。评级判断仍做（8.1/8.2 标准），但**结果写云库**
+> （`eval_decision_quality`/`eval_execution_quality` 字段），**不再写入 markdown 章节**。
+> 信号收益结算（7.6.2）与云库入库（7.6.1）保留——周报 `auto_signal_quality_weekly` 仍消费云库。
 
-对 `每日信号.md` 中的每条信号进行评级，并**原地写入**以下三个节：
+### 8.0 输出方式（任务4 修订）
 
-### 8.0 写入位置与操作顺序
-
-1. **先读取** `reports/{today}/每日信号.md` 当前内容
-2. **修改**以下三个节的内容（保留节标题，填充表格数据行）：
-   - **`## 信号评价（复盘时填入）`**：填写 7.1（决策质量）+ 7.2（执行质量）的评级结果，含入场价/出场价/P&L/持有天数/紧急度校准。**每条已触发/已执行的信号必须有一行**（未触发/已过期的信号可选填）
-   - **`## 当日信号统计`**：填写 7.4 的汇总统计（含紧急度相关指标）。**所有指标必须填具体数字，不可留"—"**
-   - **`## 信号收益追踪（复盘时填入）`**：填写 7.6 的本日结算信号 + 累计统计（从 signal_tracking.json 聚合）
-3. **写回** `每日信号.md` 文件
+1. **读** `reports/{today}/每日信号.md` 的 `## 信号总表`（信号清单与当日状态）
+2. **对每条已触发/已执行的信号**，用 8.1/8.2 标准做评级，并把评价结果**写云库**：
+   ```bash
+   python -c "
+   import sys
+   sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+   from lib.signal_tracking_cloud import cloud_update_fields
+   # 对每条已触发/已执行信号调用：
+   #   cloud_update_fields('<signal_id>', {'eval_decision_quality': '<S/A/B/C/D/F>',
+   #                                        'eval_execution_quality': '<A/B/C/D/F>'})
+   # 云库不可达 → 打印提示并跳过（不阻塞复盘主流程）
+   "
+   ```
+3. **不再生成**以下 markdown 节（保留节标题删除/留空均可，但不得填写数据行）：
+   - `## 信号评价（复盘时填入）`、`## 当日信号统计`、`## 信号收益追踪（复盘时填入）`
+4. **不写** `## 信号数量检查` 自检节、**不做** `信号与早盘报告对照` 章节
 
 ### 8.1 决策质量评级 (S/A/B/C/D/F)
 - S: 信号精准预判了市场走势，触发条件恰到好处
@@ -413,9 +423,12 @@ def board_scan(fs: str = "m:90+t:2", pz: int = 200) -> list:
 4. **触发条件校准**：是否有信号触发条件设置不合理（太敏感→误触发 / 太迟钝→漏触发）？P0 信号的阈值是否需要调整？
 5. **执行完整性**：信号触发记录是否完整？是否存在触发条件满足但未记录的情况？是否存在信号"已过期未执行"但实际盘中应执行的情况？**P0 执行追踪（REQ-007）**：`## P0 执行追踪` 节是否完整记录每个已触发 P0 的逐检查点响应？最终结果是否已收尾？
 
-### 8.4 更新 `## 当日信号统计`
+### 8.4 当日信号统计（任务4：不再生成 markdown 表，仅作内部统计参考）
 
-根据信号总表和触发记录，填充统计表：
+> **2026-09-14 任务4**：`## 当日信号统计` 节**不再生成**到 `每日信号.md`。
+> 以下统计口径保留，供 8.6 云库入库/质量仪表盘（7.6.4）内部使用，但**不输出 markdown 表格**。
+
+根据信号总表和触发记录，统计以下口径（供质量仪表盘/云库回填参考）：
 
 | 指标 | 填写来源 |
 |------|----------|
@@ -434,9 +447,12 @@ def board_scan(fs: str = "m:90+t:2", pz: int = 200) -> list:
 | 升级质量 | 升级后盈利信号数 / 已升级信号数（目标：≥60%，低于此值需审视升级条件阈值） |
 | 观察废弃率 | 已废弃的观察信号数 / 已触发的观察信号总数（目标：信息价值，废弃≠失败——正确识别不应操作也是价值） |
 
-### 8.5 更新 `## 信号评价（复盘时填入）`
+### 8.5 信号评价（任务4：评价写云库，不再生成 markdown 评价表）
 
-对每条信号逐条填写评价表（v2.0 扩展列）：
+> **2026-09-14 任务4**：`## 信号评价（复盘时填入）` 节**不再生成**到 `每日信号.md`。
+> 评级判断仍按下方标准做，结果写云库 `eval_decision_quality`/`eval_execution_quality`（见 §8.0 步骤2）。
+
+对每条信号按下列字段做内部评价（写云库，不输出 markdown 表）：
 
 | 信号ID | 决策质量 | 执行质量 | 入场价 | 出场价 | P&L(元) | P&L(%) | 持有天数 | 紧急度校准 | 复盘反思 |
 |--------|:------:|:------:|--------|--------|:------:|:-----:|:------:|:--------:|----------|
@@ -500,7 +516,7 @@ print(f'云库信号总数: {len(cloud_signals)} 条')
 
 **操作规则**：
 - 新触发信号（已触发/已执行/部分执行）= 创建记录，status="triggered"
-- 未触发的信号（已过期/已废弃/待执行）= 不录入追踪库（只有触发了才追踪收益）
+- 未触发的信号（已过期/已废弃/未触发）= 不录入追踪库（只有触发了才追踪收益）
 - **无入场价/无份额的信号不追踪收益（2026-08-26 优化）**：parse_signal_markdown 只返回同时具备 入场价（盘中验证记录 现价/当前/开盘）+ 份额>0 的信号——无法结算 P&L 的不入库，避免追踪库积累永不结算的僵尸信号。观察类信号（仓位=观察）不追踪
 - **升级信号双向链接（v3.0新增）**：
   - 对从关注列表升级的盘中追加信号（`-盘中` 后缀）→ 在 signal record 中追加 `upgraded_from` 字段，存储触发条件中的升级来源信息
@@ -515,6 +531,68 @@ print(f'云库信号总数: {len(cloud_signals)} 条')
   - 对从关注列表升级的盘中追加信号（`-盘中` 后缀）→ 在 signal record 中追加 `upgraded_from` 字段，存储触发条件中的升级来源信息
   - 对状态="已升级"的原观察信号 → 在原记录中追加 `upgraded_to` 字段，存储新操作信号ID
   - 这建立双向链接，便于跨日追踪升级信号的质量（升级后信号盈利=升级决策正确）
+
+#### 7.6.1b 复盘关联"录入交易" → 回填 entry_price/entry_time（任务4 新增，2026-09-14）
+
+> **CHAT.md 任务4 硬性要求**："复盘分析时检查『录入交易』中的交易记录，记录买入价/买入时间"。
+> 买入价/买入时间写入云库 `entry_price`/`entry_time`，供 Dashboard「信号触发记录」表展示。
+> 数据源：dashboard「持仓/资产」录入的调仓（写本地 `每日调仓.md`）+ `portfolio_trades` 表。
+
+**执行**：读当日 `每日调仓.md`（或 `portfolio_trades`）中的交易记录，对每个有交易的标的，匹配当日已触发/已执行的信号（同 ticker），把 买入价 + 买入时间 写云库：
+
+```bash
+python -c "
+import sys, json, re
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.signal_tracking_cloud import cloud_load_signals, cloud_update_fields, cloud_enabled
+from datetime import date
+
+today_ymd = date.today().strftime('%Y%m%d')
+iso = date.today().isoformat()
+
+# 1. 读当日录入交易（每日调仓.md 的调仓记录表；无则读本地 JSON 兜底）
+trades = []  # [{code, name, side, price, time?}]
+tiao_file = 'my_doc/每日复盘/每日调仓.md'
+try:
+    text = open(tiao_file, encoding='utf-8').read()
+    # 解析调仓记录表行：| 日期 | 名称(代码) | 买卖 | 数量 | 价格 | 备注 |
+    for line in text.splitlines():
+        if '|' not in line or '代码' in line or '日期' in line or '---' in line:
+            continue
+        cells = [c.strip() for c in line.strip().strip('|').split('|')]
+        if len(cells) < 5:
+            continue
+        m = re.search(r'(\d{6})', cells[1])
+        if m and cells[2] in ('买入', '卖出'):
+            trades.append({'code': m.group(1), 'name': cells[1], 'side': cells[2],
+                           'price': float(re.sub(r'[^\d.]', '', cells[4]) or 0)})
+except FileNotFoundError:
+    trades = []
+print(f'当日录入交易: {len(trades)} 条')
+
+# 2. 取云库当日信号，按 ticker 匹配交易 → 回填 entry_price/entry_time
+if not cloud_enabled():
+    print('云库不可用，跳过 entry 回填（不阻塞流程）')
+else:
+    signals = [s for s in cloud_load_signals() if s.get('signal_date') == iso or s.get('trigger_date') == iso]
+    updated = 0
+    for t in trades:
+        for s in signals:
+            if s.get('ticker') == t['code'] and (s.get('status') in ('triggered', 'executed', 'settled')):
+                ok = cloud_update_fields(s['signal_id'], {
+                    'entry_price': t['price'],
+                    'entry_time': '09:30',   # 录入交易无精确时点，取开盘后默认；可按实际备注调整
+                })
+                if ok:
+                    updated += 1
+    print(f'回填 entry_price/entry_time: {updated} 条')
+"
+```
+
+**操作规则**：
+- 只有 `每日调仓.md`/`portfolio_trades` 中有该标的当日交易才回填；无交易不写（保持 NULL）。
+- `entry_time` 若交易备注/记录无精确时点，用 `09:30` 占位；有明确时间则如实填写（`HH:MM`）。
+- 云库不可达 → 打印提示并跳过（不阻塞复盘主流程），下次任务补写。
 
 #### 7.6.2 结算到期信号（云库优先 + 本地镜像）
 
@@ -639,7 +717,7 @@ print(json.dumps(generate_quality_dashboard(db['signals'], settled), ensure_asci
 > **模拟口径**，只用于方向/目标达成率评估，**不并入账户级 P&L / 胜率 / 期望价值**。
 > 若 `simulated_count` 较大（≥2 或 ≥已执行 30%），复盘需回答：为何 P0/P1 信号未执行？执行缺失是否系统性？
 
-> 目标/止损 来自信号表的 `目标/止损` 列（12 列信号表第 9 列），目标达成率评估依据；目标价设定是否过高看"目标达成率"与"平均达标天数"。
+> 交易价/目标价/止损价 来自信号表的 `交易价`/`目标价`/`止损价` 列（14 列信号表第 9/10/11 列；交易价=触发条件关键执行价位，目标价/止损价为买入信号），触发评估与目标达成率评估依据；目标价设定是否过高看"目标达成率"与"平均达标天数"。
 
 **预警与校准（必答）**：
 - P1 周触发率 <40% → ⚠️ 预警：触发条件过严或信号类型需调整（给出具体建议）
@@ -724,86 +802,51 @@ print(json.dumps(alert, ensure_ascii=False))
   > 🚨 **P1 级告警（REQ-007）**：P0 执行率连续 {streak} 日 <100%（{alert.message}）
 - 同时将告警写入 `PENDING_CONFIRMATION.md`（用户必须确认执行缺失根因与整改措施）
 
-### 8.7 写入验证（‼️ 硬性门禁，禁止跳过）
+### 8.7 写入验证（‼️ 硬性门禁，禁止跳过；任务4 改为验证云库）
 
-> 🚨 确认信号评价和统计已正确写入 `每日信号.md` 后，必须运行以下验证脚本。验证失败 = 复盘未完成，必须回补。
+> 🚨 **任务4 修订**：`信号评价/当日信号统计/P0执行追踪` 等 markdown 节已不再生成，
+> 本验证改为校验**云库写入结果**（信号入库 + entry 回填 + 评价回填）。验证失败 = 复盘未完成，必须回补。
 
 ```bash
 
 python -c "
 import sys
-
-with open('my_doc/每日复盘/reports/{today}/每日信号.md', 'r', encoding='utf-8') as f:
-    content = f.read()
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.signal_tracking_cloud import cloud_load_signals, cloud_enabled
+from datetime import date
 
 errors = []
-
-# 检查1: 信号评价表必须有数据行（至少1行非空）
-eval_section = content.split('## 信号评价（复盘时填入）')
-if len(eval_section) < 2:
-    errors.append('未找到 ## 信号评价（复盘时填入） 节')
+iso = date.today().isoformat()
+if not cloud_enabled():
+    errors.append('云库不可用 — 信号写入无法验证，确认本地 signal_tracking.json 有当日记录')
 else:
-    eval_text = eval_section[1].split('## ')[0] if '## ' in eval_section[1] else eval_section[1]
-    eval_lines = [l for l in eval_text.split('\n') if l.strip().startswith('|') and not l.strip().startswith('|--') and '信号ID' not in l and '决策质量' not in l]
-    data_rows = [l for l in eval_lines if any(c.strip() for c in l.split('|')[1:-1] if c.strip() and c.strip() != '—')]
-    if len(data_rows) == 0:
-        errors.append('信号评价表为空 — 必须为每条已触发/已执行的信号填写评价行')
+    today_sigs = [s for s in cloud_load_signals()
+                  if (s.get('signal_date') or s.get('trigger_date')) == iso]
+    if not today_sigs:
+        errors.append(f'云库无 {iso} 信号（信号入库失败或当日无触发信号）')
     else:
-        print(f'信号评价表: {len(data_rows)} 条评价记录')
-
-# 检查2: 当日信号统计表必须有具体数字
-stat_section = content.split('## 当日信号统计')
-if len(stat_section) < 2:
-    errors.append('未找到 ## 当日信号统计 节')
-else:
-    stat_text = stat_section[1].split('## ')[0] if '## ' in stat_section[1] else stat_section[1]
-    # 检查是否还有未填充的 '—'
-    placeholder_count = stat_text.count('—')
-    if placeholder_count > 2:  # 允许最多2个 '—'（如遗漏信号数=0时可能用—）
-        errors.append(f'当日信号统计有 {placeholder_count} 个未填充的占位符(—)，必须填具体数字')
-
-# 检查3: 信号总表中的状态已更新（不应全为'待执行'）
-signal_table = content.split('## 信号总表')
-if len(signal_table) >= 2:
-    table_text = signal_table[1].split('## ')[0] if '## ' in signal_table[1] else signal_table[1]
-    pending_count = table_text.count('待执行')
-    triggered_count = table_text.count('已触发')
-    executed_count = table_text.count('已执行')
-    expired_count = table_text.count('已过期')
-    print(f'信号总表状态: 待执行={pending_count} 已触发={triggered_count} 已执行={executed_count} 已过期={expired_count}')
-
-# 检查4 (REQ-007): 有已触发 P0 时，`## P0 执行追踪` 节必须存在且最终结果已填（零容忍）
-import re
-if '## P0 执行追踪' not in content:
-    if triggered_count + executed_count > 0:
-        # 需判断是否有 P0 触发：从信号总表提取 P0 行状态
-        p0_lines = [l for l in table_text.split('\n') if l.strip().startswith('| P0') and '信号ID' not in l]
-        p0_triggered = any(('已触发' in l or '已执行' in l) for l in p0_lines)
-        if p0_triggered:
-            errors.append('有已触发 P0 信号但缺少 ## P0 执行追踪 节（REQ-007 执行保障缺失）')
-else:
-    p0_track_text = content.split('## P0 执行追踪')[1].split('## ')[0] if '## ' in content.split('## P0 执行追踪')[1] else content.split('## P0 执行追踪')[1]
-    p0_track_rows = [l for l in p0_track_text.split('\n') if l.strip().startswith('| SIG-')]
-    if p0_track_rows:
-        # 最终结果列（最后一列）不应全为占位 '—'（收盘复盘必须收尾）
-        finals = [l.split('|')[-2].strip() for l in p0_track_rows]  # 最后一列前的单元格
-        if all(f == '—' or f == '' for f in finals):
-            errors.append('## P0 执行追踪 节存在 P0 记录但最终结果未填写（REQ-007 收尾缺失）')
-        else:
-            print(f'P0 执行追踪: {len(p0_track_rows)} 行, 最终结果已收尾')
+        print(f'云库当日信号: {len(today_sigs)} 条')
+        # 触发信号应有 trigger_price/trigger_time
+        triggered = [s for s in today_sigs if s.get('status') in ('triggered', 'executed', 'settled')]
+        missing_trigger = [s for s in triggered
+                           if s.get('trigger_price') is None or not s.get('trigger_time')]
+        if missing_trigger:
+            errors.append(f'{len(missing_trigger)} 条已触发信号缺 trigger_price/trigger_time: '
+                          + ', '.join(s['signal_id'] for s in missing_trigger))
+        # 录入交易回填：有当日交易且匹配信号时应有 entry_price（见 7.6.1b）
 
 if errors:
-    print(f'[FAIL] 每日信号.md 写入验证失败 ({len(errors)} errors):')
+    print(f'[FAIL] 信号云库验证失败 ({len(errors)} errors):')
     for e in errors:
         print(f'  ❌ {e}')
-    print('必须回补每日信号.md 后再继续')
+    print('必须回补云库写入后再继续')
     sys.exit(1)
 else:
-    print('[PASS] 每日信号.md 信号评价和统计已正确写入')
+    print('[PASS] 信号云库写入验证通过（当日信号已入库，触发价/触发时间已回填）')
 " 2>&1
 ```
 
-**如果验证失败**：必须回到 7.4/7.5 重新填写，直到验证通过。**禁止在验证失败的情况下继续后续步骤。**
+**如果验证失败**：必须回到 7.6.1/7.6.1b 回补云库写入，直到验证通过。**禁止在验证失败的情况下继续后续步骤。**
 
 ---
 
@@ -841,8 +884,21 @@ else:
 - **T1 新建**：`viking_remember`（category=experiences），内容 = 标题 + Situation（触发场景）+
   Approach（应对/纪律，3-5 句可操作）+ Reflect（置信度默认**中**、证据链记本次 + 来源/领域/状态元数据）。
 - **T2 更新**：`viking_read` 旧条目 → 追加证据链记录 `{YYYY-MM-DD} 复盘 {事实} {置信度调整}` →
-  **贝叶斯更新置信度**：单次验证 中→高（不一次打满）；单次证伪 中→低（不删除）；低置信度再证伪→
+  **贝叶斯更新置信度**（用 `lib/openviking_health.apply_t2_update` 计算，REQ-009 落地）：
+  单次验证 中→高需 2+ 次独立验证（不一次打满）；单次证伪 中→低（不删除）；低置信度再证伪→
   `deprecated`；冲突双方都保留各标 `conflict_with`。
+  ```bash
+  python -c "
+  import sys
+  sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+  from lib.openviking_health import apply_t2_update
+  # 验证事件（读条目 Reflect 已有证据链计数）:
+  #   r = apply_t2_update('中', evidence_type='verify', verify_count=<累计独立验证数>)
+  # 证伪事件:
+  #   r = apply_t2_update('中', evidence_type='falsify')
+  # r['confidence'] / r['status_change'] / r['changed'] 决定写回的置信度与状态
+  "
+  ```
 - **镜像导出（过渡期）**：写入 OpenViking 后，同步把新条目/更新追加到对应本地
   `harness/experience/{投资经验,短线机会经验,报告审阅经验}.md`（按领域归属），保持镜像一致。
 

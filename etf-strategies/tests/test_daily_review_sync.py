@@ -31,24 +31,24 @@ def _no_cloud():
 
 
 # ═══════════════════════════════════════════════════════════════
-# D1: 信号总表解析（v2.0 12 列）
+# D1: 信号总表解析（v3.0 14 列）
 # ═══════════════════════════════════════════════════════════════
 
-# 真实 v2.0 样例（取自 reports/20260827/每日信号.md 信号总表，节选 2 行）
-V2_SIGNAL_MD = """# 每日信号 — 2026年8月27日（周四）
+# 真实 v3.0 样例（交易价/目标价/止损价 三列；买入三列，卖出仅交易价）
+V3_SIGNAL_MD = """# 每日信号 — 2026年9月16日（周三）
 
 ## 信号总表
 
-| 优先级 | 标的 | 触发条件 | 操作类型 | 状态 | 方向 | 紧急度 | 预期触发率 | 目标/止损 | 有效时段 | 仓位 | 信号ID |
-|:---:|------|----------|:------:|:---:|:---:|:---:|:---:|:---:|----------|:---:|--------|
-| P0 | 黄金ETF(518880) | 跌破9.20 或 冲高回落+放量流出 → 减仓1/3 | 减仓 | 待执行 | 卖出 | 高 | — | 目标9.60/止损9.0 | 全天 | 1,300份(1/3) | SIG-20260827-01 |
-| P1 | 电网设备ETF(159326) | 站上1.70 + 量比>0.8 → 正T | 正T | 已触发 | 买入 | 高 | 35% | 目标+2%(1.717)/止损-1%(1.683) | 10:30-11:30 | 1,975份(1/4) | SIG-20260827-04 |
+| 优先级 | 标的 | 触发条件 | 操作类型 | 状态 | 方向 | 紧急度 | 预期触发率 | 交易价 | 目标价 | 止损价 | 有效时段 | 仓位 | 信号ID |
+|:---:|------|----------|:------:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|----------|:---:|--------|
+| P0 | 黄金ETF(518880) | 跌破9.20 或 冲高回落+放量流出 → 减仓1/3 | 减仓 | 未触发 | 卖出 | 高 | — | 9.20 | — | — | 全天 | 1,300份(1/3) | SIG-20260916-01 |
+| P1 | 电网设备ETF(159326) | 站上1.70 + 量比>0.8 → 正T | 正T | 已触发 | 买入 | 高 | 35% | 1.70 | 1.717 | 1.683 | 10:30-11:30 | 1,975份(1/4) | SIG-20260916-04 |
 
 ## 信号触发记录
 
 | 触发时间 | 信号ID | 优先级 | 标的 | 操作类型 | 触发条件摘要 | 当前状态 | 建议操作 | 用户操作 |
 |----------|--------|:---:|------|:------:|-------------|:------:|----------|:------:|
-| 10:31 | SIG-20260827-04 | P1 | 电网设备ETF(159326) | 正T | 午后路径三条件齐备 | 已触发 | 正T 1,975份 | 待用户填写 |
+| 10:31 | SIG-20260916-04 | P1 | 电网设备ETF(159326) | 正T | 午后路径三条件齐备 | 已触发 | 正T 1,975份 | 待用户填写 |
 """
 
 # 旧 14 列格式（迁移前，用于兜底兼容验证）
@@ -56,35 +56,39 @@ V1_SIGNAL_MD = """## 信号总表
 
 | 优先级 | 标的 | 触发条件 | 操作类型 | 状态 | 方向 | 紧急度 | 升级条件 | 预期收益日 | 有效时段 | 仓位 | 操作来源 | 生成依据 | 信号ID |
 |--------|------|----------|:------:|:---:|:---:|:---:|----------|-----------|----------|:---:|:------:|----------|--------|
-| P0 | 黄金ETF | 跌破守位线 | 减仓 | 待执行 | 卖出 | 高 | 放量 | T+3 | 全天 | 1,300份 | 早盘分析 | 早盘报告P0 | SIG-20260817-01 |
+| P0 | 黄金ETF | 跌破守位线 | 减仓 | 未触发 | 卖出 | 高 | 放量 | T+3 | 全天 | 1,300份 | 早盘分析 | 早盘报告P0 | SIG-20260817-01 |
 """
 
 
-class TestParseSignalsV2:
-    def test_parses_v2_columns(self):
-        rows = api_daily._parse_signals(V2_SIGNAL_MD)
+class TestParseSignalsV3:
+    def test_parses_v3_columns(self):
+        rows = api_daily._parse_signals(V3_SIGNAL_MD)
         assert len(rows) == 2
 
         r0 = rows[0]
         assert r0["优先级"] == "P0"
         assert r0["标的"] == "黄金ETF(518880)"
         assert r0["操作类型"] == "减仓"
-        assert r0["状态"] == "待执行"
+        assert r0["状态"] == "未触发"
         assert r0["方向"] == "卖出"
         assert r0["紧急度"] == "高"
         assert r0["预期触发率"] == "—"          # P0 不考核触发率
-        assert "9.60" in r0["目标/止损"]          # v2.0 新列
+        assert r0["交易价"] == "9.20"            # v3.0 卖出信号仅交易价
+        assert r0["目标价"] == "—"
+        assert r0["止损价"] == "—"
         assert r0["有效时段"] == "全天"
         assert r0["仓位"] == "1,300份(1/3)"
-        assert r0["信号ID"] == "SIG-20260827-01"
+        assert r0["信号ID"] == "SIG-20260916-01"
 
         r1 = rows[1]
         assert r1["预期触发率"] == "35%"          # P1 必填百分比
-        assert r1["目标/止损"].startswith("目标+2%")
-        assert r1["信号ID"] == "SIG-20260827-04"
+        assert r1["交易价"] == "1.70"
+        assert r1["目标价"] == "1.717"            # 买入信号三列齐全
+        assert r1["止损价"] == "1.683"
+        assert r1["信号ID"] == "SIG-20260916-04"
 
     def test_no_longer_exposes_v1_columns(self):
-        rows = api_daily._parse_signals(V2_SIGNAL_MD)
+        rows = api_daily._parse_signals(V3_SIGNAL_MD)
         # v2.0 不再有 操作来源/生成依据 列
         assert "操作来源" not in rows[0]
         assert "生成依据" not in rows[0]
@@ -178,13 +182,18 @@ class TestSchedulerScope:
         assert "evening_review" in ids
 
     def test_etf_automation_tasks_in_scope(self):
-        """2026-08-27 决策：ETF 自动化巡检任务也随 Web 启停（纳入引擎）。"""
+        """2026-08-27 决策：ETF 自动化巡检任务也随 Web 启停（纳入引擎）。
+
+        2026-09-14 任务1：bug_inspect_logic / harness_bug_auto_fix / pending_remind
+        已从 task_schedule.json 删除（CHAT.md），不再出现在范围内。
+        """
         ids = {t["task_id"] for t in scheduler.scoped_tasks()}
         assert "bug_auto_fix" in ids
         assert "bug_inspect_data" in ids
         assert "bug_inspect_code" in ids
-        assert "bug_inspect_logic" in ids
+        assert "bug_inspect_logic" not in ids
         assert "strategy_scan_weekly" in ids
+        assert "signal_quality_weekly" in ids
 
     def test_all_scoped_tasks_have_prompt_file(self):
         for t in scheduler.scoped_tasks():
@@ -462,23 +471,24 @@ class TestAutoFailureRetryLimit:
 # 僵尸 running 清理：进程重启后遗留 running 记录在 start() 时回收
 # ═══════════════════════════════════════════════════════════════
 
-class TestStartCleansZombieRuns:
-    def test_start_marks_zombie_running_failed(self, monkeypatch):
-        """start() 引擎启动前，把 DB 遗留 running 记录标记为 failed（重启中断）。"""
+class TestStartDoesNotTouchAgentRuns:
+    def test_start_preserves_running_records(self, monkeypatch):
+        """2026-09-14：Dashboard 不再执行任务，start() 不得把 running 标记 failed
+        （running 记录属于 Agent 进程，Dashboard 误标记会杀掉正在执行的任务记录）。"""
         from dashboard import db as db_mod
         in_mem = _in_memory_db(monkeypatch)
         db_mod.init_db()
         rid = db_mod.scheduler_run_insert("morning_analysis", "morning_analysis:2026-09-02",
                                           "auto", "2026-09-02 14:30:00", status="running")
-        # 防止真实启动引擎线程（daemon 循环），只验证清理逻辑被触发
+        # 防止真实启动引擎线程（daemon 循环），只验证 start() 无清理副作用
         monkeypatch.setattr(scheduler.SchedulerEngine, "_loop",
                             lambda self: None)
 
         scheduler.start()
 
         r = db_mod.scheduler_run_get(rid)
-        assert r["status"] == "failed"
-        assert "中断" in (r["output"] or "")
+        assert r["status"] == "running", \
+            "Dashboard start() 不应再标记 running → failed（职责已移交 Agent）"
         in_mem.close()
 
     def test_start_no_running_no_cleanup(self, monkeypatch):
@@ -515,3 +525,51 @@ def _in_memory_db(monkeypatch):
 
     monkeypatch.setattr(db_mod, "get_conn", _get_conn)
     return mem_conn
+
+
+# ═══════════════════════════════════════════════════════════════
+# 2026-09-14 架构调整：Dashboard 引擎不再主动发现/派发定时任务。
+# 定时任务由 Agent 进程（scheduler_agent.tick）检查到点并执行。
+# Dashboard 只保留报告重扫 + 手动「运行」（POST Agent）。
+# ═══════════════════════════════════════════════════════════════
+
+class TestEngineNoAutoDispatch:
+    def test_tick_does_not_call_run_task(self, monkeypatch):
+        """_tick 不再调用 run_task（auto 派发已移除），即使任务到点也不触发。"""
+        from dashboard import db as db_mod
+        _in_memory_db(monkeypatch)
+        db_mod.init_db()
+        # 构造一个"到点"任务，并强制 online
+        due_task = {
+            "task_id": "morning_analysis",
+            "prompt_file": "my_doc/每日复盘/prompts/x.md",
+            "target_time": "09:07",
+            "window_minutes": 7,
+            "days_of_week": [0, 1, 2, 3, 4],
+            "trading_day_required": True,
+        }
+        monkeypatch.setattr(scheduler, "scoped_tasks", lambda: [due_task])
+        monkeypatch.setattr(scheduler, "is_trading_day", lambda d: True)
+        monkeypatch.setattr(scheduler, "agent_online", lambda: True)
+        monkeypatch.setattr(scheduler, "task_due_now", lambda t, now: True)
+        calls = {"run_task": 0}
+
+        def fake_run_task(task, trigger="manual", now=None):
+            calls["run_task"] += 1
+            return {"started": True, "run_id": 1}
+
+        monkeypatch.setattr(scheduler, "run_task", fake_run_task)
+        eng = scheduler.SchedulerEngine()
+        eng._tick()
+        assert calls["run_task"] == 0, "Dashboard _tick 不应再自动派发任务"
+        assert eng.last_tick is not None  # 引擎仍在跑（展示刷新）
+
+    def test_tick_skips_auto_when_offline(self, monkeypatch):
+        """下线时 _tick 跳过（只保留报告重扫）。"""
+        from dashboard import db as db_mod
+        _in_memory_db(monkeypatch)
+        db_mod.init_db()
+        monkeypatch.setattr(scheduler, "agent_online", lambda: False)
+        eng = scheduler.SchedulerEngine()
+        eng._tick()
+        assert eng.last_tick is not None

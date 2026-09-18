@@ -18,6 +18,10 @@ pyarrow>=14.0.0
 requests>=2.31.0
 urllib3>=2.0.0
 
+# Cloud DB PostgreSQL 直连后端（CLOUD_DB_BACKEND=pgdirect 时需要）
+# 2026-09-17 迁移到 AIDAP PostgreSQL 引擎；纯 Python 无编译依赖。
+pg8000>=1.30.0
+
 # Charts & reports
 matplotlib>=3.7.0
 

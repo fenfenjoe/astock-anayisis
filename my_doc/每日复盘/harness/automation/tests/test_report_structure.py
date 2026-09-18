@@ -60,9 +60,9 @@ class TestMorningTemplate:
         assert "### 11.2 运行提示与工单提交" in self.content
 
     def test_signal_generation_section_kept(self):
-        """第九节（每日信号生成）保留 —— 一致性检查依赖"""
+        """第九节（每日信号生成）保留 —— 一致性检查依赖（v3.0 14 列）"""
         assert "## 九、每日信号生成" in self.content
-        assert "| 优先级 | 标的 | 触发条件 | 操作类型 | 状态 | 方向 | 紧急度 | 预期触发率 | 目标/止损 | 有效时段 | 仓位 | 信号ID |" in self.content
+        assert "| 优先级 | 标的 | 触发条件 | 操作类型 | 状态 | 方向 | 紧急度 | 预期触发率 | 交易价 | 目标价 | 止损价 | 有效时段 | 仓位 | 信号ID |" in self.content
 
 
 # ============================================================

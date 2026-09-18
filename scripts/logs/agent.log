@@ -1,3 +1,68 @@
-[agent] 小满常驻进程启动（tick 间隔见 config）
-[agent]   社交平台可访问性判定完成：0/7 可达
-[agent]   WARNING: Cookie 待办生成失败（不影响启动）: 'str' object has no attribute 'get'
+[agent] 小满常驻进程启动（tick 间隔见 config，HTTP API 端口 8020）
+[agent]   回收 1 条中断遗留的 running 记录 → failed
+[agent]   社交平台可访问性判定完成：4/7 可达
+[agent]   HTTP API 启动中...
+INFO:     127.0.0.1:51835 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51835 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51872 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51869 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51873 - "GET /api/agent/articles?limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51869 - "GET /api/agent/sessions/19/messages HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51871 - "GET /api/agent/notices?page=1&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "GET /api/agent/activities?date=&page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51869 - "GET /api/agent/sessions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51871 - "GET /api/agent/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51873 - "GET /api/agent/articles?limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "GET /api/agent/notices?page=1&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51872 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51870 - "GET /api/agent/activities?date=&page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51920 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51973 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52034 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52085 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52134 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52217 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52288 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52330 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52438 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52575 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58142 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58166 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58209 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58225 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58244 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58258 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58258 - "GET /api/agent/notices?page=1&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58329 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58357 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58553 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58689 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58862 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58988 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59161 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59301 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59440 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59790 - "GET /api/agent/status HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:60157 - "GET /api/agent/status HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:60575 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60759 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60842 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60944 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61040 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61147 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61177 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61177 - "GET /api/agent/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61177 - "GET /api/agent/activities?date=&page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61278 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61406 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61450 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61614 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61691 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61750 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61941 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62026 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62108 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62210 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62311 - "GET /api/agent/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62423 - "GET /api/agent/status HTTP/1.1" 200 OK

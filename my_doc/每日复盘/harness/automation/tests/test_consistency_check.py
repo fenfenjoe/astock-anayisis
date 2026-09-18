@@ -19,11 +19,11 @@ from consistency_check import (
     render_report,
 )
 
-# definer 通过样本：核心 + 表头
+# definer 通过样本：核心 + 表头（v3.0 14 列）
 _DEFINER_OK = """
-| 优先级 | 标的 | 触发条件 | 操作类型 | 状态 | 方向 | 紧急度 | 预期触发率 | 目标/止损 | 有效时段 | 仓位 | 信号ID |
+| 优先级 | 标的 | 触发条件 | 操作类型 | 状态 | 方向 | 紧急度 | 预期触发率 | 交易价 | 目标价 | 止损价 | 有效时段 | 仓位 | 信号ID |
 盘中追加信号用 -盘中 后缀标识
-P1 必填预期触发率 + 目标/止损
+P1 必填预期触发率 + 交易价（买入另必填目标价/止损价）
 观察雷达移入关注列表
 P0 风控 ≤3
 """
@@ -31,7 +31,7 @@ P0 风控 ≤3
 # consumer 通过样本：核心概念（无表头）
 _CONSUMER_OK = """
 盘中追加信号用 -盘中 后缀标识
-P1 必填预期触发率 + 目标/止损
+P1 必填预期触发率 + 交易价（买入另必填目标价/止损价）
 观察雷达移入关注列表
 """
 
@@ -61,7 +61,7 @@ class TestCheckMarkers:
         assert '关注列表' in missing
 
     def test_definer_missing_table(self):
-        content = _DEFINER_OK.replace('| 优先级 | 标的 | 触发条件 | 操作类型 | 状态 | 方向 | 紧急度 | 预期触发率 | 目标/止损 | 有效时段 | 仓位 | 信号ID |', '')
+        content = _DEFINER_OK.replace('| 优先级 | 标的 | 触发条件 | 操作类型 | 状态 | 方向 | 紧急度 | 预期触发率 | 交易价 | 目标价 | 止损价 | 有效时段 | 仓位 | 信号ID |', '')
         missing = check_markers(content, markers_for_role('definer'))
         assert TABLE_MARKERS[0] in missing
 

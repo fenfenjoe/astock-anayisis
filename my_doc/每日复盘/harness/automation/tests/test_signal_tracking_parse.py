@@ -26,6 +26,7 @@ sys.path.insert(0, str(LIB_DIR))
 
 from signal_tracking import (
     parse_signal_markdown,
+    parse_signal_rows_all,
     merge_new_signals,
     settle_due_signals,
     update_aggregation,
@@ -486,15 +487,19 @@ class TestParseNewColumns:
 # ============================================================
 
 class TestReturnTrackableFilter:
-    """只有同时具备 入场价 + 份额 的信号才可追踪收益（无法结算 P&L 的不入库）。"""
+    """任务4（2026-09-14）：信号只要 份额>0 即入库；entry_price 不再作为硬门槛
+    （买入价由复盘"录入交易"回填，触发价由盘中写云库；盘中验证记录若存在仍提取为触发价）。"""
 
     def test_no_entry_price_not_tracked(self):
-        """已触发但盘中验证记录无价格 → 不追踪（无法计算 P&L）"""
+        """已触发且无任何价格来源 → 仍入库（份额>0 即可；entry_price 待回填）"""
         md = _mk_new_md([
             "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40 | 目标+3%/止损-2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
         ])
         records = parse_signal_markdown(md, '2026-08-26')
-        assert records == []
+        # 任务4 变更：不再因缺 entry_price 丢弃信号；只要求份额>0
+        assert len(records) == 1
+        assert records[0]['entry_price'] is None
+        assert records[0]['shares'] == 1975
 
     def test_no_shares_not_tracked(self):
         """有价格但仓位=观察(0份) → 不追踪（无实际持仓，P&L 恒为 0）"""
@@ -528,3 +533,182 @@ class TestReturnTrackableFilter:
         records = parse_signal_markdown(md, '2026-08-26')
         assert len(records) == 1
         assert records[0]['entry_price'] == pytest.approx(9.553)
+
+
+# ============================================================
+# parse_signal_rows_all（2026-09-15 BUG-FIX：早盘信号云库入库）
+# ============================================================
+
+class TestParseSignalRowsAll:
+    def test_includes_pending_rows(self):
+        """未触发/已触发/已执行/已过期 都要解析出来（云库入库含全部状态）——
+        与 parse_signal_markdown 只追已触发不同（v3.0：已过期→expired 也入云库，
+        供盘中状态变更后同步 Dashboard）。"""
+        md = _mk_md(_SAMPLE_ROWS)
+        records = parse_signal_rows_all(md, '2026-08-05')
+        by_id = {r['signal_id']: r for r in records}
+        # _SAMPLE_ROWS: 02=已触发, 04=已执行, 03=已过期, 05=已废弃(跳过)
+        assert 'SIG-20260805-02' in by_id
+        assert 'SIG-20260805-04' in by_id
+        assert by_id['SIG-20260805-03']['status'] == 'expired'  # v3.0 已过期也入库
+        assert 'SIG-20260805-05' not in by_id   # 已废弃不入库
+
+    def test_status_mapping_en(self):
+        """中文状态 → 英文内部值（open/triggered/executed）"""
+        md = _mk_new_md([
+            "| P0 | 黄金ETF(518880) | 跌破8.80 | 减仓 | 待执行 | 卖出 | 高 | 40 | 目标8.5/止损8.9 | 09:30-14:30 | 20% | SIG-20260915-01 |",
+            "| P1 | 农业ETF(159825) | 回踩0.72 | 建仓 | 已触发 | 买入 | 低 | 50 | 目标0.78/止损0.70 | 全天 | 1/4 | SIG-20260915-03 |",
+        ])
+        records = parse_signal_rows_all(md, '2026-09-15')
+        by_id = {r['signal_id']: r for r in records}
+        assert by_id['SIG-20260915-01']['status'] == 'open'
+        assert by_id['SIG-20260915-03']['status'] == 'triggered'
+        assert all(r['trigger_date'] == '2026-09-15' for r in records)
+        assert all(r['source'] == 'morning_analysis' for r in records)
+
+    def test_pending_row_cloud_mapping(self):
+        """待执行信号 to_row 后 signal_date 正确落云库列（trigger_date→signal_date）"""
+        from signal_tracking_cloud import to_row
+        md = _mk_new_md([
+            "| P0 | 黄金ETF(518880) | 跌破8.80 | 减仓 | 待执行 | 卖出 | 高 | 40 | 目标8.5/止损8.9 | 09:30-14:30 | 20% | SIG-20260915-01 |",
+        ])
+        records = parse_signal_rows_all(md, '2026-09-15')
+        row = to_row(records[0])
+        assert row['signal_date'] == '2026-09-15'
+        assert row['status'] == 'open'
+        assert row['priority'] == 'P0'
+        assert row['source'] == 'morning_analysis'
+
+
+# ============================================================
+# v3.0 14 列信号表（交易价/目标价/止损价）—— 2026-09 用户需求
+# ============================================================
+
+_V3_HEADER = (
+    "| 优先级 | 标的 | 触发条件 | 操作类型 | 状态 | 方向 | 紧急度 | 预期触发率 | 交易价 | 目标价 | 止损价 | 有效时段 | 仓位 | 信号ID |\n"
+    "|:---:|------|----------|:------:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|----------|:---:|--------|\n"
+)
+
+
+def _mk_v3_md(rows: list[str], verify: list[str] | None = None) -> str:
+    md = f"## 信号总表\n\n{_V3_HEADER + chr(10).join(rows)}\n"
+    if verify:
+        md += f"\n## 盘中验证记录\n\n{_VERIFY_HEADER + chr(10).join(verify)}\n"
+    return md
+
+
+class TestParseV3Format:
+    """v3.0：交易价/目标价/止损价 三列（买入三列必填，卖出仅交易价）"""
+
+    def test_buy_signal_three_prices(self):
+        """买入信号：交易价/目标价/止损价 全部提取"""
+        md = _mk_v3_md([
+            "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40 | 1.70 | 1.75 | 1.66 | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ], verify=[
+            _vrow('SIG-20260826-06', '电网ETF(159326)', '正T', '1,975份', '现价1.70'),
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        assert len(records) == 1
+        rec = records[0]
+        assert rec['trade_price'] == pytest.approx(1.70)
+        assert rec['target_price'] == pytest.approx(1.75)
+        assert rec['stop_price'] == pytest.approx(1.66)
+
+    def test_sell_signal_only_trade_price(self):
+        """卖出信号：仅交易价，目标价/止损价为 —"""
+        md = _mk_v3_md([
+            "| P1 | 黄金ETF(518880) | 跌破8.80 | 减仓 | 已触发 | 卖出 | 高 | 40 | 8.80 | — | — | 09:30-14:30 | -500份 | SIG-20260826-07 |",
+        ], verify=[
+            _vrow('SIG-20260826-07', '黄金ETF(518880)', '减仓', '-500份', '现价8.79'),
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        assert len(records) == 1
+        rec = records[0]
+        assert rec['trade_price'] == pytest.approx(8.80)
+        assert rec['target_price'] is None
+        assert rec['stop_price'] is None
+
+    def test_target_stop_pct_in_v3(self):
+        """目标价/止损价 支持百分比写法（+3% / -2%）"""
+        md = _mk_v3_md([
+            "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40 | 1.70 | +3% | -2% | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ], verify=[
+            _vrow('SIG-20260826-06', '电网ETF(159326)', '正T', '1,975份', '现价1.70'),
+        ])
+        records = parse_signal_markdown(md, '2026-08-26')
+        rec = records[0]
+        assert rec['trade_price'] == pytest.approx(1.70)
+        assert rec['target_pct'] == 3.0
+        assert rec['stop_pct'] == -2.0
+        assert rec['target_price'] is None
+
+    def test_v3_status_untouched_open(self):
+        """未触发（初始状态）→ open；已过期 → expired（parse_signal_rows_all 含过期行）"""
+        md = _mk_v3_md([
+            "| P0 | 黄金ETF(518880) | 跌破8.80 | 减仓 | 未触发 | 卖出 | 高 | 40 | 8.80 | — | — | 09:30-14:30 | 20% | SIG-20260916-01 |",
+            "| P1 | 农业ETF(159825) | 回踩0.72 | 建仓 | 已触发 | 买入 | 低 | 50 | 0.72 | 0.78 | 0.70 | 全天 | 1/4 | SIG-20260916-03 |",
+            "| P1 | 通信ETF(515880) | 站上0.68 | 建仓 | 已过期 | 买入 | 高 | 30 | 0.68 | 0.71 | 0.66 | 全天 | 1/4 | SIG-20260916-04 |",
+        ])
+        records = parse_signal_rows_all(md, '2026-09-16')
+        by_id = {r['signal_id']: r for r in records}
+        assert by_id['SIG-20260916-01']['status'] == 'open'
+        assert by_id['SIG-20260916-03']['status'] == 'triggered'
+        assert by_id['SIG-20260916-04']['status'] == 'expired'
+        assert by_id['SIG-20260916-04']['trade_price'] == pytest.approx(0.68)
+
+    def test_v3_trade_price_in_cloud_row(self):
+        """v3 trade_price 经 to_row 落云库 trade_price 列"""
+        from signal_tracking_cloud import to_row
+        md = _mk_v3_md([
+            "| P1 | 电网ETF(159326) | 站上1.70 | 正T | 已触发 | 买入 | 高 | 40 | 1.70 | 1.75 | 1.66 | 10:30-11:30 | 1,975份 | SIG-20260826-06 |",
+        ])
+        records = parse_signal_rows_all(md, '2026-08-26')
+        row = to_row(records[0])
+        assert row['trade_price'] == pytest.approx(1.70)
+        assert row['target_price'] == pytest.approx(1.75)
+        assert row['stop_price'] == pytest.approx(1.66)
+
+
+class TestStatusEnum:
+    """状态枚举：expired 加入；未触发 → open"""
+
+    def test_enum_contains_expired(self):
+        from signal_tracking import ENUM_STATUS
+        assert 'expired' in ENUM_STATUS
+        assert 'open' in ENUM_STATUS
+
+    def test_assert_accepts_expired_and_trade_price(self):
+        from signal_tracking import assert_valid_signal_record
+        rec = assert_valid_signal_record({
+            'signal_id': 'SIG-20260916-01', 'status': 'expired',
+            'trade_price': 0.68, 'target_price': 0.71,
+        })
+        assert rec['status'] == 'expired'
+        assert rec['trade_price'] == 0.68
+
+    def test_assert_rejects_invalid_status(self):
+        from signal_tracking import assert_valid_signal_record
+        import pytest as _pytest
+        with _pytest.raises(ValueError):
+            assert_valid_signal_record({'signal_id': 'SIG-1', 'status': 'bogus'})
+
+
+class TestResolveTargetPriceFallback:
+    """目标价换算基准：entry → trigger → trade_price 兜底"""
+
+    def test_pct_resolves_from_trade_price(self):
+        from signal_tracking import _resolve_target_price
+        target, stop = _resolve_target_price({
+            'trade_price': 1.70, 'target_pct': 3.0, 'stop_pct': -2.0,
+        })
+        assert target == pytest.approx(1.751)
+        assert stop == pytest.approx(1.666)
+
+    def test_explicit_price_wins(self):
+        from signal_tracking import _resolve_target_price
+        target, stop = _resolve_target_price({
+            'trade_price': 1.70, 'target_price': 1.75, 'target_pct': 5.0,
+            'stop_price': 1.66, 'stop_pct': -1.0,
+        })
+        assert target == pytest.approx(1.75)
+        assert stop == pytest.approx(1.66)

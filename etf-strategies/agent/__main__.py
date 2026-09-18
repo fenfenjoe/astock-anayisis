@@ -1,16 +1,19 @@
 """python -m agent — 拟人 Agent「小满」常驻进程入口.
 
-独立于 dashboard Web 存活（方案 §5.4）：崩溃看门狗由外层（docker/systemd）
-负责重启；进程内 AgentLoop 自愈单轮异常。
+完全独立于 Dashboard 运行，不再共享 agent.db 文件。
+内嵌 HTTP API（端口默认 8020）+ 调度引擎 + 状态机 tick loop 全自主。
 """
+
+import os
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-# 加载 etf-strategies/.env（云后端/凭据 等在 agent.db 模块 import 前生效）
 try:
     from load_env import load_env_file
+
     load_env_file()
 except ImportError:
     pass
@@ -19,14 +22,36 @@ from agent import db as agent_db
 from agent.core import lifecycle
 
 
+def _ensure_cloud():
+    if not os.environ.get("AGENT_DB_BACKEND"):
+        os.environ["AGENT_DB_BACKEND"] = "cloud"
+        print(
+            "[agent]   强制 AGENT_DB_BACKEND=cloud（Agent 独立运行不再支持 file 模式）"
+        )
+
+
 def main():
-    print("[agent] 小满常驻进程启动（tick 间隔见 config）")
-    # ── 初始化 agent.db：file 模式建表/迁移；cloud 模式直接连云（见 agent/db.py USE_CLOUD）──
+    api_port = int(os.environ.get("AGENT_API_PORT", "8020"))
+    _ensure_cloud()
+
+    print(f"[agent] 小满常驻进程启动（tick 间隔见 config，HTTP API 端口 {api_port}）")
+
     try:
         agent_db.init_db()
     except Exception as e:
         print(f"[agent]   WARNING: agent.db init failed: {e}")
-    # ── 首次启动可访问性判定（方案 v1.10 §9.4）：写平台可达性缓存，失败不阻塞启动 ──
+
+    # 2026-09-14 架构调整：Agent 是定时任务唯一执行方。启动时回收僵尸 running 记录
+    # （上次进程被中断遗留的"运行中"记录），等价于原 dashboard 的僵尸回收职责。
+    try:
+        from agent.core import scheduler_agent
+
+        n = scheduler_agent.reconcile_zombies()
+        if n:
+            print(f"[agent]   回收 {n} 条中断遗留的 running 记录 → failed")
+    except Exception as e:
+        print(f"[agent]   WARNING: reconcile_zombies 失败（不影响启动）: {e}")
+
     try:
         from agent.core import reachability
 
@@ -35,15 +60,27 @@ def main():
         print(f"[agent]   社交平台可访问性判定完成：{n_ok}/{len(cache)} 可达")
     except Exception as e:
         print(f"[agent]   WARNING: 社交平台可访问性判定失败（不影响启动）: {e}")
-    # ── 无 Cookie 的社交平台 → 生成"请提供 Cookie"待办（REQ-002，幂等去重）──
+
     try:
         from agent.core import notices
 
         created = notices.ensure_cookie_todos()
         if created:
-            print(f"[agent]   已生成 {len(created)} 条 Cookie 待办（聊天页「📌 提示与待办」可见）")
+            print(
+                f"[agent]   已生成 {len(created)} 条 Cookie 待办（聊天页「📌 提示与待办」可见）"
+            )
     except Exception as e:
         print(f"[agent]   WARNING: Cookie 待办生成失败（不影响启动）: {e}")
+
+    def _start_api():
+        print(f"[agent]   HTTP API 启动中...")
+        from agent.api import run_api
+
+        run_api(port=api_port)
+
+    api_thread = threading.Thread(target=_start_api, daemon=True, name="agent-api")
+    api_thread.start()
+
     loop = lifecycle.AgentLoop()
     try:
         loop.run()

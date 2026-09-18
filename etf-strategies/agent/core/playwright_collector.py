@@ -18,8 +18,22 @@ from agent import config, db as agent_db
 from agent.core import reachability
 
 
+class WeiboHTMLBlocked(Exception):
+    """微博移动接口返回 HTML（登录态失效/被反爬）而非 JSON，无法解析热榜。
+
+    专门异常：让 collect_platform 捕获后给出可读错误（"微博接口被反爬/需重新登录"），
+    而不是 resp.json() 抛出的晦涩 JSONDecodeError（"Expecting value: line 1 column 1"）。
+    """
+
+
 def _weibo_hot_items(cookie, limit):
-    """微博热搜：m.weibo.cn 移动热榜 JSON 接口。返回 [{title, url, summary}]。"""
+    """微博热搜：m.weibo.cn 移动热榜 JSON 接口。返回 [{title, url, summary}]。
+
+    2026-09-16 反爬变更：m.weibo.cn 对无登录态/被风控的请求返回 HTTP 200 +
+    text/html 登录/验证页（不再是 JSON）→ 检查 Content-Type，非 JSON 抛
+    WeiboHTMLBlocked（上层 collect_platform 捕获后回写 reachability=false，
+    不再抛晦涩的 JSONDecodeError "Expecting value"）。
+    """
     import requests
 
     url = (
@@ -32,6 +46,11 @@ def _weibo_hot_items(cookie, limit):
     }
     resp = requests.get(url, headers=headers, timeout=config.BROWSE_COLLECT_TIMEOUT_SECONDS)
     resp.raise_for_status()
+    ctype = (resp.headers.get("Content-Type") or "").lower()
+    if "json" not in ctype:
+        raise WeiboHTMLBlocked(
+            f"微博接口返回 {ctype or '未知 Content-Type'}（登录态失效/被反爬，非 JSON）"
+        )
     data = resp.json()
     cards = (data.get("data") or {}).get("cards") or []
     items = []
@@ -249,9 +268,32 @@ def collect_platform(platform_id, db=None):
         }
     except Exception as e:
         reachability.update_after_access(platform_id, False, f"采集失败: {e}", db=db)
+        # Cookie 失效/反爬类失败 → 生成"失效"待办，让用户重新提供 Cookie
+        # （2026-09-16 修复：之前只有无 Cookie 才生成待办，失效不触发 → 用户无从得知）
+        _notify_cookie_expired(platform_id, e, db=db)
         return {
             "platform_id": platform_id,
             "ok": False,
             "collected": 0,
             "error": f"采集失败: {e}",
         }
+
+
+def _notify_cookie_expired(platform_id, exc, db=None):
+    """Cookie 失效/反爬类采集异常 → 生成"失效"待办（幂等去重，已有 open 待办则跳过）。
+
+    判断依据：WeiboHTMLBlocked（微博接口返回 HTML 登录页）或异常信息含
+    "登录态失效/反爬/Cookie 失效" 等关键词；其他异常（网络抖动等）不打扰用户。
+    """
+    msg = str(exc)
+    is_auth_failure = isinstance(exc, WeiboHTMLBlocked) or any(
+        kw in msg for kw in ("登录态失效", "反爬", "Cookie 失效", "Cookie已失效", "Cookie 无效")
+    )
+    if not is_auth_failure:
+        return None
+    try:
+        from agent.core import notices
+
+        return notices.create_cookie_todo(platform_id, reason="失效", db=db)
+    except Exception:
+        return None  # 待办生成失败不阻塞采集流程

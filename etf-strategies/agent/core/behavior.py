@@ -677,10 +677,38 @@ def execute_browse(platform_id, db=None, llm_fn=None):
         )
         db.activity_set_note(ev_id, note)
 
+    # 0. 逛前 Cookie 有效性快检（2026-09-16）：Cookie 类平台已有 Cookie 但
+    #    reachability 缓存判不可达（登录态失效/被反爬）→ 不执行采集，
+    #    直接更新"爱逛的地方"登录状态 + 失效待办，避免浪费逛动作。
+    #    缓存缺失/可达 → 继续走 collect_platform 真实采集（失败时由采集侧回写）。
+    if platform and platform.get("kind") == "cookie" and db.platform_cookie_get(platform_id):
+        from agent.core import notices as notices_mod
+        from agent.core import reachability as reach_mod
+
+        cache = db.reachability_get(platform_id)
+        if cache and cache.get("reachable") is False:
+            reason = cache.get("reason") or "Cookie 失效或探测失败"
+            # 状态已由 ensure_reachability/采集侧回写；此处确保失效待办存在（幂等）
+            notices_mod.create_cookie_todo(platform_id, reason="失效", db=db)
+            _finish_browse(f"Cookie 失效未逛：{reason}")
+            return {
+                "platform_id": platform_id,
+                "ok": False,
+                "collected": 0,
+                "added": 0,
+                "read_count": 0,
+                "posted_count": 0,
+                "error": reason,
+                "skipped": "cookie_invalid",
+            }
+
     # 1. 采集
     collect = playwright_collector.collect_platform(platform_id, db=db)
     if not collect.get("ok"):
-        _finish_browse(f"采集失败：{collect.get('error')}")
+        # collect.get('error') 已带"采集失败: "前缀 → 不再重复包裹
+        # （原写法"采集失败：{error}"会变成"采集失败：采集失败: ..."重复前缀）
+        err = (collect.get("error") or "").replace("采集失败: ", "", 1)
+        _finish_browse(f"采集失败：{err}")
         return {
             "platform_id": platform_id,
             "ok": False,

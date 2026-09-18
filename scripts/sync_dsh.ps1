@@ -3,7 +3,9 @@
 # ===========================================
 # 1. Check & auto-install prerequisites: node/npm, pnpm (dsh 插件管理器依赖),
 #    dsh CLI（缺失时按钉选版本 npm i -g 自动安装）
-# 2. Sync repo .dsh/profiles (xiaoman/headless) -> ~/.dsh/profiles (idempotent)
+# 2. Sync repo .dsh/profiles (xiaoman/headless) -> ~/.dsh/profiles (idempotent;
+#    对已存在的 profile 目录，只覆盖推送「定义文件」package.json / pnpm-workspace.yaml /
+#    cordis.patch.yml / settings.yaml —— 哈希相同则跳过，不删除本机任何文件)
 # 3. Install profile plugin deps: dsh plugin --profile <name> install (idempotent)
 # 4. Check ~/.dsh/.credentials.yaml exists (copy from template if missing)
 #
@@ -85,16 +87,36 @@ if ($ovExe) {
 
 Write-Host "=== [2/4] Sync dsh profiles (repo -> ~/.dsh) ==="
 $srcProfiles = Join-Path $projDsh "profiles"
+# profile「定义文件」：仓库是单一事实源，即使目标 profile 目录已存在也会覆盖推送。
+# 其余文件（node_modules / 启动时生成的 cordis.yml / pnpm-lock.yaml 等）属本机运行状态，不覆盖。
+$profileFiles = @("package.json", "pnpm-workspace.yaml", "cordis.patch.yml", "settings.yaml")
 if (Test-Path $srcProfiles) {
   $dst = Join-Path $homeDsh "profiles"
   New-Item -ItemType Directory -Force -Path $dst | Out-Null
   Get-ChildItem $srcProfiles -Directory | ForEach-Object {
-    $target = Join-Path $dst $_.Name
+    $profileName = $_.Name
+    $target = Join-Path $dst $profileName
     if (-not (Test-Path $target)) {
+      # 全新 profile：整目录复制（含全部定义文件）
       Copy-Item $_.FullName $target -Recurse
-      Write-Host "  synced profile: $($_.Name)"
+      Write-Host "  synced profile (new): $profileName"
     } else {
-      Write-Host "  exists (skip): $($_.Name)"
+      # 已存在的 profile：只推送仓库拥有的定义文件；哈希相同则跳过（幂等），不删本机文件
+      $pushed = 0; $upToDate = 0
+      foreach ($f in $profileFiles) {
+        $srcFile = Join-Path $_.FullName $f
+        if (-not (Test-Path $srcFile)) { continue }
+        $dstFile = Join-Path $target $f
+        if ((Test-Path $dstFile) -and
+            ((Get-FileHash $srcFile).Hash -eq (Get-FileHash $dstFile).Hash)) {
+          $upToDate++
+          continue
+        }
+        Copy-Item $srcFile $dstFile -Force
+        Write-Host "    pushed: $profileName/$f"
+        $pushed++
+      }
+      Write-Host "  profile: $profileName (pushed $pushed, up-to-date $upToDate)"
     }
   }
 } else {

@@ -93,3 +93,118 @@ def test_agent_online_false_when_agent_db_unavailable(monkeypatch):
         raise RuntimeError("agent.db unavailable")
     monkeypatch.setattr(agent_db_mod, "meta_get", _boom)
     assert sched.agent_online() is False
+
+
+# ═══════════════════════════════════════════════════════════════
+# 2026-09-14 架构调整：手动「运行」= Dashboard 直接 POST Agent，
+# 不再本地建记录、不本地兜底执行（Agent 写云库 scheduler_runs）
+# ═══════════════════════════════════════════════════════════════
+
+
+def test_run_task_by_id_dispatches_to_agent(monkeypatch):
+    """手动运行：POST Agent 成功 → started=True，且不写本地 scheduler_runs。"""
+    import requests as req
+    import agent.db as agent_db_mod
+    monkeypatch.setattr(agent_db_mod, "meta_get",
+                        lambda key: "1" if key == "xiaoman_online" else None)
+
+    captured = {}
+
+    class FakeResp:
+        status_code = 200
+        headers = {"content-type": "application/json"}
+
+        def json(self):
+            return {"started": True, "reason": "ok"}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        captured["url"] = url
+        captured["body"] = json
+        return FakeResp()
+
+    monkeypatch.setattr(req, "post", fake_post)
+    # 强制走真实 scoped_tasks（morning_analysis 在 task_schedule.json 里）
+    task = next(t for t in sched.scoped_tasks() if t["task_id"] == "morning_analysis")
+    assert task is not None
+    monkeypatch.setattr(sched, "scoped_tasks", lambda: [task])
+    monkeypatch.setattr(sched, "_dispatch_to_agent", lambda t, trigger="manual": {
+        "started": True, "reason": "ok", "message": "已派发给 Agent 执行", "run": None,
+    })
+    r = sched.run_task_by_id("morning_analysis", trigger="manual")
+    assert r["started"] is True
+    assert r["reason"] == "ok"
+
+
+def test_run_task_by_id_offline_rejected(monkeypatch):
+    """小满下线 → 拒绝，message 含上班提示。"""
+    import agent.db as agent_db_mod
+    monkeypatch.setattr(agent_db_mod, "meta_get",
+                        lambda key: "0" if key == "xiaoman_online" else None)
+    r = sched.run_task_by_id("morning_analysis")
+    assert r["started"] is False
+    assert r["reason"] == "offline"
+    assert "上线" in r["message"]
+
+
+def test_run_task_by_id_unknown_task_rejected(monkeypatch):
+    import agent.db as agent_db_mod
+    monkeypatch.setattr(agent_db_mod, "meta_get",
+                        lambda key: "1" if key == "xiaoman_online" else None)
+    r = sched.run_task_by_id("no_such_task_xyz")
+    assert r["started"] is False
+    assert r["reason"] == "unknown"
+
+
+def test_dispatch_to_agent_unreachable(monkeypatch):
+    """Agent 进程不可达 → started=False + reason=agent_unreachable（不本地兜底）。"""
+    import requests as req
+    def _boom(*a, **k):
+        raise ConnectionError("agent down")
+    monkeypatch.setattr(req, "post", _boom)
+    r = sched._dispatch_to_agent({"task_id": "morning_analysis"})
+    assert r["started"] is False
+    assert r["reason"] == "agent_unreachable"
+
+
+def test_dispatch_stop_to_agent_ok(monkeypatch):
+    """停止：POST Agent 成功 → stopped=True。"""
+    import requests as req
+
+    class FakeResp:
+        status_code = 200
+        headers = {"content-type": "application/json"}
+
+        def json(self):
+            return {"stopped": True, "message": "已发送停止信号"}
+
+    monkeypatch.setattr(req, "post", lambda *a, **k: FakeResp())
+    r = sched.dispatch_stop_to_agent("morning_analysis")
+    assert r["stopped"] is True
+
+
+def test_dispatch_stop_to_agent_not_running(monkeypatch):
+    """Agent 返回未运行 → stopped=False + reason=not_running。"""
+    import requests as req
+
+    class FakeResp:
+        status_code = 200
+        headers = {"content-type": "application/json"}
+
+        def json(self):
+            return {"stopped": False, "reason": "not_running", "message": "该任务未在运行"}
+
+    monkeypatch.setattr(req, "post", lambda *a, **k: FakeResp())
+    r = sched.dispatch_stop_to_agent("ghost")
+    assert r["stopped"] is False
+    assert r["reason"] == "not_running"
+
+
+def test_dispatch_stop_to_agent_unreachable(monkeypatch):
+    """Agent 不可达 → stopped=False + reason=agent_unreachable。"""
+    import requests as req
+    def _boom(*a, **k):
+        raise ConnectionError("agent down")
+    monkeypatch.setattr(req, "post", _boom)
+    r = sched.dispatch_stop_to_agent("morning_analysis")
+    assert r["stopped"] is False
+    assert r["reason"] == "agent_unreachable"

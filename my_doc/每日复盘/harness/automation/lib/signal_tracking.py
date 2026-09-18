@@ -287,6 +287,56 @@ _TRADE_TYPE_KEYWORDS = {
 }
 _URGENCY_MAP = {'高': 'high', '低': 'low'}
 
+# ── 枚举约束（CHAT.md 任务4 · 与 docs/signal-enums.md / signal_tracking_cloud.py 一致）──
+# 复用既有 VALID_TRADE_TYPE / VALID_URGENCY / VALID_PRIORITY（L248-250），新增其余枚举
+# 注意：追踪库/云库 status 用英文内部值（markdown 显示层的中文状态由 _TRACKABLE_STATUSES 映射）
+# 2026-09 v3.0：新增 expired（已过期）——盘中"触发后回落离开交易价"或"75%窗口过期"写入云库
+ENUM_STATUS = {'open', 'triggered', 'executed', 'partial_executed', 'settled', 'expired'}
+ENUM_DIRECTION = {'buy', 'sell'}
+ENUM_SOURCE = {'morning_analysis', 'intraday_check', 'evening_review'}
+ENUM_OUTCOME = {'hit', 'stopped', 'miss'}
+
+_ENUM_FIELDS = {
+    'trade_type': VALID_TRADE_TYPE,
+    'direction': ENUM_DIRECTION,
+    'priority': VALID_PRIORITY,
+    'urgency': VALID_URGENCY,
+    'source': ENUM_SOURCE,
+    'outcome': ENUM_OUTCOME,
+    'status': ENUM_STATUS,
+}
+
+
+def assert_valid_signal_record(rec: dict) -> dict:
+    """校验单条信号记录的枚举字段；非法值抛 ValueError。返回原 dict。
+
+    只校验存在且有值的受约束字段；数值字段做类型规整。供 merge_new_signals 及
+    signal_tracking_cloud.to_row 双端调用（生成/入库两侧同口径）。
+    注意：这是"抛异常"版；原 validate_signal_record（L253，返回错误列表）保留不动。
+    """
+    for field, allowed in _ENUM_FIELDS.items():
+        val = rec.get(field)
+        if val is None:
+            continue
+        v = str(val).strip()
+        if v not in allowed:
+            raise ValueError(
+                f"信号字段 {field} 值 {v!r} 不在合法枚举 {sorted(allowed)} 内 "
+                f"(signal_id={rec.get('signal_id')})"
+            )
+        rec[field] = v
+    for field in ('target_price', 'stop_price', 'entry_price', 'trigger_price',
+                  'expected_trigger_rate', 'target_pct', 'stop_pct', 'trade_price'):
+        val = rec.get(field)
+        if val is not None and not isinstance(val, (int, float)):
+            try:
+                rec[field] = float(val)
+            except (TypeError, ValueError):
+                raise ValueError(
+                    f"信号字段 {field} 应为数值，实际 {val!r} (signal_id={rec.get('signal_id')})"
+                )
+    return rec
+
 
 def _extract_ticker(标的: str) -> str:
     """从 '银行ETF(512800)' 提取 6 位代码；提取失败返回空串。"""
@@ -340,6 +390,55 @@ def _parse_target_stop(raw: str) -> dict:
         m = re.match(r'止损\s*(\d+(?:\.\d+)?)', part)
         if m:
             result['stop_price'] = float(m.group(1)); continue
+    return result
+
+
+def _parse_pct_or_price(cell: str) -> tuple:
+    """解析单个价位单元格：'+3%' → (pct=3.0, price=None)；'1.75' → (pct=None, price=1.75)。
+    空/— → (None, None)。"""
+    cell = (cell or '').strip()
+    if not cell or cell == '—':
+        return None, None
+    m = re.match(r'([+-]?\d+(?:\.\d+)?)\s*%', cell)
+    if m:
+        return float(m.group(1)), None
+    m = re.match(r'([+-]?\d+(?:\.\d+)?)', cell)
+    if m:
+        return None, float(m.group(1))
+    return None, None
+
+
+def _parse_price_cols(g, header: list[str]) -> dict:
+    """解析价格列：v3.0 三列（交易价/目标价/止损价）优先，v2.0 目标/止损 列兜底。
+
+    返回 {trade_price, target_price, target_pct, stop_price, stop_pct}。
+    g(idx) 取单元格文本（row → cell）；header 为表头列名列表。
+    - 交易价：'1.70' → trade_price=1.70；'—' → None
+    - 目标价/止损价：显式价或百分比（'+3%'/'1.75'）
+    """
+    result = {'trade_price': None, 'target_price': None, 'target_pct': None,
+              'stop_price': None, 'stop_pct': None}
+    c_trade = _col(header, '交易价')
+    if c_trade >= 0:
+        trade = g(c_trade)
+        if trade and trade != '—':
+            _pct, price = _parse_pct_or_price(trade)
+            result['trade_price'] = price if price is not None else None
+        c_tgt = _col(header, '目标价')
+        c_stop = _col(header, '止损价')
+        if c_tgt >= 0:
+            pct, price = _parse_pct_or_price(g(c_tgt))
+            result['target_pct'] = pct
+            result['target_price'] = price
+        if c_stop >= 0:
+            pct, price = _parse_pct_or_price(g(c_stop))
+            result['stop_pct'] = pct
+            result['stop_price'] = price
+        return result
+    # v2.0 兜底：目标/止损 合并列
+    c_tgt_stop = _col(header, '目标/止损')
+    if c_tgt_stop >= 0:
+        result.update(_parse_target_stop(g(c_tgt_stop)))
     return result
 
 
@@ -410,7 +509,6 @@ def parse_signal_markdown(md_text: str, today: str = '') -> list[dict]:
     c_qty = _col(header, '仓位')
     c_id = _col(header, '信号ID')
     c_exp_rate = _col(header, '预期触发率')
-    c_tgt_stop = _col(header, '目标/止损')
 
     records = []
     for row in rows:
@@ -438,7 +536,7 @@ def parse_signal_markdown(md_text: str, today: str = '') -> list[dict]:
 
         urgency_val = _URGENCY_MAP.get(urgency, 'low')
 
-        ts = _parse_target_stop(g(c_tgt_stop))
+        ts = _parse_price_cols(g, header)
         records.append({
             'signal_id': signal_id,
             'ticker': ticker,
@@ -448,6 +546,7 @@ def parse_signal_markdown(md_text: str, today: str = '') -> list[dict]:
             'priority': priority or 'P2',
             'urgency': urgency_val,
             'expected_trigger_rate': _parse_expected_rate(g(c_exp_rate)),
+            'trade_price': ts['trade_price'],
             'target_pct': ts['target_pct'],
             'stop_pct': ts['stop_pct'],
             'target_price': ts['target_price'],
@@ -460,14 +559,97 @@ def parse_signal_markdown(md_text: str, today: str = '') -> list[dict]:
             'status_history': [{'date': today, 'status': 'triggered', 'note': '从每日信号.md解析录入'}],
         })
 
-    # 从盘中验证记录提取触发价 → 补充 entry_price
+    # 触发价/入场价回填（2026-09-14 任务4 调整）：
+    #   盘中验证记录 已不再生成（CHAT.md），但为兼容过渡期/历史 markdown，
+    #   若段落仍在则提取作为触发价（写入 trigger_price；entry_price 作为入场价代理）。
+    # 过滤规则（任务4 调整）：只要求 份额>0（可交易的信号）即入库；
+    #   不再强制 entry_price——买入价由复盘 7.6.1b（录入交易）回填，触发价由盘中写云库，
+    #   二者都缺时信号保持无价记录（settle 侧对无 entry_price 信号跳过结算）。
     verify_prices = _extract_trigger_prices(md_text)
     for rec in records:
-        if rec['entry_price'] is None and rec['signal_id'] in verify_prices:
-            rec['entry_price'] = verify_prices[rec['signal_id']]
-    # 无入场价或无份额的信号无法结算 P&L → 不追踪收益（与 settle_due_signals 的
-    # "无入场价或份额无法结算" 口径一致，避免追踪库积累永不结算的僵尸信号）
-    records = [r for r in records if r.get('entry_price') and r.get('shares', 0) > 0]
+        if rec['signal_id'] in verify_prices:
+            # trigger_price：直接写（盘中触发价）；entry_price：仅当尚未回填时用触发价作代理
+            rec['trigger_price'] = verify_prices[rec['signal_id']]
+            if rec.get('entry_price') is None:
+                rec['entry_price'] = verify_prices[rec['signal_id']]
+    records = [r for r in records if r.get('shares', 0) > 0]
+    return records
+
+
+def parse_signal_rows_all(md_text: str, today: str = '') -> list[dict]:
+    """解析每日信号.md 信号总表的【全部行】（含 未触发/已触发/已执行/已过期），用于云库入库。
+
+    与 parse_signal_markdown 的差异：
+    - parse_signal_markdown 只追踪 已触发/已执行/部分执行（结算收益用）；
+    - 本函数把整表按行转成云库 JSON 记录（status 用英文内部值：未触发→open、已过期→expired），
+      供 auto_morning_analysis 生成每日信号.md 后立刻云库入库、auto_intraday_check 状态变更后同步云库，
+      使 Dashboard「每日信号」页早盘即可见（2026-09-15 BUG-FIX：早盘只写 md
+      不写云库 → daily-signals 查云库为空）。
+    today: 'YYYY-MM-DD'，缺省用 date.today()。
+    """
+    if not today:
+        today = date.today().isoformat()
+    _STATUS_CN2EN = {
+        '待执行': 'open',        # 旧词元兼容
+        '未触发': 'open',        # v3.0 初始状态
+        '已触发': 'triggered',
+        '已执行': 'executed',
+        '部分执行': 'partial_executed',
+        '已过期': 'expired',     # v3.0 盘中回落/窗口过期
+    }
+    header, rows = _parse_table_rows(md_text, '## 信号总表')
+    c_prio = _col(header, '优先级')
+    c_target = _col(header, '标的')
+    c_op = _col(header, '操作类型')
+    c_status = _col(header, '状态')
+    c_dir = _col(header, '方向')
+    c_urg = _col(header, '紧急度')
+    c_exp = _col(header, '预期收益日')
+    c_qty = _col(header, '仓位')
+    c_id = _col(header, '信号ID')
+    c_exp_rate = _col(header, '预期触发率')
+    c_cond = _col(header, '触发条件')
+    c_window = _col(header, '有效时段')
+
+    records = []
+    for row in rows:
+        def g(idx):
+            return row[idx] if 0 <= idx < len(row) else ''
+
+        signal_id = g(c_id)
+        if not signal_id.startswith('SIG-'):
+            continue
+        status_cn = g(c_status).strip()
+        status = _STATUS_CN2EN.get(status_cn)
+        if status is None:
+            continue  # 已取消/已废弃等：不入库
+        ticker = _extract_ticker(g(c_target))
+        if not ticker:
+            continue
+        target = g(c_target)
+        ts = _parse_price_cols(g, header)
+        records.append({
+            'signal_id': signal_id,
+            'ticker': ticker,
+            'name': target.split('(')[0] if '(' in target else target,
+            'trade_type': _map_trade_type(g(c_op), g(c_dir)),
+            'direction': 'sell' if '卖' in g(c_dir) else 'buy',
+            'priority': g(c_prio) or 'P2',
+            'urgency': _URGENCY_MAP.get(g(c_urg), 'low'),
+            'expected_trigger_rate': _parse_expected_rate(g(c_exp_rate)),
+            'trade_price': ts['trade_price'],
+            'target_pct': ts['target_pct'],
+            'stop_pct': ts['stop_pct'],
+            'target_price': ts['target_price'],
+            'stop_price': ts['stop_price'],
+            'expected_return_date': g(c_exp) if g(c_exp) and g(c_exp) != '—' else '',
+            'trigger_date': today,
+            'status': status,
+            'source': 'morning_analysis',
+            'trigger_condition': g(c_cond) if g(c_cond) else None,
+            'valid_window': g(c_window) if g(c_window) else None,
+            'position': g(c_qty) if g(c_qty) else None,
+        })
     return records
 
 
@@ -502,10 +684,15 @@ def _extract_trigger_prices(md_text: str) -> dict:
 
 
 def merge_new_signals(tracking: dict, new_records: list[dict]) -> dict:
-    """将新信号并入追踪库（按 signal_id 去重）。返回更新后的 dict（不写磁盘）。"""
+    """将新信号并入追踪库（按 signal_id 去重）。返回更新后的 dict（不写磁盘）。
+
+    并入前逐条做枚举校验（assert_valid_signal_record），非法记录抛 ValueError——
+    生成侧严格遵守枚举是任务4 的硬性要求，宁可中断也不入库脏数据。
+    """
     existing_ids = {s.get('signal_id') for s in tracking.get('signals', [])}
     added = 0
     for rec in new_records:
+        assert_valid_signal_record(rec)
         if rec['signal_id'] in existing_ids:
             continue
         tracking.setdefault('signals', []).append(rec)
@@ -516,8 +703,13 @@ def merge_new_signals(tracking: dict, new_records: list[dict]) -> dict:
 
 
 def _resolve_target_price(sig: dict) -> tuple:
-    """计算信号目标价/止损价：显式价格优先，否则用百分比×触发价。"""
-    entry = sig.get('entry_price') or 0.0
+    """计算信号目标价/止损价：显式价格优先，否则用百分比×基准价。
+
+    2026-09-14 任务4：入场价可能由录入交易/触发价回填；entry_price 缺时回退 trigger_price。
+    2026-09 v3.0：再回退 trade_price（交易价）——盘中/结算时入场价尚未回填时，
+    百分比目标/止损按信号生成时的计划交易价换算。
+    """
+    entry = sig.get('entry_price') or sig.get('trigger_price') or sig.get('trade_price') or 0.0
     target = sig.get('target_price')
     if target is None and sig.get('target_pct') is not None and entry:
         target = round(entry * (1 + sig['target_pct'] / 100.0), 4)
@@ -571,7 +763,7 @@ def settle_due_signals(tracking: dict, price_history: dict, today: str = '') -> 
 
         target_price, stop_price = _resolve_target_price(sig)
         is_buy = sig.get('trade_type') == 'buy'
-        entry = sig.get('entry_price') or 0.0
+        entry = sig.get('entry_price') or sig.get('trigger_price') or 0.0
         shares = sig.get('shares', 0)
         if not entry or not shares:
             continue  # 无入场价或份额无法结算，等待补充

@@ -40,20 +40,20 @@ etf-strategies/report/*.html
 # Temporary scripts
 _*.py
 
-# Secretsï¼ˆdocker compose çš?.env å?ANTHROPIC_AUTH_TOKENï¼Œå‹¿æäº¤ï¼?
+# Secretsï¼ˆdocker compose ï¿½?.env ï¿½?ANTHROPIC_AUTH_TOKENï¼Œå‹¿æäº¤ï¿½?
 .env
 .env.local
 .env.*
 !.env.example
 
-# ä¼ä¸šå¾®ä¿¡é€šçŸ¥å‡­è¯ï¼ˆcorpid/agentid/secret/touserï¼Œå‹¿æäº¤ï¼?
+# ä¼ä¸šå¾®ä¿¡é€šçŸ¥å‡­è¯ï¼ˆcorpid/agentid/secret/touserï¼Œå‹¿æäº¤ï¿½?
 etf-strategies/dashboard/data/notify_config.json
 
 # OS
 .DS_Store
 Thumbs.db
 
-# DSH ×Ô¶¯»¯Ñ­»·ÈÕÖ¾
+# DSH ï¿½Ô¶ï¿½ï¿½ï¿½Ñ­ï¿½ï¿½ï¿½ï¿½Ö¾
 .dsh/logs/
 
 # DSH runtime data (profiles/sessions/storages/credentials/logs)
@@ -80,6 +80,9 @@ scripts/config/cloud.json
 scripts/.snapshots/
 scripts/logs/cloud_sync.log
 
-# _*.py ÎóÉËºÏ·¨Èë¿Ú£º__main__.py ±ØĞëÈë¿â
+# _*.py ï¿½ï¿½ï¿½ËºÏ·ï¿½ï¿½ï¿½Ú£ï¿½__main__.py ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 !**/__main__.py
 !**/__init__.py
+
+.npm-cache
+node_modules

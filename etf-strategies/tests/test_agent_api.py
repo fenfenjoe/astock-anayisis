@@ -52,6 +52,47 @@ def test_status_endpoint(client):
     assert data["state"] in ("offline", "leave", "working", "slack")
 
 
+def test_status_working_when_scheduler_task_running(client, monkeypatch):
+    """BUG-FIX(2026-09-15)：调度任务执行中 → /api/agent/status 返回 state=working + current_task。
+
+    原实现硬编码 current_task=None → 桌宠在定时任务期间永远不显示"工作中"。
+    """
+    from agent.core import scheduler_agent
+
+    # 存活前置：heartbeat 新鲜 + 在线（离线时 state=offline 优先于 working）
+    from datetime import datetime
+
+    agent_db.meta_set(
+        "agent_heartbeat", datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    )
+    agent_db.meta_set("xiaoman_online", "1")
+
+    # 模拟调度器正在跑任务
+    monkeypatch.setattr(
+        scheduler_agent,
+        "current_task",
+        lambda: {"task_id": "morning_analysis", "name": "早盘分析", "started_at": "09:07:00"},
+    )
+    r = client.get("/api/agent/status")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["alive"] is True
+    assert data["state"] == "working"
+    assert data["current_task"]["task_id"] == "morning_analysis"
+    assert "正在做" in data["mood"]["label"]
+
+
+def test_status_slack_when_no_task(client, monkeypatch):
+    """无调度任务 → 保持 slack/普通状态（不被 current_task 干扰）。"""
+    from agent.core import scheduler_agent
+
+    monkeypatch.setattr(scheduler_agent, "current_task", lambda: None)
+    r = client.get("/api/agent/status")
+    data = r.json()
+    assert data["current_task"] is None
+    assert data["state"] in ("offline", "leave", "working", "slack")
+
+
 def test_mood_demo():
     assert agent_api._mood("leave", None, True)["label"] == "请假中"
     assert agent_api._mood("on", None, True)["label"] == "摸鱼中"

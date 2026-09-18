@@ -2,6 +2,7 @@
 
 启动: python dashboard/app.py  →  http://localhost:8000
 """
+
 import sys
 import os
 import json
@@ -19,6 +20,7 @@ if str(_PARENT) not in sys.path:
 # 加载 etf-strategies/.env（云后端/凭据 等在 db 模块 import 前生效）
 try:
     from load_env import load_env_file
+
     load_env_file()
 except ImportError:
     pass
@@ -31,24 +33,38 @@ from fastapi.staticfiles import StaticFiles
 
 from dashboard import db as db_mod
 from dashboard.db import (
-    init_db, is_seeded, metrics_get_all, metrics_get_one,
-    signals_get_latest, kb_get, nav_get_all, nav_has_data,
-    user_count, user_create,
+    init_db,
+    is_seeded,
+    metrics_get_all,
+    metrics_get_one,
+    signals_get_latest,
+    kb_get,
+    nav_get_all,
+    nav_has_data,
+    user_count,
+    user_create,
 )
 from dashboard.sync import seed_all, sync_daily_signals, sync_backtest_nav
 from dashboard.auth import (
-    get_current_user, create_token, verify_password, hash_password,
-    check_rate_limit, record_login_failure, clear_rate_limit,
+    get_current_user,
+    create_token,
+    verify_password,
+    hash_password,
+    check_rate_limit,
+    record_login_failure,
+    clear_rate_limit,
     get_secret_key_warning,
 )
 from dashboard.api_daily import router as daily_router
 from dashboard.api_agent import router as agent_router
+from dashboard.api_tickets import router as tickets_router
 from dashboard import scheduler as daily_scheduler
 
 
 # ═══════════════════════════════════════════════════════════════
 # Startup / Shutdown (lifespan)
 # ═══════════════════════════════════════════════════════════════
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -61,19 +77,12 @@ async def lifespan(app: FastAPI):
     启动提速（2026-09-02）：重负载的「每日复盘导入 + 调度器/通知启动」移入后台
     daemon 线程，uvicorn 立即绑定端口即可访问。
     """
-    _in_test = os.environ.get("PYTEST_CURRENT_TEST") is not None \
+    _in_test = (
+        os.environ.get("PYTEST_CURRENT_TEST") is not None
         or os.environ.get("DSH_TEST") == "1"
+    )
 
     init_db()
-
-    # ── 初始化 agent.db（会话/文章/知识库）：dashboard 也要读它，
-    #    否则 /api/agent/* （如 status 的 heartbeat）会因表不存在而报错。
-    #    file 模式建表；cloud 模式直接连云（见 agent/db.py USE_CLOUD）。 ──
-    try:
-        from agent import db as agent_db
-        agent_db.init_db()
-    except Exception as e:
-        print(f"[app]   WARNING: agent.db init failed: {e}")
 
     # ── 预热云端 DB 连接池（2026-09-08 性能优化）──
     #    云后端首请求需建立 TCP+TLS 连接（实测单次冷连接 0.7~15s）；启动时先打一发
@@ -82,6 +91,7 @@ async def lifespan(app: FastAPI):
     if not _in_test:
         try:
             import cloud_db as _cd
+
             if _cd.enabled():
                 _cd.select("portfolio_meta", columns="key,value", limit=1)
                 print("[app]   cloud DB connection pool warmed")
@@ -92,7 +102,10 @@ async def lifespan(app: FastAPI):
     if not _in_test and user_count() == 0:
         import secrets
         import os as _os
-        default_password = _os.environ.get("DASHBOARD_ADMIN_PASSWORD", "") or secrets.token_hex(8)[:16]
+
+        default_password = (
+            _os.environ.get("DASHBOARD_ADMIN_PASSWORD", "") or secrets.token_hex(8)[:16]
+        )
         user_create(
             username="admin",
             password_hash=hash_password(default_password),
@@ -123,6 +136,7 @@ async def lifespan(app: FastAPI):
     print("[app] Pre-loading strategy modules...")
     try:
         import daily_signal  # noqa: F401
+
         print(f"[app]   daily_signal loaded ({len(daily_signal.STRAT_MAP)} strategies)")
     except Exception as e:
         print(f"[app]   WARNING: daily_signal pre-load failed: {e}")
@@ -171,6 +185,7 @@ async def lifespan(app: FastAPI):
         # ── 3. 企业微信信号触发通知 watcher（未配置则静默空转）──
         try:
             from dashboard import notify as notify_mod
+
             notify_mod.start()
         except Exception as e:
             print(f"[app]   WARNING: notify watcher start failed: {e}")
@@ -192,6 +207,7 @@ async def lifespan(app: FastAPI):
         print(f"[app]   WARNING: scheduler stop failed: {e}")
     try:
         from dashboard import notify as notify_mod
+
         notify_mod.stop()
     except Exception:
         pass
@@ -213,10 +229,12 @@ protected = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
 # Auth Routes (UNPROTECTED — on main app, not the protected router)
 # ═══════════════════════════════════════════════════════════════
 
+
 @app.post("/api/auth/login")
 async def auth_login(request: Request):
     """Login — validate credentials, return JWT access token."""
     import json as _json
+
     try:
         body = await request.json()
     except Exception:
@@ -234,6 +252,7 @@ async def auth_login(request: Request):
     check_rate_limit(client_ip)
 
     from dashboard.db import user_get_by_username, user_update_last_login
+
     user = user_get_by_username(username)
 
     if not user or not user.get("is_active"):
@@ -248,21 +267,25 @@ async def auth_login(request: Request):
     clear_rate_limit(client_ip)
     user_update_last_login(username)
 
-    token = create_token({
-        "username": user["username"],
-        "role": user.get("role", "admin"),
-        "display_name": user.get("display_name", user["username"]),
-    })
-
-    return JSONResponse({
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
+    token = create_token(
+        {
             "username": user["username"],
-            "display_name": user.get("display_name", user["username"]),
             "role": user.get("role", "admin"),
-        },
-    })
+            "display_name": user.get("display_name", user["username"]),
+        }
+    )
+
+    return JSONResponse(
+        {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "username": user["username"],
+                "display_name": user.get("display_name", user["username"]),
+                "role": user.get("role", "admin"),
+            },
+        }
+    )
 
 
 @app.post("/api/auth/logout")
@@ -274,17 +297,22 @@ async def auth_logout():
 @app.get("/api/auth/me")
 async def auth_me(user: dict = Depends(get_current_user)):
     """Return current user info (requires valid token)."""
-    return JSONResponse({
-        "username": user["username"],
-        "display_name": user.get("display_name", user["username"]),
-        "role": user.get("role", "viewer"),
-    })
+    return JSONResponse(
+        {
+            "username": user["username"],
+            "display_name": user.get("display_name", user["username"]),
+            "role": user.get("role", "viewer"),
+        }
+    )
 
 
 @app.post("/api/auth/change-password")
-async def auth_change_password(request: Request, user: dict = Depends(get_current_user)):
+async def auth_change_password(
+    request: Request, user: dict = Depends(get_current_user)
+):
     """Change the current user's password (requires valid token)."""
     import json as _json
+
     try:
         body = await request.json()
     except Exception:
@@ -299,6 +327,7 @@ async def auth_change_password(request: Request, user: dict = Depends(get_curren
         raise HTTPException(400, "新密码长度不能少于6位")
 
     from dashboard.db import user_get_by_username, user_change_password
+
     db_user = user_get_by_username(user["username"])
     if not db_user:
         raise HTTPException(401, "用户不存在")
@@ -327,6 +356,7 @@ _klines_syncing = threading.Lock()  # guard against concurrent K-line sync
 # Routes: Page
 # ═══════════════════════════════════════════════════════════════
 
+
 @app.get("/")
 async def index():
     template_path = BASE_DIR / "templates" / "dashboard.html"
@@ -338,6 +368,7 @@ async def index():
 # ═══════════════════════════════════════════════════════════════
 # Routes: Strategies (from DB)
 # ═══════════════════════════════════════════════════════════════
+
 
 @protected.get("/strategies")
 async def list_strategies(
@@ -361,24 +392,36 @@ async def get_strategy_detail(sid: str):
 
     result = {"id": sid}
     if kb:
-        result.update({
-            "name": kb.get("name", ""), "class_name": kb.get("class_name", ""),
-            "category": kb.get("category", ""), "intro": kb.get("intro", ""),
-            "stock_selection": kb.get("stock_selection", ""),
-            "market_timing": kb.get("market_timing", ""),
-            "factors": kb.get("factors", ""), "rebalance": kb.get("rebalance", ""),
-            "strengths": kb.get("strengths", ""), "weaknesses": kb.get("weaknesses", ""),
-            "backtest": kb.get("backtest", {}),
-            "source_url": kb.get("source_url", ""),
-            "process_desc": kb.get("process_desc", ""),
-        })
+        result.update(
+            {
+                "name": kb.get("name", ""),
+                "class_name": kb.get("class_name", ""),
+                "category": kb.get("category", ""),
+                "intro": kb.get("intro", ""),
+                "stock_selection": kb.get("stock_selection", ""),
+                "market_timing": kb.get("market_timing", ""),
+                "factors": kb.get("factors", ""),
+                "rebalance": kb.get("rebalance", ""),
+                "strengths": kb.get("strengths", ""),
+                "weaknesses": kb.get("weaknesses", ""),
+                "backtest": kb.get("backtest", {}),
+                "source_url": kb.get("source_url", ""),
+                "process_desc": kb.get("process_desc", ""),
+            }
+        )
     if metrics:
         result["metrics"] = {
-            "annual_return": f"{metrics['annual_return']:.2f}%" if metrics.get("annual_return") is not None else "—",
+            "annual_return": f"{metrics['annual_return']:.2f}%"
+            if metrics.get("annual_return") is not None
+            else "—",
             "sharpe": metrics.get("sharpe"),
-            "max_drawdown": f"{metrics['max_drawdown']:.2f}%" if metrics.get("max_drawdown") is not None else "—",
+            "max_drawdown": f"{metrics['max_drawdown']:.2f}%"
+            if metrics.get("max_drawdown") is not None
+            else "—",
             "calmar": metrics.get("calmar"),
-            "win_rate": f"{metrics['win_rate']:.1f}%" if isinstance(metrics.get("win_rate"), (int, float)) else metrics.get("win_rate", "—"),
+            "win_rate": f"{metrics['win_rate']:.1f}%"
+            if isinstance(metrics.get("win_rate"), (int, float))
+            else metrics.get("win_rate", "—"),
             "turnover": metrics.get("turnover"),
         }
     return result
@@ -387,6 +430,7 @@ async def get_strategy_detail(sid: str):
 # ═══════════════════════════════════════════════════════════════
 # Shared Helper: DB-first price loading (used by signals/rebalances/diagnostics)
 # ═══════════════════════════════════════════════════════════════
+
 
 def _load_prices_from_db(assets: list[str], lookback_days: int = 300):
     """Load prices from SQLite kline_daily table, auto-syncing fresh data first.
@@ -453,6 +497,7 @@ def _load_prices_from_db(assets: list[str], lookback_days: int = 300):
 # Routes: K-line Sync (ensure fresh data before signals/rebalances)
 # ═══════════════════════════════════════════════════════════════
 
+
 @protected.post("/klines/ensure/{sid}")
 async def ensure_klines_fresh(sid: str):
     """Ensure K-line data is up-to-date for a strategy's ETF codes.
@@ -479,18 +524,23 @@ async def ensure_klines_fresh(sid: str):
             results[code] = -1  # Mark as failed
             print(f"[app] K-line sync failed for {code}: {e}")
 
-    return JSONResponse({
-        "status": "done",
-        "strategy_id": sid,
-        "total_new_rows": total_new,
-        "details": results,
-        "message": "数据已是最新" if total_new == 0 else f"已补充 {total_new} 行K线数据",
-    })
+    return JSONResponse(
+        {
+            "status": "done",
+            "strategy_id": sid,
+            "total_new_rows": total_new,
+            "details": results,
+            "message": "数据已是最新"
+            if total_new == 0
+            else f"已补充 {total_new} 行K线数据",
+        }
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
 # Routes: Daily Signals (from DB, with lazy generation)
 # ═══════════════════════════════════════════════════════════════
+
 
 def _generate_and_store_signal(sid: str) -> dict | None:
     """Generate today's signal for one strategy and store in DB.
@@ -516,9 +566,10 @@ def _generate_and_store_signal(sid: str) -> dict | None:
     # Use live=True where supported (strategy decides how to use it; e.g., weekly
     # strategies may apply resample regardless of the live flag)
     import inspect
+
     try:
         sig = inspect.signature(strat.generate)
-        if 'live' in sig.parameters:
+        if "live" in sig.parameters:
             weights = strat.generate(prices, live=True)
         else:
             weights = strat.generate(prices)
@@ -535,6 +586,7 @@ def _generate_and_store_signal(sid: str) -> dict | None:
     # 例：最新K线7/21 → 信号日期7/22（今天盘中执行）
     # 例：最新K线7/22 → 信号日期7/23（收盘后，明天执行）
     from datetime import timedelta
+
     data_date = weights.index[-1].date()
     signal_date = (data_date + timedelta(days=1)).strftime("%Y-%m-%d")
 
@@ -564,40 +616,68 @@ def _generate_and_store_signal(sid: str) -> dict | None:
         else:
             action = "HOLD"
 
-        assets_data.append({
-            "code": etf, "name": name,
-            "target_weight": round(tw, 4), "prev_weight": round(pw, 4),
-            "change": round(diff, 4), "action": action,
-        })
+        assets_data.append(
+            {
+                "code": etf,
+                "name": name,
+                "target_weight": round(tw, 4),
+                "prev_weight": round(pw, 4),
+                "change": round(diff, 4),
+                "action": action,
+            }
+        )
         if action in ("BUY", "SELL"):
-            actions.append({"code": etf, "name": name, "action": action,
-                          "change_pct": round(abs(diff) * 100, 1)})
+            actions.append(
+                {
+                    "code": etf,
+                    "name": name,
+                    "action": action,
+                    "change_pct": round(abs(diff) * 100, 1),
+                }
+            )
 
     # Store in DB — single transaction: DELETE old + INSERT new
     # BUG-FIX(2026-09-07)：云模式必须走云 signals_upsert/signals_delete_by_strategy，
     # 原先直接 get_conn() 写本地 daily_signals 在云模式下本地无此表（只有 kline/backtest_nav 缓存表），
     # 全新机器直接 500，迁移机器写本地读云端 → 信号不跨机共享，违背云权威原则。
     from dashboard.db import signals_delete_by_strategy, signals_upsert
+
     signals_delete_by_strategy(sid)
     for a in assets_data:
-        signals_upsert(sid, signal_date, a["code"], a["name"],
-                       a["target_weight"], a["prev_weight"], a["action"])
+        signals_upsert(
+            sid,
+            signal_date,
+            a["code"],
+            a["name"],
+            a["target_weight"],
+            a["prev_weight"],
+            a["action"],
+        )
 
     holdings = sorted(
-        [{"code": etf, "name": get_etf_name(etf),
-          "weight": round(float(today_w.get(etf, 0)), 4)}
-         for etf in strat.assets if today_w.get(etf, 0) > 0.001],
+        [
+            {
+                "code": etf,
+                "name": get_etf_name(etf),
+                "weight": round(float(today_w.get(etf, 0)), 4),
+            }
+            for etf in strat.assets
+            if today_w.get(etf, 0) > 0.001
+        ],
         key=lambda x: -x["weight"],
     )
 
     return {
-        "strategy_id": sid, "strategy_name": sname,
+        "strategy_id": sid,
+        "strategy_name": sname,
         "signal_date": signal_date,
         "data_start": str(prices.index[0].date()),
         "data_end": str(prices.index[-1].date()),
         "trading_days": len(prices),
-        "assets": assets_data, "actions": actions,
-        "holdings": holdings, "has_signals": len(actions) > 0,
+        "assets": assets_data,
+        "actions": actions,
+        "holdings": holdings,
+        "has_signals": len(actions) > 0,
         "data_stale": data_stale,
         "staleness_msg": staleness_msg,
     }
@@ -653,41 +733,56 @@ async def get_signal(sid: str):
             actions = []
             holdings = []
             for r in cached:
-                assets_data.append({
-                    "code": r["asset_code"], "name": r["asset_name"],
-                    "target_weight": r["target_weight"],
-                    "prev_weight": r["prev_weight"],
-                    "change": r["weight_change"],
-                    "action": r["action"],
-                })
-                if r["action"] in ("BUY", "SELL"):
-                    actions.append({
-                        "code": r["asset_code"], "name": r["asset_name"],
+                assets_data.append(
+                    {
+                        "code": r["asset_code"],
+                        "name": r["asset_name"],
+                        "target_weight": r["target_weight"],
+                        "prev_weight": r["prev_weight"],
+                        "change": r["weight_change"],
                         "action": r["action"],
-                        "change_pct": round(abs(r["weight_change"]) * 100, 1),
-                    })
+                    }
+                )
+                if r["action"] in ("BUY", "SELL"):
+                    actions.append(
+                        {
+                            "code": r["asset_code"],
+                            "name": r["asset_name"],
+                            "action": r["action"],
+                            "change_pct": round(abs(r["weight_change"]) * 100, 1),
+                        }
+                    )
                 if r["target_weight"] and r["target_weight"] > 0.001:
-                    holdings.append({
-                        "code": r["asset_code"], "name": r["asset_name"],
-                        "weight": r["target_weight"],
-                    })
+                    holdings.append(
+                        {
+                            "code": r["asset_code"],
+                            "name": r["asset_name"],
+                            "weight": r["target_weight"],
+                        }
+                    )
             holdings.sort(key=lambda x: -x["weight"])
 
             # Get strategy name from metrics table
             m = metrics_get_one(sid)
             sname = m["name"] if m else sid
 
-            return JSONResponse({
-                "strategy_id": sid, "strategy_name": sname,
-                "signal_date": cached_date,
-                "assets": assets_data, "actions": actions,
-                "holdings": holdings,
-                "has_signals": len(actions) > 0,
-                "data_start": "", "data_end": "", "trading_days": 0,
-                "_cached": True,
-                "data_stale": stale,
-                "staleness_msg": stale_msg,
-            })
+            return JSONResponse(
+                {
+                    "strategy_id": sid,
+                    "strategy_name": sname,
+                    "signal_date": cached_date,
+                    "assets": assets_data,
+                    "actions": actions,
+                    "holdings": holdings,
+                    "has_signals": len(actions) > 0,
+                    "data_start": "",
+                    "data_end": "",
+                    "trading_days": 0,
+                    "_cached": True,
+                    "data_stale": stale,
+                    "staleness_msg": stale_msg,
+                }
+            )
 
     # Not cached at all → generate
     try:
@@ -698,7 +793,9 @@ async def get_signal(sid: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, f"Signal generation failed: {e}\n\n{traceback.format_exc()}")
+        raise HTTPException(
+            500, f"Signal generation failed: {e}\n\n{traceback.format_exc()}"
+        )
 
 
 @protected.get("/signals")
@@ -720,29 +817,47 @@ async def get_all_signals_summary():
             sell_c = sum(1 for r in cached if r["action"] == "SELL")
             total_buy += buy_c
             total_sell += sell_c
-            strategies_summary.append({
-                "id": sid, "name": STRAT_MAP[sid][0],
-                "signal_date": cached[0]["signal_date"],
-                "buy_count": buy_c, "sell_count": sell_c,
-                "hold_count": len(cached) - buy_c - sell_c,
-                "has_signals": (buy_c + sell_c) > 0,
-                "holdings_count": sum(1 for r in cached if r["target_weight"] and r["target_weight"] > 0.001),
-            })
+            strategies_summary.append(
+                {
+                    "id": sid,
+                    "name": STRAT_MAP[sid][0],
+                    "signal_date": cached[0]["signal_date"],
+                    "buy_count": buy_c,
+                    "sell_count": sell_c,
+                    "hold_count": len(cached) - buy_c - sell_c,
+                    "has_signals": (buy_c + sell_c) > 0,
+                    "holdings_count": sum(
+                        1
+                        for r in cached
+                        if r["target_weight"] and r["target_weight"] > 0.001
+                    ),
+                }
+            )
         else:
-            strategies_summary.append({
-                "id": sid, "name": STRAT_MAP[sid][0], "error": True,
-            })
+            strategies_summary.append(
+                {
+                    "id": sid,
+                    "name": STRAT_MAP[sid][0],
+                    "error": True,
+                }
+            )
 
-    return JSONResponse({
-        "strategies": strategies_summary,
-        "total_buy": total_buy, "total_sell": total_sell,
-        "strategies_with_signals": sum(1 for s in strategies_summary if s.get("has_signals")),
-    })
+    return JSONResponse(
+        {
+            "strategies": strategies_summary,
+            "total_buy": total_buy,
+            "total_sell": total_sell,
+            "strategies_with_signals": sum(
+                1 for s in strategies_summary if s.get("has_signals")
+            ),
+        }
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
 # Routes: Refresh (triggers sync)
 # ═══════════════════════════════════════════════════════════════
+
 
 @protected.post("/refresh/signals")
 async def refresh_signals():
@@ -751,10 +866,14 @@ async def refresh_signals():
         results = sync_daily_signals()
         ok = sum(1 for v in results.values() if v > 0)
         fail = sum(1 for v in results.values() if v < 0)
-        return JSONResponse({
-            "status": "done", "ok": ok, "fail": fail,
-            "details": results,
-        })
+        return JSONResponse(
+            {
+                "status": "done",
+                "ok": ok,
+                "fail": fail,
+                "details": results,
+            }
+        )
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -765,18 +884,24 @@ async def refresh_klines():
     from dashboard.sync import sync_all_klines
 
     if _klines_syncing.locked():
-        return JSONResponse({"status": "already_running", "message": "K-line sync already in progress"})
+        return JSONResponse(
+            {"status": "already_running", "message": "K-line sync already in progress"}
+        )
 
     def run():
         with _klines_syncing:
             sync_all_klines()
+
     threading.Thread(target=run, daemon=True).start()
-    return JSONResponse({"status": "started", "message": "K-line sync running in background"})
+    return JSONResponse(
+        {"status": "started", "message": "K-line sync running in background"}
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
 # Routes: Charts (from DB NAV table, with lazy backtest)
 # ═══════════════════════════════════════════════════════════════
+
 
 def _run_backtest_task():
     """Run full backtest in background and store NAV data."""
@@ -810,11 +935,14 @@ async def get_equity_data(
     if not nav_has_data():
         if _cache["backtest_status"] != "running":
             threading.Thread(target=_run_backtest_task, daemon=True).start()
-        return JSONResponse({
-            "status": _cache["backtest_status"],
-            "message": _cache["backtest_message"],
-            "data": None,
-        }, status_code=202)
+        return JSONResponse(
+            {
+                "status": _cache["backtest_status"],
+                "message": _cache["backtest_message"],
+                "data": None,
+            },
+            status_code=202,
+        )
 
     data = nav_get_all()
     if not data["dates"]:
@@ -829,28 +957,34 @@ async def get_equity_data(
         filtered_series = data["series"]
         filtered_dd = data["drawdowns"]
 
-    return JSONResponse({
-        "status": "done",
-        "dates": data["dates"],
-        "series": filtered_series,
-        "drawdowns": filtered_dd,
-    })
+    return JSONResponse(
+        {
+            "status": "done",
+            "dates": data["dates"],
+            "series": filtered_series,
+            "drawdowns": filtered_dd,
+        }
+    )
 
 
 @protected.get("/charts/status")
 async def get_chart_status():
-    return JSONResponse({
-        "status": _cache["backtest_status"],
-        "message": _cache["backtest_message"],
-        "ready": nav_has_data(),
-    })
+    return JSONResponse(
+        {
+            "status": _cache["backtest_status"],
+            "message": _cache["backtest_message"],
+            "ready": nav_has_data(),
+        }
+    )
 
 
 @protected.post("/backtest/run")
 async def trigger_backtest():
     """Trigger full backtest (background thread)."""
     if _cache["backtest_status"] == "running":
-        return JSONResponse({"status": "running", "message": "Backtest already in progress"})
+        return JSONResponse(
+            {"status": "running", "message": "Backtest already in progress"}
+        )
     threading.Thread(target=_run_backtest_task, daemon=True).start()
     return JSONResponse({"status": "started", "message": "Backtest started"})
 
@@ -864,17 +998,23 @@ async def generate_report(sid: str):
     sid = sid.upper()
     try:
         from daily_signal import STRAT_MAP
+
         if sid not in STRAT_MAP:
             raise HTTPException(404, f"Strategy '{sid}' not found")
         from html_report import generate_report as gen_report
+
         sname, strat = STRAT_MAP[sid]
         filepath = gen_report(sid, strat)
         stored = "local"
-        return JSONResponse({
-            "status": "done", "strategy_id": sid,
-            "strategy_name": sname, "report_path": str(filepath),
-            "stored": stored,
-        })
+        return JSONResponse(
+            {
+                "status": "done",
+                "strategy_id": sid,
+                "strategy_name": sname,
+                "report_path": str(filepath),
+                "stored": stored,
+            }
+        )
     except ImportError as e:
         raise HTTPException(500, f"Import failed: {e}")
     except HTTPException:
@@ -890,8 +1030,9 @@ async def get_report_file(name: str):
         raise HTTPException(400, "非法文件名")
     local = Path(__file__).resolve().parent.parent / "report" / name
     if local.exists():
-        return Response(content=local.read_bytes(),
-                        media_type="text/html; charset=utf-8")
+        return Response(
+            content=local.read_bytes(), media_type="text/html; charset=utf-8"
+        )
     raise HTTPException(404, "报告不存在")
 
 
@@ -923,13 +1064,15 @@ async def get_strategy_source(sid: str):
 
     try:
         source_code = file_path.read_text(encoding="utf-8")
-        return JSONResponse({
-            "strategy_id": sid,
-            "strategy_name": sdef["name"],
-            "file_path": rel_path,
-            "source_code": source_code,
-            "lines": len(source_code.splitlines()),
-        })
+        return JSONResponse(
+            {
+                "strategy_id": sid,
+                "strategy_name": sdef["name"],
+                "file_path": rel_path,
+                "source_code": source_code,
+                "lines": len(source_code.splitlines()),
+            }
+        )
     except Exception as e:
         raise HTTPException(500, f"Failed to read source: {e}")
 
@@ -954,42 +1097,53 @@ async def get_rebalance_history(sid: str):
 
         # Group weight changes by date
         from collections import OrderedDict
+
         date_groups = OrderedDict()  # date_str -> list of ETF changes
         for i in range(1, len(weights)):
             date_str = str(weights.index[i].date())
             for etf in strat.assets:
-                delta = weights.iloc[i].get(etf, 0) - weights.iloc[i-1].get(etf, 0)
+                delta = weights.iloc[i].get(etf, 0) - weights.iloc[i - 1].get(etf, 0)
                 if abs(delta) > 0.001:  # 0.1% threshold for grouping
                     if date_str not in date_groups:
                         date_groups[date_str] = []
-                    date_groups[date_str].append({
-                        "code": etf,
-                        "name": get_etf_name(etf),
-                        "from_weight": round(float(weights.iloc[i-1].get(etf, 0)) * 100, 1),
-                        "to_weight": round(float(weights.iloc[i].get(etf, 0)) * 100, 1),
-                        "change_pct": round(float(delta) * 100, 1),
-                        "action": "加仓" if delta > 0 else "减仓",
-                    })
+                    date_groups[date_str].append(
+                        {
+                            "code": etf,
+                            "name": get_etf_name(etf),
+                            "from_weight": round(
+                                float(weights.iloc[i - 1].get(etf, 0)) * 100, 1
+                            ),
+                            "to_weight": round(
+                                float(weights.iloc[i].get(etf, 0)) * 100, 1
+                            ),
+                            "change_pct": round(float(delta) * 100, 1),
+                            "action": "加仓" if delta > 0 else "减仓",
+                        }
+                    )
 
         # Build rebalance records (one per date)
         rebalance_dates = []
         for date_str, etf_changes in date_groups.items():
             total_buy = sum(1 for c in etf_changes if c["action"] == "加仓")
             total_sell = sum(1 for c in etf_changes if c["action"] == "减仓")
-            rebalance_dates.append({
-                "date": date_str,
-                "total_buy": total_buy,
-                "total_sell": total_sell,
-                "changes": etf_changes,
-            })
+            rebalance_dates.append(
+                {
+                    "date": date_str,
+                    "total_buy": total_buy,
+                    "total_sell": total_sell,
+                    "changes": etf_changes,
+                }
+            )
 
         # Return last 10 rebalance dates
-        return JSONResponse({
-            "strategy_id": sid,
-            "strategy_name": sname,
-            "total_dates": len(rebalance_dates),
-            "rebalances": rebalance_dates[-10:],
-        })
+        return JSONResponse(
+            {
+                "strategy_id": sid,
+                "strategy_name": sname,
+                "total_dates": len(rebalance_dates),
+                "rebalances": rebalance_dates[-10:],
+            }
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -1040,6 +1194,7 @@ async def run_single_strategy_backtest(sid: str):
     """Run full-window backtest for a single strategy and persist metrics to DB."""
     import importlib
     import re
+
     sid = sid.upper()
 
     try:
@@ -1075,6 +1230,7 @@ async def run_single_strategy_backtest(sid: str):
         # Load prices — try both SQLite and API/parquet, use whichever has more data
         from backtest.data import get_kline
         from dashboard.db import kline_get_dataframe
+
         series = {}
         for code in strat.assets:
             best_close = None
@@ -1105,6 +1261,7 @@ async def run_single_strategy_backtest(sid: str):
         # Run backtest
         w = strat.generate(prices)
         from backtest.engine import backtest as run_bt
+
         result = run_bt(prices, w)
 
         # Compute metrics
@@ -1116,12 +1273,17 @@ async def run_single_strategy_backtest(sid: str):
 
         # years for display: computed from window dates (reliable, not data-dependent)
         from datetime import datetime
+
         win_start = datetime.strptime(start_date, "%Y-%m-%d")
         win_end = datetime.strptime(end_date, "%Y-%m-%d")
         window_years = max(1, round((win_end - win_start).days / 365.25))
 
         daily_rets = result.nav.pct_change().dropna()
-        sharpe = float(daily_rets.mean() / daily_rets.std() * np.sqrt(252)) if daily_rets.std() > 0 else 0.0
+        sharpe = (
+            float(daily_rets.mean() / daily_rets.std() * np.sqrt(252))
+            if daily_rets.std() > 0
+            else 0.0
+        )
 
         peak = result.nav.cummax()
         dd_series = result.nav / peak - 1
@@ -1129,7 +1291,11 @@ async def run_single_strategy_backtest(sid: str):
 
         calmar = annual_return / abs(max_drawdown) if max_drawdown < 0 else 0.0
 
-        win_rate = float((daily_rets > 0).sum() / len(daily_rets) * 100) if len(daily_rets) > 0 else 0.0
+        win_rate = (
+            float((daily_rets > 0).sum() / len(daily_rets) * 100)
+            if len(daily_rets) > 0
+            else 0.0
+        )
 
         # Annual turnover (approx from weight changes)
         w_diff = w.diff().abs().sum(axis=1)
@@ -1139,6 +1305,7 @@ async def run_single_strategy_backtest(sid: str):
         excess_return = None
         try:
             from dashboard.db import metrics_get_one
+
             s1 = metrics_get_one("S1")
             if s1 and s1.get("ann_val") is not None:
                 excess_return = annual_return * 100 - s1["ann_val"]
@@ -1147,6 +1314,7 @@ async def run_single_strategy_backtest(sid: str):
 
         # Persist metrics to DB
         from dashboard.db import metrics_upsert, nav_upsert_batch
+
         assets_display = [f"{c}" for c in strat.assets]
         backtest_window_display = f"{start_date}~{end_date} (约{window_years}年)"
 
@@ -1161,7 +1329,9 @@ async def run_single_strategy_backtest(sid: str):
             calmar=round(calmar, 2),
             win_rate=round(win_rate, 1),
             turnover=round(turnover, 1),
-            excess_return=round(excess_return, 2) if excess_return is not None else None,
+            excess_return=round(excess_return, 2)
+            if excess_return is not None
+            else None,
             assets=assets_display,
             description=sdef["desc"],
             backtest_window=backtest_window_display,
@@ -1179,25 +1349,33 @@ async def run_single_strategy_backtest(sid: str):
             dd = float(weekly_dd.iloc[i]) if i < len(weekly_dd) else 0.0
             nav_rows.append((strategy_name, d_str, nv, dd))
         from dashboard.db import get_conn
+
         with get_conn() as conn:
-            conn.execute("DELETE FROM backtest_nav WHERE strategy_name=?", (strategy_name,))
-            conn.executemany("""
+            conn.execute(
+                "DELETE FROM backtest_nav WHERE strategy_name=?", (strategy_name,)
+            )
+            conn.executemany(
+                """
                 INSERT OR REPLACE INTO backtest_nav (strategy_name, date, nav, drawdown)
                 VALUES (?, ?, ?, ?)
-            """, nav_rows)
+            """,
+                nav_rows,
+            )
 
-        return JSONResponse({
-            "status": "done",
-            "strategy_id": sid,
-            "strategy_name": sdef["name"],
-            "annual_return": f"{annual_return*100:.2f}%",
-            "sharpe": round(sharpe, 2),
-            "max_drawdown": f"{max_drawdown*100:.2f}%",
-            "calmar": round(calmar, 2),
-            "win_rate": f"{win_rate:.1f}%",
-            "turnover": round(turnover, 1),
-            "backtest_window": backtest_window_display,
-        })
+        return JSONResponse(
+            {
+                "status": "done",
+                "strategy_id": sid,
+                "strategy_name": sdef["name"],
+                "annual_return": f"{annual_return * 100:.2f}%",
+                "sharpe": round(sharpe, 2),
+                "max_drawdown": f"{max_drawdown * 100:.2f}%",
+                "calmar": round(calmar, 2),
+                "win_rate": f"{win_rate:.1f}%",
+                "turnover": round(turnover, 1),
+                "backtest_window": backtest_window_display,
+            }
+        )
     except HTTPException:
         raise
     except ImportError as e:
@@ -1210,7 +1388,18 @@ async def run_single_strategy_backtest(sid: str):
 # Routes: Score Curves
 # ═══════════════════════════════════════════════════════════════
 
-SCORING_STRATEGIES = {"S4", "S8", "S12", "S13", "S14", "S15", "S16", "S17", "S18", "S19"}
+SCORING_STRATEGIES = {
+    "S4",
+    "S8",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+}
 
 
 def _compute_momentum_scores(prices, lookback=25, clamp_r2=False):
@@ -1227,7 +1416,7 @@ def _compute_momentum_scores(prices, lookback=25, clamp_r2=False):
     scores = pd.DataFrame(index=prices.index, columns=prices.columns, dtype=float)
     for i in range(lookback, len(prices)):
         # 窗口含当日：与策略 generate() 一致 [i-lookback+1, i+1)
-        window = log_prices.iloc[i - lookback + 1: i + 1]
+        window = log_prices.iloc[i - lookback + 1 : i + 1]
         for col in prices.columns:
             y = window[col].dropna().values
             if len(y) < lookback // 2:
@@ -1241,17 +1430,18 @@ def _compute_momentum_scores(prices, lookback=25, clamp_r2=False):
             ss_res = np.sum((y - y_pred) ** 2)
             ss_tot = (len(y) - 1) * np.var(y, ddof=1) if len(y) > 1 else 1e-12
             r2 = 1 - ss_res / ss_tot if ss_tot > 1e-12 else 0.0
-            scores.iloc[i, prices.columns.get_loc(col)] = ann_ret * (max(r2, 0) if clamp_r2 else r2)
+            scores.iloc[i, prices.columns.get_loc(col)] = ann_ret * (
+                max(r2, 0) if clamp_r2 else r2
+            )
     return scores
-
 
 
 def _compute_three_factor_scores(prices, lookback=25):
     log_prices = np.log(prices)
     scores = pd.DataFrame(index=prices.index, columns=prices.columns, dtype=float)
     for i in range(lookback, len(prices)):
-        window = log_prices.iloc[i - lookback + 1: i + 1]
-        window_prices = prices.iloc[i - lookback + 1: i + 1]
+        window = log_prices.iloc[i - lookback + 1 : i + 1]
+        window_prices = prices.iloc[i - lookback + 1 : i + 1]
         for col in prices.columns:
             y = window[col].dropna().values
             p = window_prices[col].dropna().values
@@ -1265,8 +1455,14 @@ def _compute_three_factor_scores(prices, lookback=25):
             r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
             slope_score = (np.exp(slope * 250) - 1) * r2
             ma = np.mean(p)
-            dev_slope = (p[-1] / ma - 1) / (len(p) / 252) if ma > 0 and len(p) > 0 else 0.0
-            dev_s, _ = np.polyfit(np.arange(len(p)).astype(float), p / ma, 1) if ma > 0 else (0, 0)
+            dev_slope = (
+                (p[-1] / ma - 1) / (len(p) / 252) if ma > 0 and len(p) > 0 else 0.0
+            )
+            dev_s, _ = (
+                np.polyfit(np.arange(len(p)).astype(float), p / ma, 1)
+                if ma > 0
+                else (0, 0)
+            )
             dev_score = float(dev_s * 252)
             direction = y[-1] - y[0]
             path = np.sum(np.abs(np.diff(y)))
@@ -1276,24 +1472,34 @@ def _compute_three_factor_scores(prices, lookback=25):
     return scores
 
 
-def _compute_adaptive_momentum_scores(prices, lb_min=15, lb_max=120, vol_short=10, vol_long=60, ratio_cap=2.0):
+def _compute_adaptive_momentum_scores(
+    prices, lb_min=15, lb_max=120, vol_short=10, vol_long=60, ratio_cap=2.0
+):
     log_prices = np.log(prices)
     rets = prices.pct_change()
     scores = pd.DataFrame(index=prices.index, columns=prices.columns, dtype=float)
     max_lb = max(lb_max, vol_long) + 5
     for i in range(max_lb, len(prices)):
         for col in prices.columns:
-            ret_series = rets[col].iloc[:i+1].dropna()
+            ret_series = rets[col].iloc[: i + 1].dropna()
             if len(ret_series) < vol_long:
                 continue
-            short_vol = ret_series.iloc[-vol_short:].std() * np.sqrt(252) if len(ret_series) >= vol_short else 0.0
-            long_vol = ret_series.iloc[-vol_long:].std() * np.sqrt(252) if len(ret_series) >= vol_long else 0.01
+            short_vol = (
+                ret_series.iloc[-vol_short:].std() * np.sqrt(252)
+                if len(ret_series) >= vol_short
+                else 0.0
+            )
+            long_vol = (
+                ret_series.iloc[-vol_long:].std() * np.sqrt(252)
+                if len(ret_series) >= vol_long
+                else 0.01
+            )
             vol_ratio = min(ratio_cap, short_vol / long_vol) if long_vol > 0 else 1.0
             lb = int(lb_min + (lb_max - lb_min) * (1 - vol_ratio))
             lb = max(lb_min, min(lb_max, lb))
             if i < lb:
                 continue
-            window = log_prices[col].iloc[i - lb + 1: i + 1]
+            window = log_prices[col].iloc[i - lb + 1 : i + 1]
             y = window.dropna().values
             if len(y) < lb // 2:
                 continue
@@ -1321,9 +1527,9 @@ async def get_score_curves(sid: str):
         # Dynamic lookback: strategies with large momentum windows (e.g. S18 mom_long=200)
         # need more calendar days to leave enough chart points after warmup.
         max_lb = max(
-            getattr(strat, 'mom_long', 0),
-            getattr(strat, 'mom_lookback', 0),
-            getattr(strat, 'lookback', 0),
+            getattr(strat, "mom_long", 0),
+            getattr(strat, "mom_lookback", 0),
+            getattr(strat, "lookback", 0),
             25,
         )
         lookback_days = max(400, int(max_lb * 3.5))
@@ -1332,56 +1538,66 @@ async def get_score_curves(sid: str):
             raise HTTPException(400, "Insufficient price data")
 
         if sid == "S4":
-            score_df = _compute_momentum_scores(prices, lookback=getattr(strat, 'lookback', 25))
+            score_df = _compute_momentum_scores(
+                prices, lookback=getattr(strat, "lookback", 25)
+            )
         elif sid == "S8":
-            score_df = _compute_three_factor_scores(prices, lookback=getattr(strat, 'lookback', 25))
+            score_df = _compute_three_factor_scores(
+                prices, lookback=getattr(strat, "lookback", 25)
+            )
         elif sid == "S14":
             score_df = _compute_adaptive_momentum_scores(
                 prices,
-                lb_min=getattr(strat, 'lb_min', 15),
-                lb_max=getattr(strat, 'lb_max', 120),
-                vol_short=getattr(strat, 'vol_short', 10),
-                vol_long=getattr(strat, 'vol_long', 60),
-                ratio_cap=getattr(strat, 'ratio_cap', 2.0),
+                lb_min=getattr(strat, "lb_min", 15),
+                lb_max=getattr(strat, "lb_max", 120),
+                vol_short=getattr(strat, "vol_short", 10),
+                vol_long=getattr(strat, "vol_long", 60),
+                ratio_cap=getattr(strat, "ratio_cap", 2.0),
             )
         elif sid in ("S12", "S13"):
             # S12/S13 use multi-factor scoring that can't be replicated without volume
             # data. Use target weights as a proxy visualization (not actual scores).
             w = strat.generate(prices)
-            score_df = w.reindex(prices.index, method='ffill')
+            score_df = w.reindex(prices.index, method="ffill")
         elif sid == "S15":
             # S15 使用 max(r_sq, 0) 截断 R²，与 TrendFilterMomentum._momentum_score 一致
-            lb = getattr(strat, 'mom_lookback', 25)
+            lb = getattr(strat, "mom_lookback", 25)
             score_df = _compute_momentum_scores(prices, lookback=lb, clamp_r2=True)
         elif sid in ("S16", "S17"):
             # S16/S17 使用 max(r_sq, 0) 截断 R²，与 canary_defense._momentum_score 一致
-            lb = getattr(strat, 'mom_lookback', 25)
+            lb = getattr(strat, "mom_lookback", 25)
             score_df = _compute_momentum_scores(prices, lookback=lb, clamp_r2=True)
             # Only show trading ETF pool scores (not bond/gold/cash monitoring assets)
-            etf_pool = getattr(strat, 'etf_pool', list(score_df.columns))
+            etf_pool = getattr(strat, "etf_pool", list(score_df.columns))
             score_df = score_df[[c for c in etf_pool if c in score_df.columns]]
         elif sid == "S18":
             # S18: RSRS增强反转动量 = 25日动量 - (200日动量 / 6)
-            mom_short = getattr(strat, 'mom_short', 25)
-            mom_long = getattr(strat, 'mom_long', 200)
-            rev_scale = getattr(strat, 'reversal_scale', 6.0)
-            scores_25 = _compute_momentum_scores(prices, lookback=mom_short, clamp_r2=True)
-            scores_200 = _compute_momentum_scores(prices, lookback=mom_long, clamp_r2=True)
+            mom_short = getattr(strat, "mom_short", 25)
+            mom_long = getattr(strat, "mom_long", 200)
+            rev_scale = getattr(strat, "reversal_scale", 6.0)
+            scores_25 = _compute_momentum_scores(
+                prices, lookback=mom_short, clamp_r2=True
+            )
+            scores_200 = _compute_momentum_scores(
+                prices, lookback=mom_long, clamp_r2=True
+            )
             # Align indices
             common_idx = scores_25.index.intersection(scores_200.index)
-            score_df = scores_25.loc[common_idx] - (scores_200.loc[common_idx] / rev_scale)
+            score_df = scores_25.loc[common_idx] - (
+                scores_200.loc[common_idx] / rev_scale
+            )
             # Only show ETF pool scores (not cash)
-            etf_pool = getattr(strat, 'etf_pool', list(score_df.columns))
+            etf_pool = getattr(strat, "etf_pool", list(score_df.columns))
             score_df = score_df[[c for c in etf_pool if c in score_df.columns]]
         elif sid == "S19":
             # S19: 低相关ETF轮动 = 标准25日动量打分
-            lb = getattr(strat, 'lookback', 25)
+            lb = getattr(strat, "lookback", 25)
             score_df = _compute_momentum_scores(prices, lookback=lb, clamp_r2=True)
         else:
             w = strat.generate(prices)
-            score_df = w.reindex(prices.index, method='ffill')
+            score_df = w.reindex(prices.index, method="ffill")
 
-        score_df = score_df.dropna(how='all')
+        score_df = score_df.dropna(how="all")
         if len(score_df) > 52:
             # Subsample evenly but ALWAYS include the last data point
             n = len(score_df)
@@ -1395,29 +1611,37 @@ async def get_score_curves(sid: str):
 
         score_series = {}
         for col in score_df.columns:
-            vals = [float(v) if not (isinstance(v, float) and np.isnan(v)) else None
-                    for v in score_df[col].values]
+            vals = [
+                float(v) if not (isinstance(v, float) and np.isnan(v)) else None
+                for v in score_df[col].values
+            ]
             score_series[col] = vals
 
-        return JSONResponse({
-            "strategy_id": sid, "strategy_name": sname,
-            "is_scoring": sid in SCORING_STRATEGIES,
-            "dates": [str(d.date()) for d in score_df.index],
-            "assets": list(score_df.columns),
-            "asset_names": asset_names,
-            "scores": score_series,
-        })
+        return JSONResponse(
+            {
+                "strategy_id": sid,
+                "strategy_name": sname,
+                "is_scoring": sid in SCORING_STRATEGIES,
+                "dates": [str(d.date()) for d in score_df.index],
+                "assets": list(score_df.columns),
+                "asset_names": asset_names,
+                "scores": score_series,
+            }
+        )
     except ImportError as e:
         raise HTTPException(500, f"Import failed: {e}")
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, f"Score computation failed: {e}\n\n{traceback.format_exc()}")
+        raise HTTPException(
+            500, f"Score computation failed: {e}\n\n{traceback.format_exc()}"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════
 # Routes: 1-Year Performance vs Shanghai Composite Index
 # ═══════════════════════════════════════════════════════════════
+
 
 def _fetch_index_kline(code: str, start: str, end: str) -> pd.Series | None:
     """Fetch index daily K-line (close prices) from Sina Finance API.
@@ -1440,8 +1664,9 @@ def _fetch_index_kline(code: str, start: str, end: str) -> pd.Series | None:
     url = "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData"
     params = {"symbol": symbol, "scale": "240", "ma": "no", "datalen": "400"}
     try:
-        r = req.get(url, params=params,
-                    headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        r = req.get(
+            url, params=params, headers={"User-Agent": "Mozilla/5.0"}, timeout=15
+        )
         r.encoding = "utf-8"
         records = r.json()
         if not records or not isinstance(records, list):
@@ -1508,6 +1733,7 @@ async def get_one_year_performance(sid: str):
 
         # Ensure K-line freshness
         from dashboard.sync import sync_kline
+
         for code in strat.assets:
             try:
                 sync_kline(code)
@@ -1525,7 +1751,9 @@ async def get_one_year_performance(sid: str):
                 pass
             if code not in series:
                 try:
-                    kdf = get_kline(code, start=lookback_start, end=end_d, refresh=False)
+                    kdf = get_kline(
+                        code, start=lookback_start, end=end_d, refresh=False
+                    )
                     if kdf is not None and len(kdf) >= 2:
                         series[code] = kdf["close"]
                 except Exception:
@@ -1583,14 +1811,22 @@ async def get_one_year_performance(sid: str):
 
         # Strategy metrics
         strat_total_ret = strat_nav.iloc[-1] / strat_nav.iloc[0] - 1
-        strat_ann_ret = (1 + strat_total_ret) ** (1 / years_1y) - 1 if years_1y > 0 else 0.0
-        strat_vol = float(daily_rets.std() * np.sqrt(252)) if len(daily_rets) > 1 else 0.0
+        strat_ann_ret = (
+            (1 + strat_total_ret) ** (1 / years_1y) - 1 if years_1y > 0 else 0.0
+        )
+        strat_vol = (
+            float(daily_rets.std() * np.sqrt(252)) if len(daily_rets) > 1 else 0.0
+        )
         strat_sharpe = float(strat_ann_ret / strat_vol) if strat_vol > 0 else 0.0
         strat_peak = strat_nav.cummax()
         strat_dd = strat_nav / strat_peak - 1
         strat_max_dd = float(strat_dd.min())
         strat_calmar = strat_ann_ret / abs(strat_max_dd) if strat_max_dd < 0 else 0.0
-        strat_win_rate = float((daily_rets > 0).sum() / len(daily_rets) * 100) if len(daily_rets) > 0 else 0.0
+        strat_win_rate = (
+            float((daily_rets > 0).sum() / len(daily_rets) * 100)
+            if len(daily_rets) > 0
+            else 0.0
+        )
 
         metrics = {
             "strategy_return": round(strat_total_ret * 100, 2),
@@ -1607,7 +1843,9 @@ async def get_one_year_performance(sid: str):
 
         if has_index and len(idx_nav_aligned) >= 2:
             idx_total_ret = idx_nav_aligned.iloc[-1] / idx_nav_aligned.iloc[0] - 1
-            idx_ann_ret = (1 + idx_total_ret) ** (1 / years_1y) - 1 if years_1y > 0 else 0.0
+            idx_ann_ret = (
+                (1 + idx_total_ret) ** (1 / years_1y) - 1 if years_1y > 0 else 0.0
+            )
             excess_total = strat_total_ret - idx_total_ret
             excess_ann = strat_ann_ret - idx_ann_ret
 
@@ -1615,17 +1853,28 @@ async def get_one_year_performance(sid: str):
             idx_daily = idx_nav_aligned.pct_change().dropna()
             common_rets = daily_rets.loc[daily_rets.index.intersection(idx_daily.index)]
             idx_common = idx_daily.loc[idx_daily.index.intersection(common_rets.index)]
-            tracking_error = float((common_rets - idx_common).std() * np.sqrt(252)) if len(common_rets) > 1 else 0.0
+            tracking_error = (
+                float((common_rets - idx_common).std() * np.sqrt(252))
+                if len(common_rets) > 1
+                else 0.0
+            )
             info_ratio = excess_ann / tracking_error if tracking_error > 0 else 0.0
 
             # Beta (to index) — computed over common dates
-            aligned_idx = idx_nav_aligned.reindex(strat_nav_aligned.index, method="ffill")
+            aligned_idx = idx_nav_aligned.reindex(
+                strat_nav_aligned.index, method="ffill"
+            )
             strat_daily = strat_nav_aligned.pct_change().dropna()
             idx_daily_aligned = aligned_idx.pct_change().dropna()
             common_dates = strat_daily.index.intersection(idx_daily_aligned.index)
             if len(common_dates) > 10:
-                beta = float(np.cov(strat_daily.loc[common_dates], idx_daily_aligned.loc[common_dates])[0, 1]
-                            / np.var(idx_daily_aligned.loc[common_dates]))
+                beta = float(
+                    np.cov(
+                        strat_daily.loc[common_dates],
+                        idx_daily_aligned.loc[common_dates],
+                    )[0, 1]
+                    / np.var(idx_daily_aligned.loc[common_dates])
+                )
             else:
                 beta = None
 
@@ -1640,59 +1889,70 @@ async def get_one_year_performance(sid: str):
             idx_dd = idx_nav_aligned / idx_peak - 1
             idx_max_dd = float(idx_dd.min())
 
-            metrics.update({
-                "index_return": round(idx_total_ret * 100, 2),
-                "index_ann_return": round(idx_ann_ret * 100, 2),
-                "index_max_drawdown": round(idx_max_dd * 100, 2),
-                "excess_return": round(excess_total * 100, 2),
-                "excess_ann_return": round(excess_ann * 100, 2),
-                "beta": round(beta, 2) if beta is not None else None,
-                "alpha": round(alpha * 100, 2) if alpha is not None else None,
-                "info_ratio": round(info_ratio, 2) if tracking_error > 0 else None,
-                "tracking_error": round(tracking_error * 100, 2),
-            })
+            metrics.update(
+                {
+                    "index_return": round(idx_total_ret * 100, 2),
+                    "index_ann_return": round(idx_ann_ret * 100, 2),
+                    "index_max_drawdown": round(idx_max_dd * 100, 2),
+                    "excess_return": round(excess_total * 100, 2),
+                    "excess_ann_return": round(excess_ann * 100, 2),
+                    "beta": round(beta, 2) if beta is not None else None,
+                    "alpha": round(alpha * 100, 2) if alpha is not None else None,
+                    "info_ratio": round(info_ratio, 2) if tracking_error > 0 else None,
+                    "tracking_error": round(tracking_error * 100, 2),
+                }
+            )
 
-            return JSONResponse({
-                "status": "done",
-                "strategy_id": sid,
-                "strategy_name": sdef["name"],
-                "index_code": index_code,
-                "index_name": "上证指数",
-                "dates": [str(d.date()) for d in strat_nav_aligned.index],
-                "strategy_nav": [float(v) for v in strat_nav_aligned.values],
-                "index_nav": [float(v) for v in idx_nav_aligned.values],
-                "metrics": metrics,
-            })
+            return JSONResponse(
+                {
+                    "status": "done",
+                    "strategy_id": sid,
+                    "strategy_name": sdef["name"],
+                    "index_code": index_code,
+                    "index_name": "上证指数",
+                    "dates": [str(d.date()) for d in strat_nav_aligned.index],
+                    "strategy_nav": [float(v) for v in strat_nav_aligned.values],
+                    "index_nav": [float(v) for v in idx_nav_aligned.values],
+                    "metrics": metrics,
+                }
+            )
         else:
             # No index data — return strategy-only
-            return JSONResponse({
-                "status": "done",
-                "strategy_id": sid,
-                "strategy_name": sdef["name"],
-                "dates": [str(d.date()) for d in strat_nav.index],
-                "strategy_nav": [float(v) for v in strat_nav.values],
-                "index_nav": None,
-                "index_name": "上证指数(数据不可用)",
-                "metrics": metrics,
-            })
+            return JSONResponse(
+                {
+                    "status": "done",
+                    "strategy_id": sid,
+                    "strategy_name": sdef["name"],
+                    "dates": [str(d.date()) for d in strat_nav.index],
+                    "strategy_nav": [float(v) for v in strat_nav.values],
+                    "index_nav": None,
+                    "index_name": "上证指数(数据不可用)",
+                    "metrics": metrics,
+                }
+            )
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, f"Performance computation failed: {e}\n\n{traceback.format_exc()}")
+        raise HTTPException(
+            500, f"Performance computation failed: {e}\n\n{traceback.format_exc()}"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════
 
+
 def _kill_existing_on_port(port: int) -> bool:
     """Kill the process already listening on *port* (Windows only). Returns True if killed."""
     import platform
     import re
+
     if platform.system() != "Windows":
         return False
     try:
         import subprocess
+
         result = subprocess.run(
             ["netstat", "-ano"], capture_output=True, text=True, timeout=10
         )
@@ -1706,8 +1966,9 @@ def _kill_existing_on_port(port: int) -> bool:
             parts = line.strip().split()
             pid = parts[-1] if parts else None
             if pid and pid.isdigit():
-                subprocess.run(["taskkill", "/PID", pid, "/F"],
-                               capture_output=True, timeout=10)
+                subprocess.run(
+                    ["taskkill", "/PID", pid, "/F"], capture_output=True, timeout=10
+                )
                 print(f"[dashboard] Killed old process (PID={pid}) on port {port}")
                 return True
     except Exception:
@@ -1721,14 +1982,18 @@ app.include_router(protected)
 app.include_router(daily_router)
 # ── 拟人 Agent「小满」API（聊天/文章/状态）──
 app.include_router(agent_router)
+# ── 工单管理 API ──
+app.include_router(tickets_router)
 
 if __name__ == "__main__":
     import uvicorn
+
     PORT = int(__import__("os").environ.get("DASHBOARD_PORT", "8000"))
     print(f"[dashboard] AStock ETF Dashboard v2 starting at http://localhost:{PORT}")
 
     if _kill_existing_on_port(PORT):
         import time
+
         time.sleep(0.5)  # let OS release the port
 
     uvicorn.run(app, host="0.0.0.0", port=PORT)

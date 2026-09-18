@@ -70,10 +70,34 @@ class TestCookieTodoGenerator:
         agent_db.platform_cookie_set("weibo", "SUB=abc")
         assert notices_mod.create_cookie_todo("weibo") is None
 
-    def test_skip_non_cookie_platform(self):
-        # 财联社是 RSS 源，不走 Cookie 待办
-        assert notices_mod.create_cookie_todo("cls") is None
-        assert notices_mod.create_cookie_todo("x") is None
+    def test_create_when_cookie_expired(self):
+        """Cookie 失效（reason='失效'）→ 生成"重新提供"待办（2026-09-16）。"""
+        agent_db.platform_cookie_set("weibo", "SUB=expired")
+        nid = notices_mod.create_cookie_todo("weibo", reason="失效")
+        assert nid is not None
+        n = agent_db.notice_get(nid)
+        assert n["todo_type"] == "cookie_provide"
+        assert n["todo_data"]["platform_id"] == "weibo"
+        assert "失效" in n["content"]
+        assert "重新" in n["content"]
+
+    def test_expired_todo_dedup_when_open_exists(self):
+        """失效待办去重：已有 open 同平台待办 → 不重复生成。"""
+        nid1 = notices_mod.create_cookie_todo("weibo", reason="失效")
+        nid2 = notices_mod.create_cookie_todo("weibo", reason="失效")
+        assert nid1 is not None
+        assert nid2 is None
+
+    def test_expired_and_missing_share_dedup(self):
+        """无 Cookie 待办与失效待办共享去重（同一平台只保留一条 open 待办）。"""
+        nid1 = notices_mod.create_cookie_todo("weibo")  # 无 Cookie
+        nid2 = notices_mod.create_cookie_todo("weibo", reason="失效")
+        assert nid1 is not None
+        assert nid2 is None  # 已有 open 待办
+
+    def test_skip_non_cookie_platform_expired(self):
+        # 财联社是 RSS 源，不走 Cookie 待办（即使传失效）
+        assert notices_mod.create_cookie_todo("cls", reason="失效") is None
 
     def test_unknown_platform(self):
         assert notices_mod.create_cookie_todo("nope") is None
@@ -97,6 +121,31 @@ class TestCookieTodoGenerator:
         assert "xhs" in ids3
         assert "zhihu" in ids3
         assert "xueqiu" in ids3
+
+    def test_ensure_cookie_todos_expired_detected(self, monkeypatch):
+        """Cookie 存在但 reachability 缓存判不可达（失效）→ 生成"失效"待办（2026-09-16）。
+
+        启动时序：ensure_reachability() 先跑（微博失效 Cookie 返回 HTML → 缓存不可达），
+        ensure_cookie_todos() 后跑 → 读缓存识别失效平台并生成失效待办。
+        """
+        # weibo/xhs 有 Cookie；zhihu/xueqiu 无
+        agent_db.platform_cookie_set("weibo", "SUB=expired")
+        agent_db.platform_cookie_set("xhs", "a1=abc")
+        # 缓存：weibo 不可达（失效）、xhs 可达、其余未判定
+        agent_db.reachability_set("weibo", False, "Cookie 失效或探测失败")
+        agent_db.reachability_set("xhs", True, "Cookie 探测通过")
+
+        created = notices_mod.ensure_cookie_todos()
+        data = {agent_db.notice_get(i)["todo_data"]["platform_id"] for i in created}
+        # weibo 失效 → 生成失效待办；xhs 可达 → 不生成；zhihu/xueqiu 无 Cookie → 生成
+        assert "weibo" in data
+        assert "xhs" not in data
+        assert "zhihu" in data
+        assert "xueqiu" in data
+        weibo_note = agent_db.notice_get(
+            [i for i in created if agent_db.notice_get(i)["todo_data"]["platform_id"] == "weibo"][0]
+        )
+        assert "失效" in weibo_note["content"]
 
     def test_create_zhihu_todo_includes_keys(self):
         """知乎 Cookie 待办：提示关键 key（z_c0/d_c0），与微博/小红书一致的询问机制。"""
@@ -133,7 +182,15 @@ class TestReviewDoneNotice:
 
 class TestReplyDispatch:
     def test_cookie_provide_stores_and_probes(self, monkeypatch):
-        _probe_ok(monkeypatch)
+        # 微博 Cookie 类平台：probe 需 JSON Content-Type（mock 网络返回 JSON → 可达）
+        class FakeJsonResp:
+            status_code = 200
+            headers = {"Content-Type": "application/json; charset=UTF-8"}
+
+            def raise_for_status(self):
+                return None
+
+        monkeypatch.setattr("requests.get", lambda *a, **kw: FakeJsonResp())
         nid = notices_mod.create_cookie_todo("weibo")
         n = agent_db.notice_get(nid)
         res = notices_mod.dispatch_todo_reply(n, "SUB=abc123; subp=def")

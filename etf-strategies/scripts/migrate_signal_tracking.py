@@ -46,6 +46,7 @@ _COLUMN_MAP = {
     "direction": "direction",
     "urgency": "urgency",
     "expected_trigger_rate": "expected_trigger_rate",
+    "trade_price": "trade_price",
     "target_price": "target_price",
     "stop_price": "stop_price",
     "target_pct": "target_pct",

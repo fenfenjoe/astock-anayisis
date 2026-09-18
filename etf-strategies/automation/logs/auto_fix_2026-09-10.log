@@ -16,3 +16,18 @@
 [2026-09-10T13:25:00+08:00] 全量回归: 534 passed, 3 failed, 18 skipped；余 3 项失败为 BUG-029/030 (MANUAL_REVIEW, auto_fix_eligible=false)，非本轮范围
 [2026-09-10T13:26:00+08:00] BUG-035/036/037 报告状态 FIXED 并移至 bugs/closed/；BUG_INDEX.md 更新完成 (OPEN 5→0, FIXED 22→25, MANUAL_REVIEW 8→10)
 [2026-09-10T13:17:00+08:00] AUTO_FIX 结束 — FIXED: 3, MANUAL_REVIEW: 2
+[2026-09-10T14:08:09+08:00] AUTO_FIX 开始 — OPEN: 0, AUTO_FIX: 0, MANUAL_REVIEW: 0
+[2026-09-10T14:08:09+08:00] 无待处理 BUG，跳过（未生成报告）；BUG_INDEX OPEN=0，bugs/open 下 10 项（BUG-005/007/012/013/014/015/029/030/038/039）均为 MANUAL_REVIEW 且 auto_fix_eligible=false，逐项核验均含「## 自动修复判定」章节，无新增动作；bugs/closed 下 27 项（FIXED 25 / VERIFIED 1 / WONT_FIX 1）无 OPEN/IN_PROGRESS 遗留；统计口径核对一致（27 closed + 10 MANUAL_REVIEW = 37 = BUG-001~039 去空号 027/028，与 BUG_INDEX 一致，索引无需重建）
+[2026-09-10T14:08:09+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0
+[2026-09-10T15:08:03+08:00] AUTO_FIX 开始 — OPEN: 0, AUTO_FIX: 0, MANUAL_REVIEW: 0
+[2026-09-10T15:08:03+08:00] 无待处理 BUG，跳过（未生成报告）；BUG_INDEX OPEN=0，bugs/open 下 10 项（BUG-005/007/012/013/014/015/029/030/038/039）均为 MANUAL_REVIEW 且 auto_fix_eligible=false，逐项核验均含「## 自动修复判定」章节，无新增动作；bugs/closed 下 27 项（FIXED 25 / VERIFIED 1 / WONT_FIX 1）无 OPEN/IN_PROGRESS 遗留；统计口径核对一致（27 closed + 10 MANUAL_REVIEW = 37 = BUG-001~039 去空号 027/028，与 BUG_INDEX 一致，索引无需重建）；无实质修复操作，未生成 AUTO_FIX_REPORT
+[2026-09-10T15:08:03+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0
+[2026-09-10T15:09:17+08:00] AUTO_FIX 开始 — OPEN: 0, AUTO_FIX: 0, MANUAL_REVIEW: 0
+[2026-09-10T15:09:17+08:00] 无待处理 BUG，跳过（未生成报告）；BUG_INDEX OPEN=0，bugs/open 下 10 项（BUG-005/007/012/013/014/015/029/030/038/039）全部为 MANUAL_REVIEW 且 auto_fix_eligible=false，逐项核验均含「## 自动修复判定」章节；bugs/closed 下 27 项（FIXED 25 / VERIFIED 1 / WONT_FIX 1）无 OPEN/IN_PROGRESS 遗留；统计口径一致（27 closed + 10 MANUAL_REVIEW = 37 = BUG-001~039 去空号 027/028，与 BUG_INDEX 一致，索引无需重建）；本轮系 15:07 窗口重派：上一实例已于 15:08:03 写入同结论日志，但 scheduler_state.json 未登记 bug_auto_fix:2026-09-10:15，判定其未完成收尾，故本次补记执行日志并补 --complete，无新增变更、未生成 AUTO_FIX_REPORT
+[2026-09-10T15:09:17+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0
+[2026-09-10T16:07:39+08:00] AUTO_FIX 开始 — OPEN: 0, AUTO_FIX: 0, MANUAL_REVIEW: 0
+[2026-09-10T16:07:39+08:00] 无待处理 BUG，跳过（未生成报告）；BUG_INDEX OPEN=0，bugs/open 下 10 项（BUG-005/007/012/013/014/015/029/030/038/039）全部为 MANUAL_REVIEW 且 auto_fix_eligible=false，逐项核验均含「## 自动修复判定」章节，无新增动作；bugs/closed 下 27 项（FIXED 25 / VERIFIED 1 / WONT_FIX 1）经全目录状态扫描无 OPEN/IN_PROGRESS 遗留；统计口径一致（27 closed + 10 MANUAL_REVIEW = 37 = BUG-001~039 去空号 027/028，与 BUG_INDEX 一致，索引无需重建）；无实质修复操作，未生成 AUTO_FIX_REPORT
+[2026-09-10T16:07:39+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0
+[2026-09-10T16:08:12+08:00] AUTO_FIX 开始 — OPEN: 0, AUTO_FIX: 0, MANUAL_REVIEW: 0
+[2026-09-10T16:08:12+08:00] 无待处理 BUG，跳过（未生成报告）；BUG_INDEX OPEN=0；bugs/open 共 10 项（BUG-005/007/012/013/014/015/029/030/038/039）全部为 MANUAL_REVIEW 且 auto_fix_eligible=false，逐项核验均含「自动修复判定」章节，无新增动作；bugs/closed 共 27 项（FIXED 25 / VERIFIED 1 / WONT_FIX 1）经全目录状态扫描无 OPEN/IN_PROGRESS 遗留；统计口径一致（27 closed + 10 MANUAL_REVIEW = 37 = BUG-001~039 去空号 027/028，与 BUG_INDEX 一致，索引无需重建）；无实质修复操作，未生成 AUTO_FIX_REPORT
+[2026-09-10T16:08:12+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0

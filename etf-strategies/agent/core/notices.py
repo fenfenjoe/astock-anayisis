@@ -19,31 +19,42 @@ from agent import db as agent_db
 from agent.core import reachability
 
 
-def create_cookie_todo(platform_id, db=None):
-    """内置生成器：平台无 Cookie → 生成"请提供 Cookie"待办（幂等去重）。
+def create_cookie_todo(platform_id, reason="无", db=None):
+    """内置生成器：平台 Cookie 缺失/失效 → 生成"请提供 Cookie"待办（幂等去重）。
 
-    已有同平台 open 状态待办 → 不重复生成（返回 None）。
+    reason: '无'（从未提供 Cookie）/ '失效'（Cookie 探测失败，需重新提供）。
+    已有同平台 open 状态待办（无论 reason）→ 不重复生成（返回 None）。
+    有 Cookie 且 reason='无' → 跳过（调用方未判失效，向后兼容）。
     返回新待办 id 或 None。
     """
     db = db or agent_db
     platform = _platform(platform_id, db)
     if not platform or platform.get("kind") != "cookie":
         return None
-    if db.platform_cookie_get(platform_id):
-        return None  # 已有 Cookie，无需待办
+    cookie = db.platform_cookie_get(platform_id)
+    if reason == "无" and cookie:
+        return None  # 已有 Cookie 且未判失效，无需待办
     existing = db.notice_list(kind="todo", status="open", limit=100)
     for n in existing:
         if n.get("todo_type") == "cookie_provide" and (
             (n.get("todo_data") or {}).get("platform_id") == platform_id
         ):
-            return None  # 已有未处理的同平台待办
+            return None  # 已有未处理的同平台待办（含失效待办，幂等）
     keys = platform.get("cookie_keys") or []
     key_hint = f"关键 key：{', '.join(keys)}；" if keys else ""
-    content = (
-        f"需要你在浏览器开发者工具 → 应用/存储 → Cookie 里，找到 {platform['name']}"
-        f" 域名的 {key_hint}然后把**完整 Cookie 串**（形如 `key1=value1; key2=value2`）复制回复给我，"
-        f"我就能去逛啦～"
-    )
+    if reason == "失效":
+        content = (
+            f"检测到 {platform['name']} 的 Cookie 已失效（登录态过期或账号被风控），"
+            f"需要你重新在浏览器开发者工具 → 应用/存储 → Cookie 里复制 {platform['name']}"
+            f" 域名的 {key_hint}完整 Cookie 串（形如 `key1=value1; key2=value2`）回复给我，"
+            f"我才能继续逛～"
+        )
+    else:
+        content = (
+            f"需要你在浏览器开发者工具 → 应用/存储 → Cookie 里，找到 {platform['name']}"
+            f" 域名的 {key_hint}然后把**完整 Cookie 串**（形如 `key1=value1; key2=value2`）复制回复给我，"
+            f"我就能去逛啦～"
+        )
     return db.notice_create(
         "todo",
         f"请提供{platform['name']}的 Cookie",
@@ -70,9 +81,12 @@ def create_review_done_notice(summary, db=None):
 
 
 def ensure_cookie_todos(db=None):
-    """启动时批量生成：所有 Cookie 类平台无 Cookie 且无未处理待办 → 生成待办。
+    """启动时批量生成：所有 Cookie 类平台 无 Cookie 或 Cookie 失效（reachability 缓存判不可达）→ 生成待办。
 
-    与 ensure_reachability 搭配：agent 常驻进程启动时调用。
+    与 ensure_reachability 搭配：agent 常驻进程启动时**先**跑 ensure_reachability()
+    （写 reachability 缓存），本函数随后读缓存识别失效平台（有 Cookie 但不可达 →
+    失效待办），避免额外网络探测（2026-09-16 修复：之前只覆盖"无 Cookie"，
+    Cookie 失效不会触发待办，用户无从得知登录态过期）。
     返回本次新生成待办 id 列表。
     """
     db = db or agent_db
@@ -82,9 +96,15 @@ def ensure_cookie_todos(db=None):
     for p in config.SOCIAL_PLATFORMS:
         if p.get("kind") != "cookie":
             continue
-        if db.platform_cookie_get(p["id"]):
-            continue
-        nid = create_cookie_todo(p["id"], db=db)
+        cookie = db.platform_cookie_get(p["id"])
+        if cookie:
+            # 有 Cookie：读 reachability 缓存判断是否失效
+            cache = db.reachability_get(p["id"])
+            if not cache or cache.get("reachable") is not False:
+                continue  # 未判定（保守不打扰）或可达 → 不生成待办
+            nid = create_cookie_todo(p["id"], reason="失效", db=db)
+        else:
+            nid = create_cookie_todo(p["id"], reason="无", db=db)
         if nid is not None:
             created.append(nid)
     return created

@@ -1194,6 +1194,28 @@ body {
 }
 .sched-run:hover { border-color: var(--border-light); background: var(--bg-hover); }
 
+/* 运行中任务「停止」按钮（危险红，Tech Noir 风格） */
+.sched-stop-btn {
+  margin-left: auto;
+  flex: none;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  border-radius: var(--radius-sm);
+  border: 1px solid oklch(0.6 0.2 25 / 0.55);
+  background: oklch(0.25 0.06 25 / 0.55);
+  color: oklch(0.78 0.16 25);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+.sched-stop-btn:hover {
+  background: oklch(0.32 0.09 25 / 0.8);
+  color: oklch(0.92 0.12 25);
+  border-color: oklch(0.65 0.22 25 / 0.8);
+}
+.sched-stop-btn:active { transform: translateY(1px); }
+.sched-stop-btn:focus-visible { outline: 2px solid oklch(0.7 0.18 25); outline-offset: 2px; }
+
 /* 日志弹窗 */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 1000;
@@ -1299,6 +1321,36 @@ body {
 .badge-p0 { background: color-mix(in oklch, var(--accent-red) 18%, var(--bg-surface-2)); color: var(--accent-red); }
 .badge-p1 { background: color-mix(in oklch, var(--accent-amber) 15%, var(--bg-surface-2)); color: var(--accent-amber); }
 .badge-p2 { background: var(--bg-surface-2); color: var(--text-secondary); }
+
+/* ═══ 工单管理 ═══ */
+.ticket-row { cursor: pointer; }
+.ticket-row:hover { background: var(--bg-surface-2) !important; }
+.mono { font-family: var(--font-mono); font-size: 0.75rem; }
+.btn-small { padding: 2px 8px; font-size: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-default); background: var(--bg-surface-2); color: var(--text-secondary); cursor: pointer; }
+.btn-small:hover { background: var(--bg-surface-3); color: var(--text-primary); }
+.btn-secondary { opacity: 0.6; }
+.ticket-status { font-size: 0.68rem; padding: 0.08rem 0.4rem; border-radius: var(--radius-full); }
+.ticket-status-open { background: color-mix(in oklch, var(--accent-cyan) 15%, var(--bg-surface-2)); color: var(--accent-cyan); }
+.ticket-status-analyzing { background: color-mix(in oklch, var(--accent-blue) 15%, var(--bg-surface-2)); color: var(--accent-blue); }
+.ticket-status-in_progress { background: color-mix(in oklch, var(--accent-amber) 15%, var(--bg-surface-2)); color: var(--accent-amber); }
+.ticket-status-needs_human { background: color-mix(in oklch, var(--accent-red) 18%, var(--bg-surface-2)); color: var(--accent-red); }
+.ticket-status-resolved { background: color-mix(in oklch, var(--accent-green) 15%, var(--bg-surface-2)); color: var(--accent-green); }
+.ticket-status-closed { background: var(--bg-surface-2); color: var(--text-muted); }
+
+.ticket-detail-card { margin-top: 16px; padding: 16px; border: 1px solid var(--border-default); border-radius: var(--radius-md); }
+.ticket-detail-header h3 { margin: 0 0 8px 0; }
+.ticket-meta { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 12px; }
+.ticket-section { margin-top: 16px; }
+.ticket-section h4 { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px; }
+.ticket-desc { white-space: pre-wrap; font-size: 0.8rem; color: var(--text-secondary); background: var(--bg-surface-2); padding: 12px; border-radius: var(--radius-sm); max-height: 200px; overflow-y: auto; }
+.ticket-log-timeline { border-left: 2px solid var(--border-default); padding-left: 16px; }
+.ticket-log-entry { padding: 4px 0; font-size: 0.78rem; }
+.ticket-log-time { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted); margin-right: 8px; }
+.ticket-log-step { color: var(--accent-cyan); margin-right: 8px; }
+.ticket-log-detail { color: var(--text-secondary); }
+.ticket-result { font-size: 0.82rem; line-height: 1.5; }
+.ticket-actions { margin-top: 12px; }
+.xm-pager { text-align: center; font-size: 0.78rem; color: var(--text-muted); margin-top: 12px; }
 
 @media (max-width: 700px) {
   .qgrid { grid-template-columns: repeat(2, 1fr); }

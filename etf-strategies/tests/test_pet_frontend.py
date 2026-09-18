@@ -22,12 +22,13 @@ AGENT_JS = BASE / "dashboard" / "static" / "js" / "agent.js"
 DASH_JS = BASE / "dashboard" / "static" / "js" / "dashboard.js"
 
 PET_IDS = [
-    "xm-pet", "xm-pet-canvas", "xm-pet-fallback", "xm-pet-scene",
+    "xm-pet", "xm-pet-canvas", "xm-pet-fallback",
     "xm-pet-bubble", "xm-pet-zzz", "xm-pet-modes",
     "xm-pet-btn-min", "xm-pet-btn-hide", "xm-pet-mini",
 ]
 STATES = ["offline", "leave", "sleep", "slack", "working", "thinking"]  # unknown=初始默认态，无需专属规则
-POSTURES = ["type", "code", "data", "read"]  # read=阅读态：隐藏非 LIVE2D 场景动画
+# 注：data-posture 已随"场景层移除"退出 DOM 契约（posture 是 pet.js 内部状态变量，
+# 不再驱动 CSS 动画场景）；此处不再断言 CSS 覆盖 data-posture。
 
 
 def _text(p):
@@ -64,12 +65,13 @@ def test_pet_js_id_refs_exist_in_html():
 
 
 def test_pet_css_covers_states_and_postures():
-    """pet.js 通过 data-state/data-posture 驱动的视觉态，CSS 必须全覆盖。"""
+    """pet.js 通过 data-state 驱动的视觉态，CSS 必须全覆盖。
+
+    场景层已移除（posture 不再写 DOM），故只校验 data-state 全集。
+    """
     css = _text(PET_CSS)
     for st in STATES:
         assert f'data-state="{st}"' in css, f"pet.css 缺 data-state={st} 样式"
-    for p in POSTURES:
-        assert f'data-posture="{p}"' in css, f"pet.css 缺 data-posture={p} 样式"
     # 无障碍/响应式降级
     assert "@media (prefers-reduced-motion: reduce)" in css
     assert "@media (max-width: 899px)" in css

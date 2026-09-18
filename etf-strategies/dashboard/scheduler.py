@@ -693,7 +693,7 @@ def _extract_tokens_from_output(output: str) -> int | None:
 
 
 def _run_prompt(task: dict, run_id: int) -> None:
-    """后台线程执行体：按当前引擎（dsh/claude）跑 prompt，结束后导入产物。
+    """后台线程执行体：通知 Agent 进程执行任务，Agent 不可达时本地兜底。
 
     任何情况下（成功/失败/超时）都执行导入器，把 agent 写出的报告收进 DB，
     绝不把运行行留在 running 状态。
@@ -702,34 +702,44 @@ def _run_prompt(task: dict, run_id: int) -> None:
 
     started = datetime.now()
     task_label = f"📊 {task.get('description') or task.get('name') or task['task_id']}"
-    activity_id = None
-    try:
-        from agent import db as agent_db
-
-        agent_db.activity_close_open(started.strftime("%Y-%m-%d %H:%M:%S"), tokens=None)
-        activity_id = agent_db.activity_start(
-            "scheduled",
-            task_label,
-            started.strftime("%Y-%m-%d %H:%M:%S"),
-            source="auto",
-        )
-    except Exception:
-        pass
-
     engine = resolve_engine()
+
+    # ── 优先通知 Agent 进程执行（HTTP → Agent 内嵌 API）──
+    agent_executed = False
+    agent_url = os.environ.get("AGENT_API_URL", "http://127.0.0.1:8020").rstrip("/")
+    agent_key = os.environ.get("AGENT_API_KEY", "").strip()
+    try:
+        import requests as req
+
+        headers = {"X-Api-Key": agent_key} if agent_key else {}
+        body = {"trigger": "auto"}
+        r = req.post(
+            f"{agent_url}/api/agent/scheduler/run/{task['task_id']}",
+            json=body,
+            headers=headers,
+            timeout=10,
+        )
+        if r.status_code == 200 and r.json().get("started"):
+            agent_executed = True
+            print(f"[scheduler] run#{run_id} {task['task_id']} → dispatched to Agent")
+    except Exception as ee:
+        print(f"[scheduler] run#{run_id} Agent dispatch failed: {ee}", file=sys.stderr)
+
+    if agent_executed:
+        db.scheduler_run_update(
+            run_id,
+            status="running",
+            completed_at=datetime.now().isoformat(),
+            duration_sec=0,
+            output="已派发到 Agent 进程执行",
+        )
+        return
+
+    # ── Agent 不可达 → 本地兜底执行 ──
     if engine == "dsh":
         status, out = _exec_dsh(task)
     else:
         status, out = _exec_claude(task, started)
-
-    ended = datetime.now()
-    try:
-        from agent import db as agent_db
-
-        tokens = _extract_tokens_from_output(out) if status == "success" else None
-        agent_db.activity_close_open(ended.strftime("%Y-%m-%d %H:%M:%S"), tokens=tokens)
-    except Exception:
-        pass
 
     try:
         import_reports_from_disk()
@@ -751,7 +761,7 @@ def _run_prompt(task: dict, run_id: int) -> None:
 
     print(
         f"[scheduler] run#{run_id} {task.get('task_id')} → {status} "
-        f"({elapsed}s, engine={engine})",
+        f"({elapsed}s, engine={engine}, local_fallback)",
         file=sys.stderr,
     )
 
@@ -844,7 +854,20 @@ def run_task(task: dict, trigger: str = "manual", now: datetime | None = None) -
 
 
 def run_task_by_id(task_id: str, trigger: str = "manual") -> dict:
-    """按 task_id 触发（API 用）。找不到任务或超出本调度器范围 → 拒绝。"""
+    """手动「运行」：Dashboard 主动调用 Agent 进程执行任务。
+
+    2026-09-14 架构调整：Dashboard 只负责展示，任务执行统一由 Agent 进程
+    （scheduler_agent）负责。手动触发 = 直接 POST Agent，由 Agent 建云库
+    scheduler_runs 记录（trigger=manual，独立 window_key）并执行。
+    Dashboard 不再本地建记录、不再本地兜底执行 —— 保证每条任务每个窗口
+    只有一条工作日志，且状态真实（Agent 完成即回写）。
+    """
+    if not agent_online():
+        return {
+            "started": False,
+            "reason": "offline",
+            "message": "小满现在已下班了，无法执行任务~ 请在页面顶部点击【让小满上线】后再试 💤",
+        }
     task = next((t for t in scoped_tasks() if t["task_id"] == task_id), None)
     if task is None:
         return {
@@ -852,7 +875,67 @@ def run_task_by_id(task_id: str, trigger: str = "manual") -> dict:
             "reason": "unknown",
             "message": f"未找到每日复盘任务 {task_id}（或不在本调度器范围）",
         }
-    return run_task(task, trigger=trigger)
+    return _dispatch_to_agent(task, trigger=trigger)
+
+
+def _dispatch_to_agent(task: dict, trigger: str = "manual") -> dict:
+    """POST 到 Agent 进程执行任务。Agent 不可达/拒绝 → 返回错误，不做本地兜底。"""
+    import requests as req
+
+    agent_url = os.environ.get("AGENT_API_URL", "http://127.0.0.1:8020").rstrip("/")
+    agent_key = os.environ.get("AGENT_API_KEY", "").strip()
+    headers = {"X-Api-Key": agent_key} if agent_key else {}
+    try:
+        r = req.post(
+            f"{agent_url}/api/agent/scheduler/run/{task['task_id']}",
+            json={"trigger": trigger},
+            headers=headers,
+            timeout=10,
+        )
+        payload = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+        if r.status_code == 200 and payload.get("started"):
+            return {"started": True, "reason": "ok", "message": "已派发给 Agent 执行", "run": None}
+        return {
+            "started": False,
+            "reason": payload.get("reason", "agent_rejected"),
+            "message": payload.get("message", f"Agent 拒绝执行（HTTP {r.status_code}）"),
+        }
+    except Exception as ee:
+        return {
+            "started": False,
+            "reason": "agent_unreachable",
+            "message": f"Agent 进程不可达，无法执行：{ee}（请确认 agent 已启动）",
+        }
+
+
+def dispatch_stop_to_agent(task_id: str) -> dict:
+    """POST 到 Agent 进程停止任务。Agent 不可达 → 返回错误。"""
+    import requests as req
+
+    agent_url = os.environ.get("AGENT_API_URL", "http://127.0.0.1:8020").rstrip("/")
+    agent_key = os.environ.get("AGENT_API_KEY", "").strip()
+    headers = {"X-Api-Key": agent_key} if agent_key else {}
+    try:
+        r = req.post(
+            f"{agent_url}/api/agent/scheduler/stop/{task_id}",
+            json={},
+            headers=headers,
+            timeout=10,
+        )
+        payload = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+        if r.status_code == 200 and payload.get("stopped"):
+            return {"stopped": True, "message": "已发送停止信号"}
+        return {
+            "stopped": False,
+            "reason": payload.get("reason", "agent_rejected"),
+            "message": payload.get("message", f"Agent 拒绝停止（HTTP {r.status_code}）"),
+        }
+    except Exception as ee:
+        return {
+            "stopped": False,
+            "reason": "agent_unreachable",
+            "message": f"Agent 进程不可达，无法停止：{ee}（请确认 agent 已启动）",
+        }
 
 
 def run_task_sync(
@@ -974,30 +1057,14 @@ class SchedulerEngine:
             except Exception as e:
                 self.last_error = f"report rescan: {e}"
 
-        # 上线/下线闸门：下线时 auto 任务调度跳过。
+        # 上线/下线闸门：下线时跳过（仅保留报告重扫，展示刷新不受影响）。
         # BUG-FIX(2026-09-07)：改读 agent db 的 xiaoman_online（agent_online），
         # 与「小满上班/下线」开关和 UI online 状态同源（详见 agent_online 注释）。
+        # 注：2026-09-14 架构调整 —— Dashboard 不再主动发现/派发定时任务，
+        # 定时任务由 Agent 进程（scheduler_agent.tick）检查到点并执行。
+        # Dashboard 引擎只保留报告重扫（展示刷新）；手动「运行」走 run_task_by_id。
         if not agent_online():
             return
-
-        if not self.auto_enabled():
-            return  # 过渡期：auto 关闭，仅手动触发
-
-        for t in scoped_tasks():
-            if t.get("trading_day_required", False) and not is_trading_day(now.date()):
-                continue
-            if not task_due_now(t, now):
-                continue
-            wkey = make_window_key(t, now)
-            if db.scheduler_window_done(
-                t["task_id"], wkey, max_failures=MAX_AUTO_FAILURES_PER_WINDOW
-            ):
-                continue  # 该时间窗已成功/超时/失败达上限（幂等 + 防重试风暴）
-            result = run_task(t, trigger="auto", now=now)
-            if result.get("started"):
-                print(
-                    f"[scheduler] auto dispatch {t['task_id']} → run#{result['run_id']}"
-                )
 
 
 engine = SchedulerEngine()
@@ -1006,19 +1073,10 @@ engine = SchedulerEngine()
 def start() -> None:
     """lifespan 调用：启动引擎（幂等）。
 
-    启动前先回收僵尸 running 记录：上次进程被中断时，_run_prompt 的后台线程
-    没机会把 running 更新为终态，DB 会遗留永久"运行中"的记录（UI 误导 +
-    窗口幂等判断受影响）。重启后进程内任务表必为空，任何 DB running 都是僵尸。
+    2026-09-14 架构调整：Dashboard 不再主动执行任务（auto 派发已移除，
+    手动「运行」仅 POST Agent），因此这里不再回收僵尸 running 记录 ——
+    running 记录现在属于 Agent 进程（唯一执行方），由 Agent 启动时
+    自行回收（scheduler_agent.reconcile_zombies）。Dashboard 若在此处
+    标记 running→failed，会误杀 Agent 正在执行的任务记录。
     """
-    from dashboard import db
-
-    try:
-        n = db.scheduler_mark_zombies_running()
-        if n:
-            print(
-                f"[scheduler] start: 回收 {n} 条中断遗留的 running 记录 → failed",
-                file=sys.stderr,
-            )
-    except Exception as e:
-        print(f"[scheduler] start: 僵尸 running 清理失败: {e}", file=sys.stderr)
     engine.start()

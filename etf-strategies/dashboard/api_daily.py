@@ -70,6 +70,25 @@ class TradePayload(BaseModel):
     fee: float = 0
 
 
+class SignalTriggerPayload(BaseModel):
+    """盘中记录信号触发价/触发时间（写云库 signal_tracking.trigger_price/trigger_time）。
+
+    trigger_time 格式 'HH:MM'（可选，缺省由服务端补当前时间）。
+    """
+
+    signal_id: str
+    trigger_price: float
+    trigger_time: str = ""
+
+
+class SignalEntryPayload(BaseModel):
+    """复盘关联"录入交易"记录买入价/买入时间（写云库 entry_price/entry_time）。"""
+
+    signal_id: str
+    entry_price: float
+    entry_time: str = ""
+
+
 # 并发保护：价格刷新 / 东财刷新 / 交易录入 各自串行，避免并发写坏估值快照与账本文件
 _price_refresh_lock = threading.Lock()
 _em_refresh_lock = threading.Lock()
@@ -419,9 +438,9 @@ def post_eastmoney_refresh():
 # 每日信号 / 报告（只读展示）
 # ═════════════════════════════════════════════════════════════════
 
-# 信号总表列名（与 每日信号.md v2.0 模板列一致 — 12 列，早盘模板 §5.1）
-# 2026-08 信号体系升级：移除 升级条件/预期收益日/操作来源/生成依据，
-# 新增 预期触发率/目标止损（P0 预期触发率=—，P1 必填百分比）。
+# 信号总表列名（与 每日信号.md v3.0 模板列一致 — 14 列，早盘模板 §5.1）
+# 2026-08 信号体系升级：移除 升级条件/预期收益日/操作来源/生成依据，新增 预期触发率/目标止损
+# 2026-09 v3.0：目标/止损 拆为 交易价/目标价/止损价（买入三列，卖出仅交易价）
 _SIGNAL_COLUMNS = [
     "优先级",
     "标的",
@@ -431,7 +450,9 @@ _SIGNAL_COLUMNS = [
     "方向",
     "紧急度",
     "预期触发率",
-    "目标/止损",
+    "交易价",
+    "目标价",
+    "止损价",
     "有效时段",
     "仓位",
     "信号ID",
@@ -491,32 +512,20 @@ def _parse_signals(markdown: str) -> list[dict]:
 
 @router.get("/daily-signals")
 def get_daily_signals(date: str | None = None):
-    """每日信号：?date=YYYYMMDD（默认最新）。返回 {date, signals, markdown, parsed, types}。
+    """今日信号：?date=YYYYMMDD（默认今天）。返回 {date, signals}，signals = 8 字段视图。
 
-    2026-09-08 信号云库化（方案 v1.10 §9.2/9.3）：数据源从「markdown 解析」升级为
-    **云库 `signal_tracking` 表优先**（全量 25 字段）；markdown 过渡期保留作人读视图/兜底。
-    signals = 云库当日信号（结构化行，含复盘回填评价列）；parsed = markdown 解析结果（兜底）。
+    2026-09-14 任务4 全云库化：仅返回今日云库信号（8 字段视图），
+    去掉 markdown/parsed 兜底与"原文视图"数据（原文不再维护）。
+    无信号/非交易日 → signals=[]（空表）。
     """
     today_ymd = datetime.now().strftime("%Y%m%d")
     target_date = date or today_ymd
-
-    # 云库优先：按 signal_date 查 signal_tracking 表
     cloud_rows = _cloud_signal_rows(target_date)
-    if cloud_rows:
-        # 云库有数据 → 直接返回结构化信号（markdown 仍尝试给全文视图）
-        md = _report_markdown(target_date)
-        parsed = _parse_signals(md) if md else []
-        return {
-            "date": target_date,
-            "signals": cloud_rows,
-            "markdown": md or "",
-            "parsed": parsed,
-            "types": _report_types(target_date),
-            "source": "cloud",
-        }
-
-    # 云库无数据 → 回退 markdown 解析（过渡期既有路径）
-    return _daily_signals_from_markdown(target_date)
+    return {
+        "date": target_date,
+        "signals": [_signal_view(r) for r in cloud_rows],
+        "source": "cloud",
+    }
 
 
 @router.get("/signal-quality")
@@ -560,6 +569,200 @@ def get_signal_quality(period: str = "day", date: str | None = None):
         "settled_included": len(settled),
         "source": _quality_source(),
     }
+
+
+# ───────────────────────────────────────────────────────────────────
+# 每日信号页重做（CHAT.md 任务4 · 2026-09-14）：枚举 / 历史查询 / 触发记录
+# ───────────────────────────────────────────────────────────────────
+
+
+def _signal_enums_dict() -> dict:
+    """信号字段枚举（与 docs/signal-enums.md / lib 一致）。
+
+    注意：status 为追踪库/云库的英文内部值（open/triggered/executed/partial_executed/settled/expired），
+    与 markdown 显示层的中文状态不同——前端下拉/过滤必须用英文值才能命中云库行。
+    """
+    return {
+        "trade_type": ["buy", "sell"],
+        "status": ["open", "triggered", "executed", "partial_executed", "settled", "expired"],
+        "direction": ["buy", "sell"],
+        "priority": ["P0", "P1", "P2"],
+        "urgency": ["high", "low"],
+        "source": ["morning_analysis", "intraday_check", "evening_review"],
+        "outcome": ["hit", "stopped", "miss"],
+    }
+
+
+@router.get("/signal-enums")
+def get_signal_enums():
+    """信号字段枚举（供前端下拉框填充）。返回 {trade_type, status, ...}。"""
+    return _signal_enums_dict()
+
+
+def _iso(ymd: str) -> str:
+    """'YYYYMMDD' → 'YYYY-MM-DD'（容错：已是 ISO 则原样返回）。"""
+    if not ymd:
+        return ""
+    digits = ymd.replace("-", "").strip()
+    if len(digits) != 8 or not digits.isdigit():
+        return ymd
+    return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
+
+
+def _signal_query_filters(*, date=None, ticker=None, trade_type=None,
+                          status=None, signal_id=None) -> list:
+    """按查询条件组装 cloud_db.select 的 filters 列表（只加非空条件）。"""
+    filters = []
+    if date:
+        filters.append(("signal_date", "eq", _iso(date)))
+    if ticker:
+        filters.append(("ticker", "like", f"*{ticker.strip()}*"))
+    if trade_type:
+        filters.append(("trade_type", "eq", trade_type.strip()))
+    if status:
+        filters.append(("status", "eq", status.strip()))
+    if signal_id:
+        filters.append(("signal_id", "like", f"*{signal_id.strip()}*"))
+    return filters
+
+
+@router.get("/signal-history")
+def get_signal_history(
+    date: str | None = Query(None),
+    ticker: str | None = Query(None),
+    trade_type: str | None = Query(None),
+    status: str | None = Query(None),
+    signal_id: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """历史信号分页查询：按日期倒序，支持 日期/标的/操作类型/状态/信号ID 过滤。
+
+    全云库化（任务4）：一律读云库 signal_tracking 表；云库不可用返回空列表。
+    返回 {items, total, page, page_size}；items 为 8 字段视图（含日期）。
+    """
+    try:
+        import cloud_db
+        if not cloud_db.enabled():
+            return {"items": [], "total": 0, "page": page, "page_size": page_size}
+        filters = _signal_query_filters(
+            date=date, ticker=ticker, trade_type=trade_type,
+            status=status, signal_id=signal_id,
+        )
+        # total（不含分页）
+        total = len(cloud_db.select("signal_tracking", columns="signal_id", filters=filters))
+        offset = (page - 1) * page_size
+        rows = cloud_db.select(
+            "signal_tracking",
+            filters=filters,
+            order="signal_date.desc,signal_id.desc",
+            limit=page_size,
+            offset=offset,
+        )
+        items = [_signal_view(r) for r in rows]
+        return {"items": items, "total": total, "page": page, "page_size": page_size}
+    except Exception:
+        return {"items": [], "total": 0, "page": page, "page_size": page_size}
+
+
+@router.get("/signal-triggers")
+def get_signal_triggers(
+    date: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """信号触发记录：trigger_price/trigger_time 非空的行，按日期倒序。
+
+    返回 {items}；items 列：日期|信号ID|标的|触发条件|触发价|触发时间|买入价|买入时间。
+    """
+    try:
+        import cloud_db
+        if not cloud_db.enabled():
+            return {"items": []}
+        filters = [("trigger_price", "is", "not.null")]
+        if date:
+            filters.append(("signal_date", "eq", _iso(date)))
+        rows = cloud_db.select(
+            "signal_tracking",
+            filters=filters,
+            order="signal_date.desc,signal_id.desc",
+            limit=limit,
+        )
+        return {"items": [_signal_view(r, triggers=True) for r in rows]}
+    except Exception:
+        return {"items": []}
+
+
+def _signal_view(r: dict, triggers: bool = False) -> dict:
+    """云表行 → 前端展示视图。
+
+    triggers=False：今日/历史信号 8 字段视图（v3.0：交易价/目标价/止损价 三列）；
+    triggers=True：触发记录视图（追加触发价/触发时间/买入价/买入时间）。
+    """
+    target = r.get("target_price") if r.get("target_price") is not None \
+        else (f"{r['target_pct']}%" if r.get("target_pct") is not None else "")
+    stop = r.get("stop_price") if r.get("stop_price") is not None \
+        else (f"{r['stop_pct']}%" if r.get("stop_pct") is not None else "")
+    view = {
+        "signal_date": r.get("signal_date") or r.get("trigger_date"),
+        "priority": r.get("priority"),
+        "ticker": r.get("ticker"),
+        "name": r.get("name"),
+        "trade_type": r.get("trade_type"),
+        "position": r.get("position"),
+        "valid_window": r.get("valid_window"),
+        "status": r.get("status"),
+        "trade_price": r.get("trade_price"),
+        "target_price": target or None,
+        "stop_price": stop or None,
+        "signal_id": r.get("signal_id"),
+    }
+    if triggers:
+        view.update({
+            "trigger_condition": r.get("trigger_condition"),
+            "trigger_price": r.get("trigger_price"),
+            "trigger_time": r.get("trigger_time"),
+            "entry_price": r.get("entry_price"),
+            "entry_time": r.get("entry_time"),
+        })
+    return view
+
+
+def _update_signal_field(signal_id: str, fields: dict) -> dict:
+    """按 signal_id 更新云库字段（含枚举/数值校验）。成功返回 {ok: True}；失败抛 404/400。
+
+    校验委托 lib/signal_tracking_cloud.cloud_update_fields（校验不合法抛 ValueError）。
+    """
+    _inject_harness_lib()
+    from lib import signal_tracking_cloud as stc
+    if not stc.cloud_enabled():
+        raise HTTPException(503, "云库不可用")
+    try:
+        ok = stc.cloud_update_fields(signal_id, fields)
+    except ValueError as e:
+        raise HTTPException(422, f"字段校验失败: {e}")
+    if not ok:
+        raise HTTPException(404, f"未找到信号 {signal_id} 或更新失败")
+    return {"ok": True, "signal_id": signal_id, **fields}
+
+
+@router.post("/signal-trigger")
+def post_signal_trigger(payload: SignalTriggerPayload):
+    """盘中记录信号触发价/触发时间 → 云库 signal_tracking.trigger_price/trigger_time。"""
+    trigger_time = payload.trigger_time or datetime.now().strftime("%H:%M")
+    return _update_signal_field(payload.signal_id, {
+        "trigger_price": payload.trigger_price,
+        "trigger_time": trigger_time,
+    })
+
+
+@router.post("/signal-entry")
+def post_signal_entry(payload: SignalEntryPayload):
+    """复盘关联"录入交易"，记录买入价/买入时间 → 云库 entry_price/entry_time。"""
+    entry_time = payload.entry_time or datetime.now().strftime("%H:%M")
+    return _update_signal_field(payload.signal_id, {
+        "entry_price": payload.entry_price,
+        "entry_time": entry_time,
+    })
 
 
 def _load_tracking_signals() -> list[dict]:
@@ -932,6 +1135,16 @@ def post_scheduler_run(task_id: str):
     if not result.get("started"):
         code = 409 if result.get("reason") == "busy" else 400
         raise HTTPException(code, result.get("message", "无法运行"))
+    return result
+
+
+@router.post("/scheduler/stop/{task_id}")
+def post_scheduler_stop(task_id: str):
+    """停止正在执行的任务（转发给 Agent 终止子进程）。未运行返回 409。"""
+    result = scheduler.dispatch_stop_to_agent(task_id)
+    if not result.get("stopped"):
+        code = 409 if result.get("reason") == "not_running" else 502
+        raise HTTPException(code, result.get("message", "无法停止"))
     return result
 
 

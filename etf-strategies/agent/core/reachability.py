@@ -42,7 +42,8 @@ def _probe_cookie(platform_id, cookie):
     """Cookie 源轻量 HTTP 探测：带 Cookie 请求平台热榜/首页，正常响应 → 可达。
 
     端点（决策 43：实施时定）：
-    - 微博：m.weibo.cn 移动热榜 JSON 接口（.m.weibo.cn 域名 + cookie 能拿到 JSON）
+    - 微博：m.weibo.cn 移动热榜 JSON 接口（.m.weibo.cn 域名 + cookie 能拿到 JSON；
+      2026-09-16 反爬变更：失效/被风控返回 200+HTML → 要求 JSON Content-Type 判可达）
     - 小红书：www.xiaohongshu.com 首页（200 即可达，无需解析内容）
     - 知乎：api/v4/me（有效 Cookie → 200 JSON；无/失效 → 401）
     - 雪球：hot listV2 JSON（有效 Cookie → Content-Type application/json；
@@ -56,7 +57,7 @@ def _probe_cookie(platform_id, cookie):
             "https://m.weibo.cn/api/container/getIndex?containerid=106003type%3D25"
             "&filter_type%3Drealtimehot&title%3D%E5%BE%AE%E5%8D%9A%E7%83%AD%E6%90%9C",
             {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)"},
-            "status200",
+            "json_content_type",
         ),
         "xhs": (
             "https://www.xiaohongshu.com/explore",

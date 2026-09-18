@@ -216,6 +216,40 @@ def test_meta_get_many_cloud(monkeypatch):
     monkeypatch.setattr(agent_db, "USE_CLOUD", False)
 
 
+def test_activity_list_cloud_order_newest_first(monkeypatch):
+    """BUG-FIX(2026-09-15)「做过的事」停留 9-07 回归：
+    云分支活动列表必须按 started_at 倒序取最新（原 ended_at.asc 让 Postgres
+    把 NULL 排最前 + 最早结束的历史排最前 → 首页恒返回最旧记录），
+    并保持进行中（ended_at IS NULL）置顶。
+    """
+    captured = {}
+
+    def fake_select(table, **kw):
+        captured.update(kw)
+        # 模拟云库按传入 order 返回：最新 started_at 在前（id 降序为同秒稳定键）
+        rows = [
+            {"id": 7, "kind": "gaming", "label": "🎮 打游戏", "started_at": "2026-09-15 10:12:55", "ended_at": None},
+            {"id": 6, "kind": "scheduled", "label": "📊 BUG自动修复", "started_at": "2026-09-15 10:07:38", "ended_at": "2026-09-15 10:10:05"},
+            {"id": 5, "kind": "scheduled", "label": "📊 盘中检查 10:00", "started_at": "2026-09-15 10:02:36", "ended_at": "2026-09-15 10:07:38"},
+            {"id": 4, "kind": "reading", "label": "📖 阅读", "started_at": "2026-09-07 12:42:29", "ended_at": "2026-09-07 12:42:30"},
+        ]
+        return rows
+
+    monkeypatch.setattr(agent_db, "USE_CLOUD", True)
+    monkeypatch.setattr(agent_db, "_cd_select", fake_select)
+
+    rows = agent_db.activity_list(limit=4)
+    # 关键：查询排序必须是 started_at 倒序（不是 ended_at 升序）
+    assert captured.get("order") == "started_at.desc,id.desc", \
+        f"云分支必须按 started_at 倒序，实际 order={captured.get('order')!r}"
+    # 进行中（ended_at NULL）排最前；随后按 started_at 倒序（最新在前）
+    assert [r["id"] for r in rows] == [7, 6, 5, 4]
+    assert rows[0]["ended_at"] is None  # 进行中置顶
+    assert rows[-1]["started_at"].startswith("2026-09-07")  # 最旧排最后
+
+    monkeypatch.setattr(agent_db, "USE_CLOUD", False)
+
+
 # ═══════════════════════════════════════════
 # 提示/待办（agent_notices）：REQ-002
 # ═══════════════════════════════════════════

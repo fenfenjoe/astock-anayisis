@@ -14,14 +14,19 @@ CREATE TABLE IF NOT EXISTS signal_tracking (
   direction       TEXT,                  -- buy/sell（方向）
   urgency         TEXT,                  -- high/low
   expected_trigger_rate REAL,            -- 预期触发率 %
+  trade_price     REAL,                  -- 交易价（v3.0：触发条件关键执行价位；买入=计划买入价，卖出=计划卖出价）
   target_price    REAL,                  -- 目标价（显式价）
   stop_price      REAL,                  -- 止损价（显式价）
   target_pct      REAL,                  -- 目标 %（百分比写法）
   stop_pct        REAL,                  -- 止损 %（百分比写法）
   valid_window    TEXT,                  -- 有效时段
   position        TEXT,                  -- 仓位描述
-  status          TEXT,                  -- 待执行/已触发/已执行/已过期/已废弃/已取消/settled
+  status          TEXT,                  -- open/triggered/executed/partial_executed/settled/expired（未触发/已触发/已执行/部分执行/已结算/已过期）
   source          TEXT,                  -- morning_analysis / intraday_check / evening_review
+  -- 盘中/复盘回填列（CHAT.md 任务4，2026-09-14 新增）
+  trigger_price   REAL,                  -- 触发价（盘中分析回填）
+  trigger_time    TEXT,                  -- 触发时间（盘中分析回填，HH:MM）
+  entry_time      TEXT,                  -- 买入时间（复盘关联交易回填）
   -- 复盘回填列
   eval_decision_quality TEXT,            -- 决策质量评价
   eval_execution_quality TEXT,           -- 执行质量评价

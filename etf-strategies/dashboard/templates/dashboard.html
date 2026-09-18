@@ -87,6 +87,7 @@
   <button class="topnav-item nav-home" data-view="view-reports" onclick="switchView('view-reports')">📄 报告</button>
   <button class="topnav-item nav-admin" data-view="view-agent" onclick="switchView('view-agent')">💬 角色</button>
   <button class="topnav-item nav-admin" data-view="view-scheduler" onclick="switchView('view-scheduler')">🗓️ 工作日程</button>
+  <button class="topnav-item nav-admin" data-view="view-tickets" onclick="switchView('view-tickets')">💼 工单管理</button>
 </nav>
 
 <!-- ═══ VIEW: 策略全景（原全部内容）═══ -->
@@ -361,19 +362,37 @@
 
 <!-- ═══ VIEW: 每日信号 ═══ -->
 <div class="view" id="view-signals">
+  <!-- 今日信号（表1） -->
   <section class="panel">
     <div class="panel-header">
-      <h2 class="panel-title">📡 每日信号</h2>
+      <h2 class="panel-title">📡 今日信号</h2>
       <div class="panel-controls">
-        <select class="select-mini" id="sig-date" onchange="sigLoad()"></select>
-        <button class="btn btn-sm" onclick="sigLoadLatest()">最新</button>
-        <button class="btn btn-sm" id="sig-toggle" onclick="sigToggle()">表格视图</button>
+        <input type="date" class="select-mini" id="sig-date" value="" onchange="sigTodayLoad()">
+        <button class="btn btn-sm" onclick="sigTodayLoad()">刷新</button>
       </div>
     </div>
     <div id="sig-content"><p class="muted">加载中...</p></div>
   </section>
 
-  <!-- 信号质量评估（Phase 3 · 方案 v1.10 §9.3） -->
+  <!-- 历史信号查询（表2） -->
+  <section class="panel">
+    <div class="panel-header">
+      <h2 class="panel-title">🕘 历史信号查询</h2>
+      <div class="panel-controls sigq-filter">
+        <input type="date" class="select-mini" id="sig-hist-date" placeholder="日期">
+        <input type="text" class="select-mini" id="sig-hist-ticker" placeholder="标的/代码" style="width:7em">
+        <select class="select-mini" id="sig-hist-type"></select>
+        <select class="select-mini" id="sig-hist-status"></select>
+        <input type="text" class="select-mini" id="sig-hist-id" placeholder="信号ID" style="width:8em">
+        <button class="btn btn-sm" onclick="sigHistorySearch()">查询</button>
+        <button class="btn btn-sm" onclick="sigHistoryReset()">重置</button>
+      </div>
+    </div>
+    <div id="sig-hist-content"><p class="muted">加载中...</p></div>
+    <div class="panel-footer sigq-pager" id="sig-hist-pager" style="display:none"></div>
+  </section>
+
+  <!-- 信号质量评估（保留） -->
   <section class="panel">
     <div class="panel-header">
       <h2 class="panel-title">📊 信号质量评估</h2>
@@ -462,6 +481,41 @@
     </div>
     <h3 class="em-title">运行日志</h3>
     <div id="sched-runs" class="sched-runs"><p class="muted">加载中...</p></div>
+  </section>
+</div>
+
+<!-- ═══ VIEW: 工单管理 ═══ -->
+<div class="view" id="view-tickets">
+  <section class="panel">
+    <div class="panel-header">
+      <h2 class="panel-title">💼 工单管理（BUG / REQ 追踪）</h2>
+      <div class="panel-controls">
+        <select id="ticket-filter-kind" onchange="Tickets.applyFilter()" style="margin-right:8px">
+          <option value="">全部类型</option>
+          <option value="bug">🐛 BUG</option>
+          <option value="req">📋 REQ</option>
+        </select>
+        <select id="ticket-filter-severity" onchange="Tickets.applyFilter()" style="margin-right:8px">
+          <option value="">全部严重度</option>
+          <option value="p0">🔴 P0</option>
+          <option value="p1">🟠 P1</option>
+          <option value="p2">🟡 P2</option>
+          <option value="p3">🟢 P3</option>
+        </select>
+        <select id="ticket-filter-status" onchange="Tickets.applyFilter()">
+          <option value="">全部状态</option>
+          <option value="open">待处理</option>
+          <option value="analyzing">分析中</option>
+          <option value="in_progress">处理中</option>
+          <option value="needs_human">需人工</option>
+          <option value="resolved">已解决</option>
+          <option value="closed">已关闭</option>
+        </select>
+        <button class="btn btn-sm" onclick="Tickets.load()" style="margin-left:8px">🔄 刷新</button>
+      </div>
+    </div>
+    <div id="tickets-container"><div class="xm-loading">加载中...</div></div>
+    <div id="ticket-detail"></div>
   </section>
 </div>
 
@@ -556,6 +610,7 @@
 <script src="/static/js/auth.js"></script>
 <script src="/static/js/dashboard.js"></script>
 <script src="/static/js/daily.js"></script>
+<script src="/static/js/tickets.js"></script>
 <script src="/static/js/agent.js"></script>
 <script src="/static/js/pet.js"></script>
 </body>

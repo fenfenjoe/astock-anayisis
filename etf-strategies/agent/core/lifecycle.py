@@ -12,6 +12,9 @@ from datetime import datetime, timedelta
 from agent import config, db as agent_db
 from agent.core import behavior, knowledge
 
+# heartbeat 节流：上一次真正写入云库的时间戳（见 heartbeat()）
+_last_heartbeat_ts: float = 0.0
+
 _STATE_LABELS = {
     "reading": "📖 阅读",
     "gaming": "🎮 打游戏",
@@ -39,7 +42,20 @@ _STATE_LABELS = {
 }
 
 def heartbeat(db=None):
+    """写 agent_heartbeat（云库）。
+
+    2026-09-17 节流：cloud 模式下 heartbeat 每 tick（300s）都会被调用，若每次都写
+    云库，workspace 永远无法进入「算力空闲自动挂起」。改为每 _HEARTBEAT_INTERVAL
+    （600s）才真正写一次云库。dashboard 仅展示 heartbeat_age_seconds（无硬性死亡
+    判定），节流到 10 分钟安全。file 模式不节流（保持每 tick 写，测试语义不变）。
+    """
+    global _last_heartbeat_ts
     db = db or agent_db
+    if getattr(agent_db, "USE_CLOUD", False):
+        now_ts = time.time()
+        if now_ts - _last_heartbeat_ts < agent_db._HEARTBEAT_INTERVAL:
+            return  # 节流：尚未到写入窗口
+        _last_heartbeat_ts = now_ts
     db.meta_set("agent_heartbeat", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 
@@ -107,6 +123,7 @@ def tick(now=None, db=None, llm_fn=None):
         "state": None,
         "read": None,
         "publish": None,
+        "scheduler": None,
     }
 
     # 0. 上线/下线闸门
@@ -116,6 +133,14 @@ def tick(now=None, db=None, llm_fn=None):
         return result
 
     result["online"] = True
+
+    # 0.5 定时任务调度：Agent 进程自己检查到点任务并执行（写云库 scheduler_runs）
+    try:
+        from agent.core import scheduler_agent
+
+        result["scheduler"] = scheduler_agent.tick(now=now)
+    except Exception as e:
+        result["scheduler"] = {"error": str(e)}
 
     # 1. RSS 入库（服务端自动执行，不入 Prompt；小满"阅读"时从库中选）
     if _rss_due(db, now):
@@ -153,8 +178,16 @@ def tick(now=None, db=None, llm_fn=None):
             db.activity_close_open(now.strftime("%Y-%m-%d %H:%M:%S"))
 
     # 3. 状态机
-    state_current = db.meta_get("xiaoman_current_state")
-    state_until = db.meta_get("xiaoman_state_until")
+    # 2026-09-17 节流优化：一次 meta_get_many 预取全部状态 key（冷读 1 次往返
+    # 填满进程内 TTL 缓存），后续 meta_get 全命中缓存；switch_state 写穿透
+    # 更新缓存 → 同 tick 后续读仍是新值。
+    _prefetch = db.meta_get_many([
+        "xiaoman_current_state", "xiaoman_state_until",
+        "xiaoman_state_seq", "xiaoman_read_done_seq",
+        "xiaoman_browse_done_seq", "published_on",
+    ])
+    state_current = _prefetch.get("xiaoman_current_state")
+    state_until = _prefetch.get("xiaoman_state_until")
     state_expired = True
     if state_until:
         try:
@@ -221,26 +254,37 @@ def tick(now=None, db=None, llm_fn=None):
             result["browse"] = {**cur, "after_browse_state_error": str(e)}
 
     # 4. 每日发文（写文章是动作事件：期间状态临时显示"正在写文章"，结束后恢复原常驻状态）
-    _prev_state = db.meta_get("xiaoman_current_state")
-    _prev_until = db.meta_get("xiaoman_state_until")
-    db.meta_set("xiaoman_current_state", "writing")
-    db.meta_set("xiaoman_state_until",
-                (now + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S"))
-    try:
-        result["publish"] = behavior.run_publish_pipeline(
-            today, now=(now.hour, now.minute), llm_fn=llm_fn, db=db
-        )
-    except Exception as e:
-        result["publish"] = {
-            "published": False,
-            "reason": f"error: {e}",
-            "article_id": None,
-        }
-    finally:
-        if _prev_state:
-            db.meta_set("xiaoman_current_state", _prev_state)
-        if _prev_until:
-            db.meta_set("xiaoman_state_until", _prev_until)
+    # 2026-09-17 节流修复：先 should_publish 门控，不该发文就不碰云库——
+    # 原实现无条件先写 current_state=writing + state_until（+ 结束恢复 2 次）共 4 次
+    # 云库写/每 tick → 阻止 workspace 进入「算力空闲自动挂起」（访问间隔恒 300s）。
+    # run_publish_pipeline 内部仍会二次门控（幂等），此处只省掉不该发文时的空写。
+    _published_on = _prefetch.get("published_on")
+    _publish_gate = behavior.should_publish(
+        today, _published_on, hour=now.hour, minute=now.minute
+    )
+    if _publish_gate["publish"]:
+        _prev_state = db.meta_get("xiaoman_current_state")
+        _prev_until = db.meta_get("xiaoman_state_until")
+        db.meta_set("xiaoman_current_state", "writing")
+        db.meta_set("xiaoman_state_until",
+                    (now + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S"))
+        try:
+            result["publish"] = behavior.run_publish_pipeline(
+                today, now=(now.hour, now.minute), llm_fn=llm_fn, db=db
+            )
+        except Exception as e:
+            result["publish"] = {
+                "published": False,
+                "reason": f"error: {e}",
+                "article_id": None,
+            }
+        finally:
+            if _prev_state:
+                db.meta_set("xiaoman_current_state", _prev_state)
+            if _prev_until:
+                db.meta_set("xiaoman_state_until", _prev_until)
+    else:
+        result["publish"] = {"published": False, "reason": _publish_gate["reason"]}
 
     return result
 

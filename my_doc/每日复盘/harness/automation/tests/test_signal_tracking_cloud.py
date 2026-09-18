@@ -50,22 +50,21 @@ def _sample_sig():
 
 
 class TestToRow:
-    def test_fixed_column_set(self):
-        """to_row 输出固定列集合（PostgREST 批量 upsert 各行键一致）。"""
+    def test_non_none_columns(self):
+        """to_row 只含非 None 列（任务4：跳过 None 列，upsert 不覆盖盘中/复盘已写字段）。"""
         row = stc.to_row(_sample_sig())
-        assert set(row.keys()) == set(stc._ALL_COLUMNS)
         # 关键映射
         assert row["signal_id"] == "SIG-20260908-TEST"
         assert row["signal_date"] == "2026-09-08"  # trigger_date → signal_date
-        assert row["target_price"] is None
+        assert "target_price" not in row  # None 值列不出现
         assert row["created_at"]  # 自动填充
         assert row["updated_at"]
 
-    def test_sell_columns_present(self):
-        """卖出信号列（cost_basis/sell_price）在固定集合内（缺失为 None）。"""
+    def test_sell_columns_absent_when_none(self):
+        """卖出信号列（cost_basis/sell_price）为 None 时不出现（任务4 跳过 None 列）。"""
         row = stc.to_row(_sample_sig())
-        assert "cost_basis" in row and row["cost_basis"] is None
-        assert "sell_price" in row and row["sell_price"] is None
+        assert "cost_basis" not in row
+        assert "sell_price" not in row
 
 
 class TestFromRow:

@@ -17,6 +17,7 @@ import difflib
 import json
 import os
 import sqlite3
+import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -61,6 +62,41 @@ else:
     except ImportError:  # pragma: no cover
         _cd_delete = _cd_enabled = _cd_insert = _cd_q = None
         _cd_select = _cd_select_one = _cd_update = _cd_upsert = None
+
+# ── 云库访问节流（2026-09-17 成本优化）──────────────────────────
+# 背景：agent 常驻每 300s tick 一次，每次 5-8 次云库往返 → AIDAP workspace
+# 永远无法进入「算力空闲自动挂起」（阈值最小 300s）→ 算力 24/7 计费。
+# 方案：meta_get/meta_get_many/activity_open 加进程内 TTL 缓存（默认 600s
+# > 挂起阈值 300s），meta_set 写穿透更新缓存 → 平时云库访问降到每 10 分钟 1 次冷读。
+#
+# 原则：数据 100% 在云。缓存仅进程内存（dict），进程重启即清空、从云重载，
+# 无任何本地持久化。仅影响 agent 进程（dashboard/db.py 独立模块，实时读不受影响）。
+# 跨进程可见性：agent 是 meta 的唯一写者（除 dashboard 的 xiaoman_online 开关），
+# 本进程写后缓存即时更新；他人写的值最多延迟 TTL（600s）可见。
+_META_TTL = int(os.environ.get("AGENT_META_TTL", "600"))  # 秒；> 挂起阈值 300s
+_meta_cache: dict = {}  # key -> (value, 过期时间戳)
+_HEARTBEAT_INTERVAL = 600  # 秒；heartbeat 写入节流（dashboard 仅展示 age，无硬判定）
+_last_heartbeat_ts: float = 0.0
+
+
+def _meta_cache_get(key):
+    hit = _meta_cache.get(key)
+    if hit is None:
+        return None, False
+    value, expires = hit
+    if time.time() < expires:
+        return value, True
+    _meta_cache.pop(key, None)
+    return None, False
+
+
+def _meta_cache_put(key, value):
+    _meta_cache[key] = (value, time.time() + _META_TTL)
+
+
+def _meta_cache_invalidate(keys):
+    for k in keys:
+        _meta_cache.pop(k, None)
 
 
 SCHEMA = """
@@ -692,8 +728,14 @@ def knowledge_all(limit=200):
 
 def meta_get(key):
     if USE_CLOUD:
+        # 节流：命中进程内 TTL 缓存则不再云库往返（跨进程新值最多延迟 _META_TTL 可见）
+        cached, hit = _meta_cache_get(key)
+        if hit:
+            return cached
         row = _cd_select_one("agent_metadata", filters=[("key", "eq", key)])
-        return row["value"] if row else None
+        value = row["value"] if row else None
+        _meta_cache_put(key, value)
+        return value
     with get_conn() as conn:
         r = conn.execute(
             "SELECT value FROM agent_metadata WHERE key=?", (key,)
@@ -706,18 +748,32 @@ def meta_get_many(keys: list[str]) -> dict:
 
     2026-09-08 性能优化：/api/agent/status 原先逐个 meta_get（云模式 N 次
     HTTPS 往返）→ 批量后降为 1 次。返回 {key: value}，缺失 key 值为 None。
+    2026-09-17 节流：命中缓存的 key 不再云库往返；未命中的批量冷读并回填缓存。
     """
     if not keys:
         return {}
     if USE_CLOUD:
-        rows = _cd_select(
-            "agent_metadata",
-            columns="key,value",
-            # PostgREST in 过滤：key=in.(k1,k2)。key 为内部标识符（无逗号/括号）
-            filters=[("key", "in", "(" + ",".join(keys) + ")")],
-        )
-        vals = {r["key"]: r["value"] for r in rows}
-        return {k: vals.get(k) for k in keys}
+        # 先查缓存：已命中的直接返回，只对未命中的发云库请求
+        result, missing = {}, []
+        for k in keys:
+            cached, hit = _meta_cache_get(k)
+            if hit:
+                result[k] = cached
+            else:
+                missing.append(k)
+        if missing:
+            rows = _cd_select(
+                "agent_metadata",
+                columns="key,value",
+                # PostgREST in 过滤：key=in.(k1,k2)。key 为内部标识符（无逗号/括号）
+                filters=[("key", "in", "(" + ",".join(missing) + ")")],
+            )
+            vals = {r["key"]: r["value"] for r in rows}
+            for k in missing:
+                v = vals.get(k)
+                _meta_cache_put(k, v)
+                result[k] = v
+        return {k: result.get(k) for k in keys}
     with get_conn() as conn:
         qs = ",".join("?" for _ in keys)
         rows = conn.execute(
@@ -730,6 +786,8 @@ def meta_get_many(keys: list[str]) -> dict:
 def meta_set(key, value):
     if USE_CLOUD:
         _cd_upsert("agent_metadata", {"key": key, "value": value}, on_conflict="key")
+        # 写穿透：立即更新进程内缓存（本进程后续读即时最新，不因 TTL 读到旧值）
+        _meta_cache_put(key, value)
         return
     with get_conn() as conn:
         conn.execute(
@@ -756,6 +814,8 @@ def activity_start(kind, label, started_at, source="auto"):
                 "source": source,
             },
         )
+        # 新活动开启 → 失效 open 缓存（下次 activity_open 重新云库读）
+        _meta_cache_invalidate(["__activity_open__"])
         return row["id"] if row else None
     with get_conn() as conn:
         cur = conn.execute(
@@ -767,11 +827,20 @@ def activity_start(kind, label, started_at, source="auto"):
 
 
 def activity_open():
-    """当前未结束（正在做）的活动；没有返回 None。"""
+    """当前未结束（正在做）的活动；没有返回 None。
+
+    2026-09-17 节流：进程内 TTL 缓存（含"无 open 活动"的 None 结果），
+    避免每 tick 都云库往返；activity_start/activity_close_open 写后失效缓存。
+    """
     if USE_CLOUD:
-        return _cd_select_one(
+        cached, hit = _meta_cache_get("__activity_open__")
+        if hit:
+            return cached
+        row = _cd_select_one(
             "agent_activities", filters=[("ended_at", "is", None)], order="id.desc"
         )
+        _meta_cache_put("__activity_open__", row)
+        return row
     with get_conn() as conn:
         r = conn.execute(
             "SELECT * FROM agent_activities WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1"
@@ -795,6 +864,8 @@ def activity_close_open(ended_at, tokens=None):
             {"ended_at": ended_at, "tokens": tokens},
             filters=[("id", "eq", open_row["id"])],
         )
+        # 活动已关闭 → 失效 open 缓存（下次 activity_open 重新云库读）
+        _meta_cache_invalidate(["__activity_open__"])
         return open_row
     with get_conn() as conn:
         row = conn.execute(
@@ -865,7 +936,11 @@ def activity_list(limit=50, date_filter=None, offset=0):
         rows = _cd_select(
             "agent_activities",
             filters=filters or None,
-            order="ended_at.asc,started_at.desc,id.desc",
+            # BUG-FIX(2026-09-15)：原 order="ended_at.asc,..." —— Postgres 默认
+            # NULLS FIRST，且已完成活动按【结束时间升序】→ 第 1 页总是返回最早的历史
+            # （"做过的事"停留 9-07）。改为按【开始时间倒序】取最新，再用下方 stable
+            # sort 把进行中（ended_at IS NULL）提到最前（与 SQLite 版口径一致）。
+            order="started_at.desc,id.desc",
             limit=limit,
             offset=offset,
         )
@@ -1367,7 +1442,7 @@ def notice_set_status(notice_id, status):
 def ticket_upsert(ticket: dict):
     """写入工单（云端 upsert，主键为 id）。"""
     if USE_CLOUD:
-        _cd_upsert("tickets", ticket, conflict="id")
+        _cd_upsert("tickets", ticket, on_conflict="id")
         return
     with get_conn() as conn:
         conn.execute(

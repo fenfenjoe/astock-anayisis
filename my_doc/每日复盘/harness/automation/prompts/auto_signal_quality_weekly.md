@@ -42,6 +42,8 @@ print('上周信号数:', len(week), '已结算:', len(settled))
 6. **沉淀经验**：将可复用结论按**事件驱动**沉淀到 OpenViking（本会话 peer=xiaoman）——
    - 触发 T1（新规律：本周信号质量揭示新的信号设计规律）→ `viking_remember`（category=experiences，
      按 `_schema.md` 模板：领域=信号设计，置信度默认中，证据链记本周指标）；
-   - 触发 T2（旧信号设计经验被本周数据证伪/校准）→ 更新对应条目证据链 + 贝叶斯置信度；
+   - 触发 T2（旧信号设计经验被本周数据证伪/校准）→ 更新对应条目证据链 + 贝叶斯置信度
+     （用 `lib/openviking_health.apply_t2_update` 计算：`r = apply_t2_update('中', evidence_type='falsify')`
+     单次证伪 中→低；verify 时传 `verify_count=<累计独立验证数>`，≥2 次 中→高；低被再证伪→deprecated）；
    - 两者皆无 → 跳过；
    - 过渡期镜像：写入 OpenViking 后同步追加到本地 `harness/experience/投资经验.md` 信号设计章节。

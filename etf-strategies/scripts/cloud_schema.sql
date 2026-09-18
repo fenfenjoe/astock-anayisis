@@ -149,3 +149,20 @@ CREATE INDEX IF NOT EXISTS idx_agent_messages_session ON agent_messages(session_
 CREATE INDEX IF NOT EXISTS idx_daily_reports_date ON daily_reports(report_date);
 CREATE INDEX IF NOT EXISTS idx_scheduler_runs_task ON scheduler_runs(task_id);
 CREATE INDEX IF NOT EXISTS idx_agent_knowledge_url ON agent_knowledge(url);
+
+-- ── E. 工单系统（BUG/REQ 管理）───────────────────────────────────
+CREATE TABLE IF NOT EXISTS tickets (
+  id          TEXT PRIMARY KEY,
+  kind        TEXT NOT NULL,
+  title       TEXT NOT NULL,
+  description TEXT,
+  severity    TEXT NOT NULL DEFAULT 'p2',
+  status      TEXT NOT NULL DEFAULT 'open',
+  source_task TEXT,
+  assignee    TEXT DEFAULT 'xiaoman',
+  created_at  TEXT NOT NULL DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS')),
+  updated_at  TEXT NOT NULL DEFAULT (to_char(now(), 'YYYY-MM-DD HH24:MI:SS')),
+  result      TEXT,
+  log_entries JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);

@@ -313,7 +313,432 @@
       ],
       "created_at": "2026-09-09",
       "updated_at": "2026-09-09"
+    },
+    {
+      "signal_id": "SIG-20260915-01",
+      "trigger_date": "2026-09-15",
+      "priority": "P0",
+      "ticker": "518880",
+      "name": "黄金ETF",
+      "trade_type": "sell",
+      "direction": "sell",
+      "urgency": "high",
+      "target_price": 8.85,
+      "status": "triggered",
+      "source": "intraday_check",
+      "eval_decision_quality": "B",
+      "eval_execution_quality": "D",
+      "entry_price": 8.817,
+      "shares": 900,
+      "created_at": "2026-09-15",
+      "updated_at": "2026-09-15",
+      "trigger_price": 8.817,
+      "trigger_time": "14:36"
+    },
+    {
+      "signal_id": "SIG-20260915-02",
+      "trigger_date": "2026-09-15",
+      "priority": "P0",
+      "ticker": "601398",
+      "name": "工商银行",
+      "trade_type": "sell",
+      "direction": "sell",
+      "urgency": "high",
+      "target_price": 8.2,
+      "status": "open",
+      "eval_decision_quality": "B",
+      "eval_execution_quality": "A",
+      "shares": 500,
+      "created_at": "2026-09-15",
+      "updated_at": "2026-09-15"
+    },
+    {
+      "signal_id": "SIG-20260915-03",
+      "trigger_date": "2026-09-15",
+      "priority": "P0",
+      "ticker": "159326",
+      "name": "电网设备ETF",
+      "trade_type": "sell",
+      "direction": "sell",
+      "urgency": "high",
+      "target_price": 1.6,
+      "status": "open",
+      "eval_decision_quality": "A",
+      "shares": 2600,
+      "created_at": "2026-09-15",
+      "updated_at": "2026-09-15"
+    },
+    {
+      "signal_id": "SIG-20260915-04",
+      "trigger_date": "2026-09-15",
+      "priority": "P1",
+      "ticker": "512480",
+      "name": "半导体ETF",
+      "trade_type": "buy",
+      "direction": "buy",
+      "urgency": "low",
+      "expected_trigger_rate": 35,
+      "status": "open",
+      "source": "intraday_check",
+      "eval_decision_quality": "B",
+      "shares": 8000,
+      "created_at": "2026-09-15",
+      "updated_at": "2026-09-15",
+      "trigger_price": 0.967,
+      "trigger_time": "14:16"
+    },
+    {
+      "signal_id": "SIG-20260915-05",
+      "trigger_date": "2026-09-15",
+      "priority": "P1",
+      "ticker": "512480",
+      "name": "元件/PCB",
+      "trade_type": "buy",
+      "direction": "buy",
+      "urgency": "low",
+      "expected_trigger_rate": 30,
+      "status": "open",
+      "eval_decision_quality": "A",
+      "shares": 8000,
+      "created_at": "2026-09-15",
+      "updated_at": "2026-09-15"
+    },
+    {
+      "signal_id": "SIG-20260915-06-盘中",
+      "trigger_date": "2026-09-15",
+      "priority": "P1",
+      "ticker": "588000",
+      "name": "科创50ETF",
+      "trade_type": "buy",
+      "direction": "buy",
+      "urgency": "low",
+      "expected_trigger_rate": 40,
+      "status": "open",
+      "source": "intraday_check",
+      "eval_decision_quality": "B",
+      "shares": 5000,
+      "created_at": "2026-09-15",
+      "updated_at": "2026-09-15"
+    },
+    {
+      "signal_id": "SIG-20260916-01",
+      "trigger_date": "2026-09-16",
+      "priority": "P0",
+      "ticker": "518880",
+      "name": "黄金ETF",
+      "trade_type": "sell",
+      "direction": "sell",
+      "urgency": "high",
+      "status": "triggered",
+      "source": "intraday_check",
+      "created_at": "2026-09-16",
+      "updated_at": "2026-09-16",
+      "trigger_price": 8.892,
+      "trigger_time": "14:47"
+    },
+    {
+      "signal_id": "SIG-20260916-02",
+      "trigger_date": "2026-09-16",
+      "priority": "P0",
+      "ticker": "159326",
+      "name": "电网设备ETF",
+      "trigger_condition": "跌破1.60纪律线 → 减仓2,600份(1/3)；现1.628守位中",
+      "trade_type": "sell",
+      "direction": "sell",
+      "urgency": "high",
+      "stop_price": 1.6,
+      "valid_window": "全天 CST",
+      "position": "2,600份(1/3)",
+      "status": "open",
+      "source": "morning_analysis",
+      "shares": 2600,
+      "created_at": "2026-09-16",
+      "updated_at": "2026-09-16"
+    },
+    {
+      "signal_id": "SIG-20260916-03",
+      "trigger_date": "2026-09-16",
+      "priority": "P0",
+      "ticker": "N/A",
+      "name": "FOMC前不加仓否决",
+      "trigger_condition": "若大盘未确认企稳（广度<40% 或 上证破3850）→ 全部P1建仓信号作废；仅保留减仓/防御。FOMC 9/17 02:00落地前'仓位只减不加'",
+      "trade_type": "sell",
+      "direction": "sell",
+      "urgency": "high",
+      "valid_window": "全天 CST",
+      "position": "—",
+      "status": "open",
+      "source": "morning_analysis",
+      "created_at": "2026-09-16",
+      "updated_at": "2026-09-16"
+    },
+    {
+      "signal_id": "SIG-20260916-04",
+      "trigger_date": "2026-09-16",
+      "priority": "P1",
+      "ticker": "512480",
+      "name": "半导体ETF",
+      "trigger_condition": "触发：站上0.97 + 半导体板块放量涨>+2%(量比>1) + 大盘不创新低(>3850) → 评估仓试探。证伪：大盘破3850 或 半导体缩量<+1%",
+      "trade_type": "buy",
+      "direction": "buy",
+      "urgency": "low",
+      "expected_trigger_rate": 35,
+      "target_price": 0.99,
+      "stop_price": 0.945,
+      "target_pct": 3,
+      "stop_pct": -2.5,
+      "valid_window": "10:30-14:30 CST",
+      "position": "9,700份(可用×1/4)",
+      "status": "triggered",
+      "source": "intraday_check",
+      "expected_return_date": "",
+      "shares": 9700,
+      "status_history": [
+        {
+          "date": "2026-09-16",
+          "note": "从每日信号.md解析录入",
+          "status": "triggered"
+        }
+      ],
+      "created_at": "2026-09-16",
+      "updated_at": "2026-09-16",
+      "trigger_price": 1.005,
+      "trigger_time": "14:47"
+    },
+    {
+      "signal_id": "SIG-20260916-05",
+      "trigger_date": "2026-09-16",
+      "priority": "P1",
+      "ticker": "515880",
+      "name": "通信ETF",
+      "trigger_condition": "触发：站稳0.66 + 通信设备板块主力净流入持续(今日+9.84亿) + 大盘不创新低 → 评估仓试探。证伪：跌破0.653 或 板块资金转出",
+      "trade_type": "buy",
+      "direction": "buy",
+      "urgency": "low",
+      "expected_trigger_rate": 40,
+      "target_price": 0.68,
+      "stop_price": 0.645,
+      "target_pct": 3,
+      "stop_pct": -2.5,
+      "valid_window": "10:30-14:30 CST",
+      "position": "11,300份(可用×1/5)",
+      "status": "triggered",
+      "source": "intraday_check",
+      "expected_return_date": "",
+      "shares": 11300,
+      "status_history": [
+        {
+          "date": "2026-09-16",
+          "note": "从每日信号.md解析录入",
+          "status": "triggered"
+        }
+      ],
+      "created_at": "2026-09-16",
+      "updated_at": "2026-09-16",
+      "trigger_price": 0.684,
+      "trigger_time": "14:47"
+    },
+    {
+      "signal_id": "SIG-20260916-06",
+      "trigger_date": "2026-09-16",
+      "priority": "P1",
+      "ticker": "588000",
+      "name": "科创50ETF",
+      "trigger_condition": "触发：站稳1.65 + 科创50维持强势(>+0.5%) + 半导体链放量 → 评估仓试探。证伪：跌破1.638 或 科创50转弱",
+      "trade_type": "buy",
+      "direction": "buy",
+      "urgency": "low",
+      "expected_trigger_rate": 35,
+      "target_price": 1.7,
+      "stop_price": 1.6,
+      "target_pct": 3,
+      "stop_pct": -2.7,
+      "valid_window": "10:30-14:30 CST",
+      "position": "11,300份(可用×1/5)",
+      "status": "triggered",
+      "source": "intraday_check",
+      "expected_return_date": "",
+      "shares": 11300,
+      "status_history": [
+        {
+          "date": "2026-09-16",
+          "note": "从每日信号.md解析录入",
+          "status": "triggered"
+        }
+      ],
+      "created_at": "2026-09-16",
+      "updated_at": "2026-09-16",
+      "trigger_price": 1.705,
+      "trigger_time": "14:47"
     }
   ],
-  "_updated": "2026-09-09"
+  "aggregation": {
+    "by_urgency": {
+      "high": {
+        "count": 14,
+        "settled": 4,
+        "total_pnl": 36.9,
+        "simulated_pnl": -231.8,
+        "win_count": 2
+      },
+      "low": {
+        "count": 7,
+        "settled": 1,
+        "total_pnl": 109.8,
+        "simulated_pnl": 0.0,
+        "win_count": 1
+      }
+    },
+    "by_priority": {
+      "P0": {
+        "count": 10,
+        "settled": 0,
+        "total_pnl": 0.0,
+        "simulated_pnl": 0.0,
+        "win_count": 0
+      },
+      "P1": {
+        "count": 11,
+        "settled": 5,
+        "total_pnl": 146.7,
+        "simulated_pnl": -231.8,
+        "win_count": 3
+      },
+      "P2": {
+        "count": 0,
+        "settled": 0,
+        "total_pnl": 0.0,
+        "simulated_pnl": 0.0,
+        "win_count": 0
+      }
+    },
+    "by_trade_type": {
+      "buy": {
+        "count": 10,
+        "settled": 4,
+        "total_pnl": 146.7,
+        "simulated_pnl": -231.8,
+        "win_count": 3
+      },
+      "sell": {
+        "count": 11,
+        "settled": 1,
+        "total_pnl": 0.0,
+        "simulated_pnl": 0.0,
+        "win_count": 0
+      }
+    },
+    "by_ticker": {
+      "159326": {
+        "count": 3,
+        "settled": 1,
+        "total_pnl": 20.9,
+        "simulated_pnl": 0.0,
+        "win_count": 1
+      },
+      "512480": {
+        "count": 5,
+        "settled": 2,
+        "total_pnl": 109.8,
+        "simulated_pnl": 0.0,
+        "win_count": 1
+      },
+      "159899": {
+        "count": 2,
+        "settled": 1,
+        "total_pnl": 16.0,
+        "simulated_pnl": 0.0,
+        "win_count": 1
+      },
+      "518880": {
+        "count": 4,
+        "settled": 0,
+        "total_pnl": 0.0,
+        "simulated_pnl": 0.0,
+        "win_count": 0
+      },
+      "159825": {
+        "count": 1,
+        "settled": 1,
+        "total_pnl": 0.0,
+        "simulated_pnl": -231.8,
+        "win_count": 0
+      },
+      "601398": {
+        "count": 2,
+        "settled": 0,
+        "total_pnl": 0.0,
+        "simulated_pnl": 0.0,
+        "win_count": 0
+      },
+      "588000": {
+        "count": 2,
+        "settled": 0,
+        "total_pnl": 0.0,
+        "simulated_pnl": 0.0,
+        "win_count": 0
+      },
+      "N/A": {
+        "count": 1,
+        "settled": 0,
+        "total_pnl": 0.0,
+        "simulated_pnl": 0.0,
+        "win_count": 0
+      },
+      "515880": {
+        "count": 1,
+        "settled": 0,
+        "total_pnl": 0.0,
+        "simulated_pnl": 0.0,
+        "win_count": 0
+      }
+    }
+  },
+  "aggregates": {
+    "total_signals_tracked": 21,
+    "total_resolved": 5,
+    "total_open": 16,
+    "total_pnl_amount": 146.7,
+    "simulated_pnl_amount": -231.8,
+    "total_avoided_loss": 21.35,
+    "win_count": 3,
+    "lose_count": 1,
+    "by_urgency": {
+      "high": {
+        "count": 14,
+        "resolved": 4,
+        "total_pnl": 36.9,
+        "simulated_pnl": -231.8,
+        "total_avoided_loss": 21.35
+      },
+      "low": {
+        "count": 7,
+        "resolved": 1,
+        "total_pnl": 109.8,
+        "simulated_pnl": 0.0,
+        "total_avoided_loss": 0.0
+      }
+    },
+    "by_priority": {
+      "P0": {
+        "count": 10,
+        "resolved": 0,
+        "total_pnl": 0.0,
+        "simulated_pnl": 0.0
+      },
+      "P1": {
+        "count": 11,
+        "resolved": 5,
+        "total_pnl": 146.7,
+        "simulated_pnl": -231.8
+      },
+      "P2": {
+        "count": 0,
+        "resolved": 0,
+        "total_pnl": 0.0,
+        "simulated_pnl": 0.0
+      }
+    },
+    "win_rate": 75.0
+  }
 }

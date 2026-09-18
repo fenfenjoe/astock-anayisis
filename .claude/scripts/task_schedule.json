@@ -115,15 +115,6 @@
       "description": "代码巡检"
     },
     {
-      "task_id": "bug_inspect_logic",
-      "target_time": "12:23",
-      "days_of_week": [0],
-      "trading_day_required": false,
-      "prompt_file": "etf-strategies/automation/prompts/bug_inspect_logic.md",
-      "window_minutes": 7,
-      "description": "逻辑巡检 (每周一)"
-    },
-    {
       "task_id": "strategy_scan_weekly",
       "target_time": "12:37",
       "days_of_week": [1],
@@ -167,28 +158,6 @@
       "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_logic_inspect.md",
       "window_minutes": 7,
       "description": "逻辑巡检 (每天17:07)"
-    },
-    {
-      "task_id": "harness_bug_auto_fix",
-      "hourly": true,
-      "target_minute": 17,
-      "hourly_range": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-      "days_of_week": [0, 1, 2, 3, 4],
-      "trading_day_required": false,
-      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_bug_fix.md",
-      "window_minutes": 7,
-      "description": "Harness BUG自动修复 (每小时 :17)"
-    },
-    {
-      "task_id": "pending_remind",
-      "hourly": true,
-      "target_minute": 13,
-      "hourly_range": [9, 11, 13, 15, 17, 19, 21],
-      "days_of_week": [0, 1, 2, 3, 4, 5, 6],
-      "trading_day_required": false,
-      "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_pending_remind.md",
-      "window_minutes": 7,
-      "description": "待确认事项提醒 (每2小时 :13)"
     },
     {
       "task_id": "signal_quality_weekly",

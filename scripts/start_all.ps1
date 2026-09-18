@@ -37,6 +37,11 @@ $services = @(
 
 # dashboard 端口：8000 常被酷狗 KGService 等占用，改用 8010（app.py 支持 DASHBOARD_PORT）
 $env:DASHBOARD_PORT = "8010"
+# Agent DB/API 环境变量（方案一+方案三）
+$env:AGENT_API_PORT = "8020"
+$env:AGENT_API_KEY = "xiaoman-secret-key-change-me"
+$env:AGENT_DB_BACKEND = "cloud"
+
 
 # ── OpenViking 云版检测：ovcli.conf 指向云（非本地）→ 无需本地 server，跳过 ──
 $ovCliConf = Join-Path $env:USERPROFILE ".openviking\ovcli.conf"

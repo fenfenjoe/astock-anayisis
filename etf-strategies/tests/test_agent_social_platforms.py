@@ -236,6 +236,39 @@ class TestReachabilityProbe:
 
         monkeypatch.setattr("requests.get", FakeGet())
         ok, _ = reachability.probe_platform(weibo)
+        # 微博 probe 需 JSON Content-Type（2026-09-16 修复：失效 Cookie 返回 200+HTML 不再误判可达）
+        assert ok is True
+
+    def test_weibo_probe_html_means_invalid(self, monkeypatch):
+        """微博 Cookie 失效（200 + text/html 登录页）→ 不可达。
+
+        2026-09-16 反爬变更：m.weibo.cn 对无登录态/被风控请求返回 HTTP 200 + HTML。
+        修复前 _probe_cookie 只看 status 200（mode=status200）→ 失效 Cookie 被误判可达；
+        修复后与雪球一致要求 JSON Content-Type。
+        """
+        agent_db.platform_cookie_set("weibo", "SUB=expired")
+        weibo = next(p for p in config.SOCIAL_PLATFORMS if p["id"] == "weibo")
+
+        class HtmlResp:
+            status_code = 200
+            headers = {"Content-Type": "text/html; charset=UTF-8"}
+
+        monkeypatch.setattr("requests.get", lambda *a, **kw: HtmlResp())
+        ok, reason = reachability.probe_platform(weibo)
+        assert ok is False
+        assert "失效" in reason or "反爬" in reason
+
+    def test_weibo_probe_json_ok(self, monkeypatch):
+        """微博 Cookie 有效（200 + application/json）→ 可达。"""
+        agent_db.platform_cookie_set("weibo", "SUB=good")
+        weibo = next(p for p in config.SOCIAL_PLATFORMS if p["id"] == "weibo")
+
+        class JsonResp:
+            status_code = 200
+            headers = {"Content-Type": "application/json; charset=UTF-8"}
+
+        monkeypatch.setattr("requests.get", lambda *a, **kw: JsonResp())
+        ok, _ = reachability.probe_platform(weibo)
         assert ok is True
 
     def test_cookie_probe_403(self, monkeypatch):
@@ -458,6 +491,89 @@ class TestPlaywrightCollector:
         assert result["ok"] is False
         assert agent_db.reachability_get("weibo")["reachable"] is False
 
+    def test_weibo_html_blocked_raises_specific(self, monkeypatch):
+        """微博接口返回 HTML（登录态失效/反爬）→ 抛 WeiboHTMLBlocked 而非 JSONDecodeError。
+
+        2026-09-16 反爬变更：m.weibo.cn 对无登录态/被风控请求返回 HTTP 200 + text/html
+        登录页（不再是 JSON）。修复前 resp.json() 抛"Expecting value: line 1 column 1"，
+        修复后抛专门的 WeiboHTMLBlocked，让上层给出可读错误。
+        """
+        class FakeResp:
+            headers = {"Content-Type": "text/html; charset=UTF-8"}
+            text = "<!doctype html><html><head><title>登录</title></head></html>"
+
+            def raise_for_status(self):
+                return None
+
+        monkeypatch.setattr("requests.get", lambda *a, **k: FakeResp())
+        with pytest.raises(playwright_collector.WeiboHTMLBlocked):
+            playwright_collector._weibo_hot_items("SUB=abc", 10)
+
+    def test_weibo_html_blocked_readable_error(self, monkeypatch):
+        """collect_platform 对微博 HTML 反爬 → ok=False + 可读错误（不再"Expecting value"）。"""
+        agent_db.platform_cookie_set("weibo", "SUB=abc")
+
+        class FakeResp:
+            headers = {"Content-Type": "text/html"}
+            text = "<!doctype html><html></html>"
+
+            def raise_for_status(self):
+                return None
+
+        monkeypatch.setattr("requests.get", lambda *a, **k: FakeResp())
+        result = playwright_collector.collect_platform("weibo")
+        assert result["ok"] is False
+        assert "Expecting value" not in result["error"]
+        assert "登录态失效" in result["error"] or "反爬" in result["error"]
+        assert agent_db.reachability_get("weibo")["reachable"] is False
+
+    def test_collect_weibo_invalid_creates_expired_todo(self, monkeypatch):
+        """微博 Cookie 失效（采集被反爬）→ 生成"失效"待办让用户重新提供（2026-09-16）。
+
+        之前只有无 Cookie 才生成待办；失效 Cookie 采集失败只回写 reachability，
+        不触发待办 → 用户永远不知道 Cookie 失效。修复：失效也触发待办。
+        """
+        agent_db.platform_cookie_set("weibo", "SUB=expired")
+
+        class HtmlResp:
+            status_code = 200
+            headers = {"Content-Type": "text/html"}
+
+            def raise_for_status(self):
+                return None
+
+        monkeypatch.setattr("requests.get", lambda *a, **k: HtmlResp())
+        result = playwright_collector.collect_platform("weibo")
+        assert result["ok"] is False
+        # 应生成失效待办（todo_type=cookie_provide，platform_id=weibo，content 含"失效"）
+        todos = [
+            n for n in agent_db.notice_list(kind="todo", status="open", limit=50)
+            if n.get("todo_type") == "cookie_provide"
+            and (n.get("todo_data") or {}).get("platform_id") == "weibo"
+        ]
+        assert todos, "Cookie 失效应生成待办"
+        assert "失效" in todos[0]["content"]
+
+    def test_weibo_json_ok(self, monkeypatch):
+        """微博接口正常返回 JSON → 解析出热榜条目。"""
+        class FakeResp:
+            headers = {"Content-Type": "application/json; charset=UTF-8"}
+            text = '{"data": {"cards": [{"card_group": [{"desc": "热搜一", "id": "1"}]}]}}'
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                import json as _json
+
+                return _json.loads(self.text)
+
+        monkeypatch.setattr("requests.get", lambda *a, **k: FakeResp())
+        items = playwright_collector._weibo_hot_items("SUB=abc", 10)
+        assert len(items) == 1
+        assert items[0]["title"] == "热搜一"
+        assert items[0]["url"].endswith("/status/1")
+
 
 # ═══════════════════════════════════════════
 # behavior.execute_browse：采集→浏览→动态直接发
@@ -470,6 +586,75 @@ class TestExecuteBrowse:
         result = behavior.execute_browse("weibo")
         assert result["ok"] is False
         assert "Cookie" in result["error"]
+
+    def test_browse_failure_note_no_duplicate_prefix(self, monkeypatch):
+        """采集失败 → 活动 note 不出现"采集失败：采集失败:"重复前缀。
+
+        2026-09-16 修复：collect_platform 的 error 已带"采集失败: "前缀，
+        execute_browse 不再重复包裹（原写法产生"采集失败：采集失败: ..."）。
+        """
+        agent_db.platform_cookie_set("weibo", "SUB=abc")
+        monkeypatch.setattr(
+            playwright_collector,
+            "collect_platform",
+            lambda pid, db=None: {
+                "platform_id": pid, "ok": False, "collected": 0,
+                "error": "采集失败: 微博接口返回 text/html（登录态失效/被反爬，非 JSON）",
+            },
+        )
+        result = behavior.execute_browse("weibo")
+        assert result["ok"] is False
+        # 活动记录（做过的事）note 应只有一层"采集失败："
+        act = agent_db.activity_open()  # 刚结束的 browse 活动（已关闭）
+        latest = agent_db.activity_list(limit=1)
+        assert latest, "应存在逛微博活动记录"
+        note = latest[0].get("note") or ""
+        assert note.startswith("采集失败：")
+        assert note.count("采集失败") == 1, f"note 不应重复前缀: {note!r}"
+
+    def test_browse_skips_when_cookie_invalid_cached(self, monkeypatch):
+        """逛前快检：reachability 缓存判微博 Cookie 失效 → 不执行采集，直接失败 + 失效待办。
+
+        2026-09-16：用户要求"逛之前先检查 Cookie 有效性"。缓存不可达（登录态失效/
+        被反爬）时跳过 collect_platform（避免浪费逛动作），并确保失效待办存在。
+        """
+        agent_db.platform_cookie_set("weibo", "SUB=expired")
+        agent_db.reachability_set("weibo", False, "Cookie 失效或探测失败")
+        collect_called = []
+
+        def fake_collect(pid, db=None):
+            collect_called.append(pid)
+            return {"platform_id": pid, "ok": True, "collected": 0, "added": 0}
+
+        monkeypatch.setattr(playwright_collector, "collect_platform", fake_collect)
+        result = behavior.execute_browse("weibo")
+        assert result["ok"] is False
+        assert result.get("skipped") == "cookie_invalid"
+        assert collect_called == []  # 未执行真实采集
+        # 失效待办已生成
+        todos = [
+            n for n in agent_db.notice_list(kind="todo", status="open", limit=50)
+            if n.get("todo_type") == "cookie_provide"
+            and (n.get("todo_data") or {}).get("platform_id") == "weibo"
+        ]
+        assert todos and "失效" in todos[0]["content"]
+        # 活动记录 note 说明未逛原因
+        latest = agent_db.activity_list(limit=1)
+        assert "Cookie 失效" in (latest[0].get("note") or "")
+
+    def test_browse_proceeds_when_cookie_reachable_cached(self, monkeypatch):
+        """逛前快检：缓存判可达 → 正常执行采集（collect_platform 被调用）。"""
+        agent_db.platform_cookie_set("weibo", "SUB=abc")
+        agent_db.reachability_set("weibo", True, "Cookie 探测通过")
+        collect_called = []
+
+        def fake_collect(pid, db=None):
+            collect_called.append(pid)
+            return {"platform_id": pid, "ok": False, "collected": 0, "error": "x"}
+
+        monkeypatch.setattr(playwright_collector, "collect_platform", fake_collect)
+        behavior.execute_browse("weibo")
+        assert collect_called == ["weibo"]  # 缓存可达 → 继续采集
 
     def test_browse_success_posts_direct(self, monkeypatch):
         """采集成功 + 阅读产出动态 → 直接发（kind=post）。"""

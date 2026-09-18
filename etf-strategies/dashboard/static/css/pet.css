@@ -73,6 +73,11 @@
 .xm-pet[data-state="slack"] .xm-pet-fallback {
   filter: saturate(1.08) brightness(1.02);
 }
+/* 工作中：专注干活，角色正常全彩显示（显式声明，与降级态区分） */
+.xm-pet[data-state="working"] .xm-pet-canvas,
+.xm-pet[data-state="working"] .xm-pet-fallback {
+  filter: none;
+}
 /* 思考中：轻微冷色偏移，酝酿灵感 */
 .xm-pet[data-state="thinking"] .xm-pet-canvas,
 .xm-pet[data-state="thinking"] .xm-pet-fallback {
