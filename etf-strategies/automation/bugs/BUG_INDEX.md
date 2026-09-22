@@ -11,7 +11,7 @@
 |------|------|
 | OPEN | 0 |
 | IN_PROGRESS | 0 |
-| FIXED | 32 |
+| FIXED | 35 |
 | VERIFIED | 1 |
 | WONT_FIX | 1 |
 | MANUAL_REVIEW | 8 |
@@ -83,6 +83,9 @@
 | BUG-042 | test_agent_api chat测试未适配xiaoman_online上线闸门:client夹具未设meta,4项chat用例命中429(agent/api.py:453-457),BUG-035修复后暴露,同BUG-024族 | tests | MEDIUM | FIXED | 2026-09-14 |
 | BUG-043 | 11/13活跃ETF缓存缺09-14官方收盘bar(另510300的09-14 bar为盘中partial,量能仅71.2%):缓存未随最后一个完整交易日推进,REQ-001同根因族第6次复发 | data | HIGH | FIXED | 2026-09-15 |
 | BUG-044 | 5个非活跃cache缓存缺09-14官方bar(002142/159227/159326/512100/601398,止于09-11,BUG-041同集合第5次复发) | data | MEDIUM | FIXED | 2026-09-15 |
+| BUG-045 | 活跃ETF 513100(纳指ETF)缺09-21官方收盘bar(数据止于09-18,mtime新鲜但数据未推进,BUG-021/033同族) | data | HIGH | FIXED | 2026-09-22 |
+| BUG-046 | 非活跃cache缓存512100过期(mtime=09-15,缺09-15~09-21共5个bar,BUG-044同集合第6次复发) | data | MEDIUM | FIXED | 2026-09-22 |
+| BUG-047 | test_cloud_db.py单元测试未适配pgdirect后端迁移:`_mock_cloud` fixture只mock PostgREST路径,pgdirect下10项FAILED且误连真实云库触发认证限流 | tests | HIGH | FIXED | 2026-09-22 |
 <!-- BUG_TABLE_END -->
 
 ---
@@ -138,6 +141,9 @@
 | 2026-09-15 | 数据巡检 | 2 | 2 | 0 |
 | 2026-09-16 | 数据巡检 | 0 | 0 | 0 |
 | 2026-09-16 | 代码巡检 | 0 | 2 | 8 |
+| 2026-09-22 | 数据巡检 | 2 | 2 | 0 |
+| 2026-09-22 | 代码巡检 | 1 | 0 | 1 |
+| 2026-09-22 | 自动修复 | 0 | 1 | 0 |
 
 ---
 

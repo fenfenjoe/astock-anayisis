@@ -22,6 +22,11 @@ def _mock_cloud(monkeypatch, request):
         return
     monkeypatch.setattr(cloud_db, "_ENABLED", True)
     monkeypatch.setattr(cloud_db, "_req", lambda *a, **k: [])
+    # BUG-047(2026-09-22)：pgdirect 迁移后 conftest 未清 CLOUD_DB_BACKEND/PG*，
+    # 本文件 PostgREST 语义单元测试必须强制走 mocked _req 路径，禁止真实连接云库
+    # （否则 10 项 FAILED + 触发云端防爆破限流）。pgdirect 路径由 test_cloud_db_pg.py 专项覆盖。
+    monkeypatch.setattr(cloud_db, "_BACKEND", "postgrest")
+    monkeypatch.setattr(cloud_db, "_PG_ENABLED", False)
 
 
 # ═══════════════════════════════════════════
