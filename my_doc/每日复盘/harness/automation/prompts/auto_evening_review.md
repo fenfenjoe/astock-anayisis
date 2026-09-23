@@ -438,7 +438,7 @@ def board_scan(fs: str = "m:90+t:2", pz: int = 200) -> list:
 | 已过期 | 信号总表中状态="已过期"的数量 |
 | 已执行 | 从信号触发记录的"用户操作"列统计"已执行"数 |
 | 已废弃 | 信号总表中状态="已废弃"或"已取消"的数量 |
-| P0执行率 | 已执行的P0信号数 / 已触发的P0信号数（**REQ-007：调用 lib/p0_tracking.py calc_p0_execution_rate 计算，并纳入仪表盘硬指标 + 连续 2 日 <100% → P1 告警**，见 7.6.5） |
+| P0执行率 | 已执行的P0信号数 / （已执行+错过）的P0信号数（**REQ-007+REQ-010：调用 lib/p0_tracking.py calc_p0_execution_rate 计算；显式放弃单独披露不计入缺失，纳入仪表盘硬指标 + 连续 2 日 <100% → P1 告警 + 连续放弃≥2日→信号设计审视告警**，见 7.6.5） |
 | 遗漏信号数 | 7.3 中识别到的遗漏信号（如有） |
 | 高紧急度触发率 | 高紧急度信号中已触发数 / 高紧急度信号总数 |
 | 低紧急度触发率 | 低紧急度信号中已触发数 / 低紧急度信号总数 |
@@ -736,10 +736,11 @@ print(json.dumps(generate_quality_dashboard(db['signals'], settled), ensure_asci
 | 升级准确率 | {XX}%（盈利/已升级） |
 ```
 
-### 7.6.5 P0 执行追踪收尾（REQ-007，新增）
+### 7.6.5 P0 执行追踪收尾（REQ-007 + REQ-010）
 
 > 🚨 **P0 执行保障收尾**：收盘复盘对当日 P0 信号做**零容忍问责**（触发必须执行或显式放弃，不做结果论豁免），
-> 计算 P0 执行率（已执行 P0 / 已触发 P0）纳入信号质量仪表盘硬指标，连续 2 日 <100% 触发 P1 级告警。
+> 计算 P0 执行率（已执行 /（已执行+错过），**显式放弃单独披露不计入缺失，REQ-010**）纳入信号质量仪表盘硬指标，
+> 连续 2 日 <100% 触发 P1 级告警。
 
 **步骤 A：调用 lib/p0_tracking.py 收尾 P0 执行追踪**
 
@@ -747,7 +748,7 @@ print(json.dumps(generate_quality_dashboard(db['signals'], settled), ensure_asci
 python -X utf8 -c "
 import sys, json
 sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
-from lib.p0_tracking import parse_p0_signals, calc_p0_execution_rate, merge_p0_daily, check_p0_alert
+from lib.p0_tracking import parse_p0_signals, calc_p0_execution_rate, merge_p0_daily, check_p0_alert, check_p0_abandon_alert
 from datetime import date
 
 today = date.today().strftime('%Y%m%d')  # ⚠️ 文件路径用 yyyyMMdd（同 §7.6.1）
@@ -760,9 +761,11 @@ with open(signal_file, encoding='utf-8') as f:
 
 records = parse_p0_signals(md, today_iso)
 summary = calc_p0_execution_rate(records)
-print(f'P0 触发={summary[\"triggered\"]} 已执行={summary[\"executed\"]} 执行率={summary[\"rate\"]}')
+print(f'P0 触发={summary[\"triggered\"]} 已执行={summary[\"executed\"]} 显式放弃={summary[\"waived\"]} 错过={summary[\"missed\"]} 执行率={summary[\"rate\"]}')
+if summary['waived_ids']:
+    print('显式放弃 P0:', ', '.join(summary['waived_ids']))
 if summary['unexecuted_ids']:
-    print('未执行 P0:', ', '.join(summary['unexecuted_ids']))
+    print('错过（应执行未执行）P0:', ', '.join(summary['unexecuted_ids']))
 
 # 跨日库合并（幂等）
 with open(p0_file, encoding='utf-8') as f:
@@ -771,9 +774,13 @@ store = merge_p0_daily(store, today_iso, summary)
 with open(p0_file, 'w', encoding='utf-8') as f:
     json.dump(store, f, indent=2, ensure_ascii=False)
 
-# 连续 2 日 <100% → P1 告警
+# 连续 2 日 <100% → P1 告警（REQ-007）
 alert = check_p0_alert(store)
 print(json.dumps(alert, ensure_ascii=False))
+
+# 连续放弃阈值 → 信号设计审视告警（REQ-010 防滥用，默认 ≥2 日）
+abandon = check_p0_abandon_alert(store)
+print(json.dumps(abandon, ensure_ascii=False))
 "
 ```
 
@@ -781,26 +788,30 @@ print(json.dumps(alert, ensure_ascii=False))
 
 - 对每条 P0 信号，按 lib `finalize_p0_result` 的判定规则将最终结果填入该信号全部行的 `最终结果` 列：
   - 用户操作 ∈ {已执行, 部分执行} → `已执行`
-  - 用户操作 = 放弃 → `未执行（放弃）`（合法终态，不问责）
+  - 用户操作/响应状态 含"放弃"（放弃/显式放弃/已取消（显式放弃））→ `显式放弃`（合法终态，不问责；REQ-010 措辞，旧值 `未执行（放弃）` 兼容解析）
   - 其余（含全程 待填 / 错过 / 14:45 截止未响应）→ `未执行（错过）` → **零容忍问责**（执行质量 D）
 - 盘中已标 `已过期（14:45截止未执行）` 的保持原状
 
-**步骤 C：P0 执行率渲染入信号质量仪表盘（REQ-007 硬指标）**
+**步骤 C：P0 执行率渲染入信号质量仪表盘（REQ-007 硬指标 + REQ-010 口径）**
 
-在 §7.6.4 信号质量仪表盘表格中**追加一行**：
+在 §7.6.4 信号质量仪表盘表格中**追加两行**：
 
 | 维度 | 指标 | 数值 | 阈值/目标 | 状态 |
 |------|------|------|----------|:---:|
-| 执行 | P0 执行率（当日） | {rate}%（{executed}/{triggered}） | 100%（零容忍） | ✅/🚨 |
+| 执行 | P0 执行率（当日） | {rate}%（{executed}/{executed+missed}） | 100%（零容忍） | ✅/🚨 |
+| 执行 | P0 显式放弃（当日） | {waived} 次（{waived_ids}） | 连续≥2日审视信号设计 | ✅/🚨 |
 
-- 当日无 P0 触发 → 数值填"—（无触发）"，状态 ✅（不构成告警）
+- 当日无应执行 P0（executed+missed=0）→ 执行率数值填"—（无应执行）"，状态 ✅（不构成告警）
 - 状态判定：rate == 100.0 → ✅；rate < 100.0 → 🚨（并结合步骤 A 的连续天数告警）
+- 显式放弃行：当日有显式放弃且步骤 A 的 abandon 告警触发 → 🚨，否则 ✅
 
-**步骤 D：P1 级告警（连续 2 日 <100%）**
+**步骤 D：P1 级告警（连续 2 日 <100% + 连续放弃阈值）**
 
 - 步骤 A 输出 `alert.alert == true` → 在复盘报告中输出：
   > 🚨 **P1 级告警（REQ-007）**：P0 执行率连续 {streak} 日 <100%（{alert.message}）
-- 同时将告警写入 `PENDING_CONFIRMATION.md`（用户必须确认执行缺失根因与整改措施）
+- 步骤 A 输出 `abandon.alert == true` → 在复盘报告中输出：
+  > 🚨 **P1 级告警（REQ-010 防滥用）**：P0 显式放弃连续 {abandon.streak} 日 ≥2（{abandon.message}）
+- 同时将告警写入 `PENDING_CONFIRMATION.md`（用户必须确认执行缺失根因与整改措施 / 审视信号设计放弃线）
 
 ### 8.7 写入验证（‼️ 硬性门禁，禁止跳过；任务4 改为验证云库）
 
@@ -1371,9 +1382,26 @@ else:
 >
 > 排序：当前持仓在前（按代码排序），已清仓标的在后（按代码排序）。
 
+### 第十二步-HTML：同步产出 `复盘报告.html`（2026-10 起强制）
+
+在 `复盘报告.md` 定稿后，**必须**再产出一份同内容的 **`my_doc/每日复盘/reports/{today}/复盘报告.html`**，供 Dashboard「报告」页展示（Dashboard 展示 HTML 版；`.md` 保留供自动化解析）。
+
+**规则**：
+1. 严格遵循 `my_doc/每日复盘/harness/prompts/报告HTML样式指南.md`（Tech Noir 暗色设计系统，组件库复制即用）。
+2. 内容与 `.md` **完全一致**（同一数据/结论/评分），仅呈现形式升级：
+   - 顶部 KPI 卡片组（大盘涨跌/市场情绪/信号胜率/持仓盈亏等 3-4 张）
+   - 持仓评分/信号胜率 → `.rp-table` 彩色行 + `.rp-score-row` 评分条
+   - 做T复盘/信号结算 → `.rp-badge`；风险/经验 → `.rp-risks`/`.rp-callout`
+3. 完整 HTML 文档（`<!DOCTYPE html>` + 内嵌 `<style>`），自包含、零 JS、零外链、零事件属性。
+4. 每个模块**结论置顶**；连续纯文字段落 ≤3 行。
+
 ---
 
 ## 第十三步：报告审阅（2-3轮自检）
+
+> **职责声明（P0b）**：本节为**生成者自检**——修正报告质量（第一道防线），**不产生质量分**。
+> 质量分由独立只读评审任务 `report_quality_review`（交易日 17:20）产出（Generator-Evaluator 分离）。
+> 自检修正后报告即定稿，分数交给独立评审者，二者互不干扰。
 
 按照 `harness/experience/报告审阅经验.md` 的检查清单逐项核验：
 1. 数据核验轮（16 项）
@@ -1543,7 +1571,7 @@ er = state['tasks']['evening_review']
 er['status'] = 'completed'
 er['completed_at'] = datetime.now().isoformat()
 er['staging_generated'] = True
-er['outputs'] = ['复盘报告.md', 'staging/今日-早盘分析.md', 'staging/今日-复盘分析.md', '每日信号.md(已回填评价)']
+er['outputs'] = ['复盘报告.md', '复盘报告.html', 'staging/今日-早盘分析.md', 'staging/今日-复盘分析.md', '每日信号.md(已回填评价)']
 json.dump(state, open(path, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
 print('task_state evening_review → completed, staging_generated=true')
 "
@@ -1579,6 +1607,19 @@ if os.path.exists(report_path):
         errors.append(f'复盘报告存在但非今日生成 (mtime={mtime.strftime(\"%Y-%m-%d\")})')
 else:
     errors.append(f'复盘报告不存在: {report_path}')
+
+# 1b. 验证复盘报告 HTML 版（2026-10 起强制产出，供 Dashboard 展示）
+report_html_path = f'my_doc/每日复盘/reports/{today_ymd}/复盘报告.html'
+if os.path.exists(report_html_path):
+    with open(report_html_path, 'r', encoding='utf-8') as f:
+        html_content = f.read()
+    if '<!DOCTYPE html>' not in html_content.upper() or '<style>' not in html_content:
+        errors.append(f'复盘报告.html 不是完整 HTML 文档（缺 DOCTYPE 或 <style>）: {report_html_path}')
+    else:
+        mtime = datetime.fromtimestamp(os.path.getmtime(report_html_path))
+        print(f'✅ 复盘报告.html: {report_html_path} ({len(html_content)/1024:.1f}KB, {mtime.strftime(\"%H:%M\")})')
+else:
+    errors.append(f'复盘报告.html 不存在: {report_html_path}')
 
 # 2. 验证早盘分析 staging
 morning_staging = 'my_doc/每日复盘/harness/staging/今日-早盘分析.md'

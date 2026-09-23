@@ -137,9 +137,9 @@ class TestFinalizeP0Result:
         assert recs[0]['final_result'] == '已执行'
 
     def test_abandoned(self):
-        """用户操作=放弃 → 最终结果 未执行（放弃）（显式放弃为合法终态）。"""
+        """用户操作=放弃 → 最终结果 显式放弃（合法终态，REQ-010 措辞；旧值'未执行（放弃）'兼容解析）。"""
         recs = finalize_p0_result([_mk_rec('SIG-C', ['放弃'])])
-        assert recs[0]['final_result'] == '未执行（放弃）'
+        assert recs[0]['final_result'] == '显式放弃'
 
     def test_missed(self):
         """用户操作=错过 → 最终结果 未执行（错过）。"""

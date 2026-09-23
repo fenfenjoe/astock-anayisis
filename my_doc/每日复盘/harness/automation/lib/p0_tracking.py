@@ -23,13 +23,39 @@ _P0_SECTION = '## P0 执行追踪'
 
 # 用户操作列取值（与 auto_morning_analysis.md §5.2 触发记录规范一致）
 _EXECUTED_ACTIONS = {'已执行', '部分执行'}
-_ABANDONED_ACTIONS = {'放弃'}
+_ABANDONED_ACTIONS = {'放弃', '显式放弃'}
 
 # 已执行终态（最终结果列取值）
 _EXECUTED_FINAL = '已执行'
+# 显式放弃合法终态（REQ-010：从 REQ-007 的 '未执行（放弃）' 演进为 '显式放弃'）
+_WAIVED_FINAL = '显式放弃'
+# 错过终态（应执行未执行，零容忍问责）
+_MISSED_FINAL = '未执行（错过）'
+# 兼容 REQ-007 旧措辞的放弃终态（历史 markdown / 跨日库条目）
+_LEGACY_WAIVED_FINALS = {'未执行（放弃）'}
 
 # 最终结果列的占位值（= 未填）
 _PLACEHOLDER = '—'
+
+
+def _is_executed_cell(cell: str) -> bool:
+    """单元格是否表示"已执行/部分执行"（用户操作列或响应状态列）。"""
+    cell = cell.strip()
+    return cell == '已执行' or cell == '部分执行' or cell.startswith('已执行')
+
+
+def _is_waived_cell(cell: str) -> bool:
+    """单元格是否表示"显式放弃"（用户操作列/响应状态列/最终结果列）。
+
+    兼容形态：放弃 / 显式放弃 / 已放弃 / 已取消（显式放弃）/ 未执行（放弃）。
+    """
+    return '放弃' in cell
+
+
+def _is_waived_final(final: str) -> bool:
+    """最终结果是否属于显式放弃（合法终态，含 REQ-007 旧措辞）。"""
+    final = (final or '').strip()
+    return final in _LEGACY_WAIVED_FINALS or final == _WAIVED_FINAL or '显式放弃' in final
 
 
 def _strip_md(cell: str) -> str:
@@ -164,9 +190,12 @@ def finalize_p0_result(p0_signals: list[dict]) -> list[dict]:
 
     判定规则（优先级从上到下，任一满足即止）：
       1. 已存在最终结果（如盘中标 '已过期'）→ 保留
-      2. 任一检查点 用户操作 ∈ {已执行, 部分执行} → '已执行'
-      3. 任一检查点 用户操作 == '放弃' → '未执行（放弃）'（显式放弃为合法终态）
+      2. 任一检查点 用户操作/响应状态 ∈ {已执行, 部分执行} → '已执行'
+      3. 任一检查点 用户操作/响应状态 含"放弃"（放弃/显式放弃/已取消（显式放弃））→ '显式放弃'（合法终态）
       4. 其余（含全程 待填 / 错过）→ '未执行（错过）'（触发必须执行或显式放弃，否则问责）
+
+    REQ-010 非法路径：同一 P0 既出现"放弃"又出现"执行"（放弃后仍执行，或执行后声明放弃）
+    → 结果按 '已执行'（执行是实际动作，比声明优先），并在记录上标注 transition_warning。
     """
     import copy
     result = copy.deepcopy(p0_signals)
@@ -175,13 +204,23 @@ def finalize_p0_result(p0_signals: list[dict]) -> list[dict]:
         if rec.get('final_result') and rec.get('final_result') != _PLACEHOLDER:
             continue
 
-        actions = {cp.get('user_action', '').strip() for cp in rec.get('checkpoints', [])}
-        if actions & _EXECUTED_ACTIONS:
+        checkpoints = rec.get('checkpoints', [])
+        any_executed = any(
+            _is_executed_cell(cp.get('user_action', '')) or _is_executed_cell(cp.get('status', ''))
+            for cp in checkpoints
+        )
+        any_waived = any(
+            _is_waived_cell(cp.get('user_action', '')) or _is_waived_cell(cp.get('status', ''))
+            for cp in checkpoints
+        )
+        if any_executed:
             rec['final_result'] = _EXECUTED_FINAL
-        elif actions & _ABANDONED_ACTIONS:
-            rec['final_result'] = '未执行（放弃）'
+            if any_waived:
+                rec['transition_warning'] = '放弃后仍执行（非法路径，最终结果按已执行）'
+        elif any_waived:
+            rec['final_result'] = _WAIVED_FINAL
         else:
-            rec['final_result'] = '未执行（错过）'
+            rec['final_result'] = _MISSED_FINAL
     return result
 
 
@@ -190,24 +229,38 @@ def finalize_p0_result(p0_signals: list[dict]) -> list[dict]:
 # ============================================================
 
 def calc_p0_execution_rate(p0_signals: list[dict]) -> dict:
-    """P0 执行率 = 已执行 P0 / 已触发 P0（百分比，保留 1 位小数）。
+    """P0 执行率 = 已执行 P0 / 应执行 P0（已执行+错过），显式放弃单独披露（REQ-010）。
 
     返回:
-        {'triggered': int, 'executed': int, 'rate': float|None, 'unexecuted_ids': [str]}
-    - triggered = 已触发 P0 数（本模块只追踪已触发 P0，故 = len(p0_signals)）
-    - executed  = 最终结果为 '已执行' 的 P0 数
-    - rate      = executed/triggered*100；triggered==0 → None
+        {
+            'triggered': int,        # 总触发 = 已执行 + 显式放弃 + 错过（3 类）
+            'executed': int,         # 已执行数
+            'waived': int,           # 显式放弃数（合法终态，单独披露，不计入缺失）
+            'missed': int,           # 错过数（应执行未执行，零容忍问责）
+            'rate': float|None,      # executed/(executed+missed)*100；无应执行项 → None
+            'unexecuted_ids': [str], # 仅错过（应执行未执行）的 signal_id
+            'waived_ids': [str],     # 显式放弃的 signal_id
+        }
     """
     finalized = finalize_p0_result(p0_signals)
-    triggered = len(finalized)
     executed = sum(1 for r in finalized if r.get('final_result') == _EXECUTED_FINAL)
-    unexecuted = [r['signal_id'] for r in finalized if r.get('final_result') != _EXECUTED_FINAL]
-    rate = round(executed / triggered * 100, 1) if triggered else None
+    waived = sum(1 for r in finalized if _is_waived_final(r.get('final_result', '')))
+    missed = len(finalized) - executed - waived
+    denom = executed + missed
+    rate = round(executed / denom * 100, 1) if denom else None
+    unexecuted_ids = [
+        r['signal_id'] for r in finalized
+        if r.get('final_result') != _EXECUTED_FINAL and not _is_waived_final(r.get('final_result', ''))
+    ]
+    waived_ids = [r['signal_id'] for r in finalized if _is_waived_final(r.get('final_result', ''))]
     return {
-        'triggered': triggered,
+        'triggered': len(finalized),
         'executed': executed,
+        'waived': waived,
+        'missed': missed,
         'rate': rate,
-        'unexecuted_ids': unexecuted,
+        'unexecuted_ids': unexecuted_ids,
+        'waived_ids': waived_ids,
     }
 
 
@@ -272,3 +325,46 @@ def check_p0_alert(store: dict) -> dict:
         message = "✅ P0 执行率 100%（或当日无 P0 触发）"
 
     return {'alert': alert, 'streak': trailing_streak, 'max_streak': max_streak, 'message': message}
+
+
+# ============================================================
+# 连续显式放弃阈值 → 告警审视信号设计（REQ-010，防滥用）
+# ============================================================
+
+def check_p0_abandon_alert(store: dict, threshold: int = 2) -> dict:
+    """显式放弃连续 ≥threshold 日 → 告警审视信号设计（防"显式放弃"被滥用）。
+
+    口径：按**日历日连续**扫描——最近一段"每个交易日都有显式放弃"的连续 run。
+    - daily 中 waived 为 0 的条目视为中断（即使中间有非交易日，也以 recorded 的相邻日期判断）。
+    - 返回 {'alert': bool, 'streak': int, 'message': str}
+      streak = 最近连续有显式放弃的 recorded 天数（相邻 recorded 日期同日历序列视为连续）。
+    - threshold 默认 2（REQ-010 建议：连续 ≥2 次放弃 → 审视信号设计）。
+    """
+    daily = store.get('daily', {})
+    # 只取 recorded 的日期（含 waived=0 的中断标记）
+    dates = sorted(daily.keys())
+    if not dates:
+        return {'alert': False, 'streak': 0,
+                'message': '✅ 无显式放弃（或未达连续放弃告警阈值）'}
+
+    # 从最近一天向前扫描连续"有显式放弃"的 run；waived<=0 视为中断
+    trailing_streak = 0
+    for d in reversed(dates):
+        waived = daily[d].get('waived', 0) or 0
+        if waived <= 0:
+            break
+        # 相邻 recorded 日期视为日历连续（daily 键为 YYYY-MM-DD，自然排序即时间序）
+        trailing_streak += 1
+
+    alert = trailing_streak >= threshold
+    if alert:
+        message = (
+            f"🚨 P1 告警：P0 显式放弃连续 {trailing_streak} 日 ≥{threshold}（REQ-010 防滥用阈值）"
+            f"——请审视信号设计：放弃线是否过高/触发条件是否过松"
+        )
+    elif trailing_streak == 1:
+        message = "⚠️ P0 显式放弃 1 日，连续 2 日将触发信号设计审视告警"
+    else:
+        message = "✅ 无显式放弃（或未达连续放弃告警阈值）"
+
+    return {'alert': alert, 'streak': trailing_streak, 'message': message}
