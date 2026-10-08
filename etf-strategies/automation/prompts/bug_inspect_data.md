@@ -107,7 +107,7 @@ for f in glob.glob('cache/*.parquet'):
 cd etf-strategies
 python -c "
 import pandas as pd, glob, os, sys
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 # 收集所有策略使用的 ETF
 # BUG-017 修复: 对策略"类"用 hasattr(s,'assets') 取到的是 base.py 类属性空列表 []
@@ -122,6 +122,20 @@ for cls in STRATEGIES:
     except Exception:
         pass
 
+# BUG-056 修复: 数据完整性判定由「自然日 >3 天」改为「交易日」口径。
+# 缓存末日期不得早于「最近一个完整交易日」; 跨长假(如国庆 09-30→10-08)不再误报。
+sys.path.insert(0, os.path.join(os.path.abspath('..'), 'my_doc', '每日复盘', 'harness', 'automation', 'config'))
+from trading_calendar import is_trading_day
+
+def last_complete_trading_day(today):
+    '''最近一个已收盘的完整交易日: 盘中(未到15:00)取前一个交易日, 收盘后/非交易日取最近交易日'''
+    d = today
+    if is_trading_day(today) and datetime.now().time() < time(15, 0):
+        d = today - timedelta(days=1)   # 今日 bar 未收盘定型
+    while not is_trading_day(d):
+        d -= timedelta(days=1)
+    return d
+
 # 检查每个 ETF 的缓存
 missing_data = []
 for etf in all_etfs:
@@ -131,8 +145,8 @@ for etf in all_etfs:
     else:
         df = pd.read_parquet(cache_file)
         last_date = df.index[-1].date()
-        if (datetime.now().date() - last_date).days > 3:
-            missing_data.append(f'{etf}: 最后数据日期={last_date}（>3天前）')
+        if last_date < last_complete_trading_day(datetime.now().date()):
+            missing_data.append(f'{etf}: 最后数据日期={last_date}（早于最近完整交易日）')
 
 if missing_data:
     print('DATA INCOMPLETE:')
