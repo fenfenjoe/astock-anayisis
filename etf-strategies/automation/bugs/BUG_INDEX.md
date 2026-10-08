@@ -9,9 +9,9 @@
 
 | 状态 | 数量 |
 |------|------|
-| OPEN | 0 |
+| OPEN | 1 |
 | IN_PROGRESS | 0 |
-| FIXED | 35 |
+| FIXED | 41 |
 | VERIFIED | 1 |
 | WONT_FIX | 1 |
 | MANUAL_REVIEW | 8 |
@@ -86,6 +86,13 @@
 | BUG-045 | 活跃ETF 513100(纳指ETF)缺09-21官方收盘bar(数据止于09-18,mtime新鲜但数据未推进,BUG-021/033同族) | data | HIGH | FIXED | 2026-09-22 |
 | BUG-046 | 非活跃cache缓存512100过期(mtime=09-15,缺09-15~09-21共5个bar,BUG-044同集合第6次复发) | data | MEDIUM | FIXED | 2026-09-22 |
 | BUG-047 | test_cloud_db.py单元测试未适配pgdirect后端迁移:`_mock_cloud` fixture只mock PostgREST路径,pgdirect下10项FAILED且误连真实云库触发认证限流 | tests | HIGH | FIXED | 2026-09-22 |
+| BUG-048 | persona.md上移后/api/agent/profile的basic节解析为空,test_profile_returns_basic_and_activity失败(全量700passed/1failed) | tests | MEDIUM | FIXED | 2026-10-08 |
+| BUG-051 | 7个活跃ETF缓存缺09-22官方收盘bar(510500/511260/511880/512010/512480/512660/512800,止于09-21,BUG-043/045同族) | data | HIGH | FIXED | 2026-09-23 |
+| BUG-052 | 活跃ETF 513100(纳指ETF)09-22缓存bar为盘中partial(量能仅76.5%,收盘偏离+0.13%,BUG-040同族) | data | HIGH | FIXED | 2026-09-23 |
+| BUG-053 | 7个非活跃cache缓存缺09-22 bar(002142/159227/159326/159992/512100/515880/601398,止于09-21,BUG-044/046同集合) | data | MEDIUM | FIXED | 2026-09-23 |
+| BUG-054 | 4个活跃ETF缓存含10-08盘中partial bar(159915/510180/513100/518880,BUG-040族复发,REQ-001覆盖,需收盘后补全) | data | HIGH | OPEN | 2026-10-08 |
+| BUG-055 | 非活跃缓存512100过期(止于09-22,缺09-23~09-30共5个交易日bar,BUG-053同集合第7次复发,巡检轮已补拉修复) | data | MEDIUM | FIXED | 2026-10-08 |
+| BUG-056 | bug_inspect_data第四步用自然日>3天判断,跨国庆误报9个活跃ETF数据缺失(09-30为节前最后交易日,应改交易日口径) | data | LOW | FIXED | 2026-10-08 |
 <!-- BUG_TABLE_END -->
 
 ---
@@ -144,6 +151,10 @@
 | 2026-09-22 | 数据巡检 | 2 | 2 | 0 |
 | 2026-09-22 | 代码巡检 | 1 | 0 | 1 |
 | 2026-09-22 | 自动修复 | 0 | 1 | 0 |
+| 2026-09-23 | 代码巡检 | 1 | 0 | 1 |
+| 2026-09-23 | 数据巡检 | 3 | 3 | 0 |
+| 2026-10-08 | 数据巡检 | 3 | 1 | 2 |
+| 2026-10-08 | 代码巡检 | 0 | 1 | 2 |
 
 ---
 
