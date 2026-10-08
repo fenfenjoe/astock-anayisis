@@ -532,67 +532,78 @@ print(f'云库信号总数: {len(cloud_signals)} 条')
   - 对状态="已升级"的原观察信号 → 在原记录中追加 `upgraded_to` 字段，存储新操作信号ID
   - 这建立双向链接，便于跨日追踪升级信号的质量（升级后信号盈利=升级决策正确）
 
-#### 7.6.1b 复盘关联"录入交易" → 回填 entry_price/entry_time（任务4 新增，2026-09-14）
+#### 7.6.1b 信号-成交对账：匹配"录入交易"→ 置信号已执行（P0 修复 2026-09-24）
 
 > **CHAT.md 任务4 硬性要求**："复盘分析时检查『录入交易』中的交易记录，记录买入价/买入时间"。
-> 买入价/买入时间写入云库 `entry_price`/`entry_time`，供 Dashboard「信号触发记录」表展示。
-> 数据源：dashboard「持仓/资产」录入的调仓（写本地 `每日调仓.md`）+ `portfolio_trades` 表。
+> **P0 修复（2026-09-24）**：旧逻辑只回填 entry_price/entry_time、**从不把 status 置为 executed**，
+> 导致用户真实执行的信号在结算统计里永远算"未执行"（执行率恒 0）。改为对账逻辑：
+> 匹配成交（优先按 remark 信号 ID，兜底同日+同码+同向）→ **status=executed** + entry_price + entry_time。
+> 数据源：本地 `每日调仓.md`（Dashboard「持仓/资产」录入的同源）+ `signal_tracking.json`。
 
-**执行**：读当日 `每日调仓.md`（或 `portfolio_trades`）中的交易记录，对每个有交易的标的，匹配当日已触发/已执行的信号（同 ticker），把 买入价 + 买入时间 写云库：
+**执行**（用 `lib/signal_reconcile.py` 纯函数，只读本地文件 + 写云库）：
 
 ```bash
 python -c "
 import sys, json, re
 sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.signal_reconcile import match_trades, apply_matches, summarize_reconcile
 from lib.signal_tracking_cloud import cloud_load_signals, cloud_update_fields, cloud_enabled
-from datetime import date
 
-today_ymd = date.today().strftime('%Y%m%d')
-iso = date.today().isoformat()
-
-# 1. 读当日录入交易（每日调仓.md 的调仓记录表；无则读本地 JSON 兜底）
-trades = []  # [{code, name, side, price, time?}]
-tiao_file = 'my_doc/每日复盘/每日调仓.md'
+# 1. 读信号档案（云库优先，本地 JSON 兜底——本地是完整档案）
 try:
-    text = open(tiao_file, encoding='utf-8').read()
-    # 解析调仓记录表行：| 日期 | 名称(代码) | 买卖 | 数量 | 价格 | 备注 |
-    for line in text.splitlines():
-        if '|' not in line or '代码' in line or '日期' in line or '---' in line:
-            continue
-        cells = [c.strip() for c in line.strip().strip('|').split('|')]
-        if len(cells) < 5:
-            continue
-        m = re.search(r'(\d{6})', cells[1])
-        if m and cells[2] in ('买入', '卖出'):
-            trades.append({'code': m.group(1), 'name': cells[1], 'side': cells[2],
-                           'price': float(re.sub(r'[^\d.]', '', cells[4]) or 0)})
-except FileNotFoundError:
-    trades = []
-print(f'当日录入交易: {len(trades)} 条')
+    signals = cloud_load_signals()
+    print(f'信号源: 云库 ({len(signals)} 条)')
+except Exception:
+    signals = json.load(open('my_doc/每日复盘/harness/automation/config/signal_tracking.json', encoding='utf-8'))['signals']
+    print(f'信号源: 本地 JSON ({len(signals)} 条)')
 
-# 2. 取云库当日信号，按 ticker 匹配交易 → 回填 entry_price/entry_time
-if not cloud_enabled():
-    print('云库不可用，跳过 entry 回填（不阻塞流程）')
+# 2. 读当日录入交易（每日调仓.md，与 Dashboard 同源）
+trades = []
+text = open('my_doc/每日复盘/每日调仓.md', encoding='utf-8').read()
+for line in text.splitlines():
+    if '|' not in line or '代码' in line or '日期' in line or '---' in line:
+        continue
+    cells = [c.strip() for c in line.strip().strip('|').split('|')]
+    if len(cells) < 6:
+        continue
+    m_date = re.search(r'(\d{4})-(\d{2})-(\d{2})', cells[0])
+    m_code = re.search(r'(\d{6})', cells[2])
+    if m_date and m_code and cells[5] in ('买入', '卖出'):
+        trades.append({'trade_date': f'{m_date.group(1)}-{m_date.group(2)}-{m_date.group(3)}',
+                       'name': cells[1], 'code': m_code.group(1), 'side': cells[5],
+                       'price': float(re.sub(r'[^\d.]', '', cells[4]) or 0),
+                       'remark': cells[6] if len(cells) > 6 else ''})
+print(f'调仓记录: {len(trades)} 条')
+
+# 3. 对账：匹配成交 → 信号置 executed
+matches = match_trades(signals, trades)
+if matches:
+    by_sid = {m['signal']['signal_id']: m['trade'] for m in matches}
+    if cloud_enabled():
+        updated = 0
+        for sid, t in by_sid.items():
+            ok = cloud_update_fields(sid, {
+                'status': 'executed',
+                'entry_price': t['price'],
+                'entry_time': t['trade_date'] + ' 09:30',  # 录入无精确时点，取当日开盘后默认
+            })
+            if ok:
+                updated += 1
+        print(f'✅ 对账命中 {len(matches)} 条，已更新信号状态 executed: {updated}')
+    else:
+        print(f'⚠️ 云库不可用，跳过状态写入（对账命中 {len(matches)} 条待写）')
+    for m in matches:
+        print(f'    {m[\"signal\"][\"signal_id\"]} <- {m[\"trade\"][\"code\"]} {m[\"trade\"][\"price\"]}')
 else:
-    signals = [s for s in cloud_load_signals() if s.get('signal_date') == iso or s.get('trigger_date') == iso]
-    updated = 0
-    for t in trades:
-        for s in signals:
-            if s.get('ticker') == t['code'] and (s.get('status') in ('triggered', 'executed', 'settled')):
-                ok = cloud_update_fields(s['signal_id'], {
-                    'entry_price': t['price'],
-                    'entry_time': '09:30',   # 录入交易无精确时点，取开盘后默认；可按实际备注调整
-                })
-                if ok:
-                    updated += 1
-    print(f'回填 entry_price/entry_time: {updated} 条')
+    print('对账命中: 0（当日无信号-成交匹配；有成交无信号=非信号交易，有信号无成交=未执行）')
 "
 ```
 
 **操作规则**：
-- 只有 `每日调仓.md`/`portfolio_trades` 中有该标的当日交易才回填；无交易不写（保持 NULL）。
-- `entry_time` 若交易备注/记录无精确时点，用 `09:30` 占位；有明确时间则如实填写（`HH:MM`）。
-- 云库不可达 → 打印提示并跳过（不阻塞复盘主流程），下次任务补写。
+- 匹配键：**成交 remark 的"执行信号 SIG-xxx"优先**（用户录入时界面自动带），兜底同日+同码+同向。
+- 命中 → 云库 `status=executed` + `entry_price` + `entry_time`（终态保护：已 executed/settled 信号不重复改）。
+- 未命中不写（保持原状态）；云库不可达 → 打印提示跳过，下次任务补写。
+- **结算顺序**：本步对账必须在 7.6.2 结算**之前**执行（先标 executed 再结算，避免把已执行信号当未执行）。
 
 #### 7.6.2 结算到期信号（云库优先 + 本地镜像）
 
@@ -813,6 +824,62 @@ print(json.dumps(abandon, ensure_ascii=False))
   > 🚨 **P1 级告警（REQ-010 防滥用）**：P0 显式放弃连续 {abandon.streak} 日 ≥2（{abandon.message}）
 - 同时将告警写入 `PENDING_CONFIRMATION.md`（用户必须确认执行缺失根因与整改措施 / 审视信号设计放弃线）
 
+**步骤 E：条件单挂单统计（REQ-011 期望结果④，新增可观测指标）**
+
+> 收盘复盘统计当日「条件单是否已挂单」——把 P0 执行通道从"依赖盘中盯盘"转为"可观测的执行保障"。
+
+```bash
+python -X utf8 -c "
+import sys, json
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.cond_order import parse_cond_order_table
+from datetime import date
+
+today = date.today().strftime('%Y%m%d')
+signal_file = f'my_doc/每日复盘/reports/{today}/每日信号.md'
+with open(signal_file, encoding='utf-8') as f:
+    md = f.read()
+
+rows = parse_cond_order_table(md)
+total = len(rows)
+hung = sum(1 for r in rows if r['status'] == '已挂单')
+not_hung = total - hung
+print(f'条件单总数={total} 已挂单={hung} 未挂单={not_hung} 挂单率={round(hung/total*100,1) if total else 0}%')
+for r in rows:
+    print(f'  {r[\"signal_id\"]} {r[\"name\"]} 触发价{r[\"trigger_price\"]} {r[\"direction\"]} {r[\"quantity\"]}份 状态={r[\"status\"]}')
+"
+```
+
+- **挂单率 = 已挂单 / 条件单总数**。条件单总数 >0 且挂单率 <100% → 复盘报告中输出：
+  > ⚠️ **条件单挂单率 {X}%（{hung}/{total}）**：{未挂单的信号ID} 未挂单，P0 执行仍依赖盘中盯盘（REQ-011）
+- **无法观测挂单状态时**（条件单清单缺失/全部待挂单无法确认）→ 至少统计「用户是否在开盘 30 分钟内响应」：
+  对照 `## P0 执行追踪` 节，P0 触发后第一个检查点（09:40/10:00）用户操作非"待填" → 视为开盘 30 分钟内响应；统计响应率
+- 挂单统计并入复盘报告"信号质量"部分（不作为独立告警，仅可观测披露）
+
+**步骤 F：连续 4 日 P0 执行率 0% → 自动升级人工裁定（REQ-011 期望结果⑤）**
+
+> 在步骤 A 的跨日库合并后，追加检查"连续 4 日 0%"红线——达红线自动写入 PENDING_CONFIRMATION.md 人工裁定（结构性整改）。
+
+```bash
+python -X utf8 -c "
+import sys, json
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.p0_tracking import check_p0_zero_execution_escalation
+
+p0_file = 'my_doc/每日复盘/harness/automation/config/p0_tracking.json'
+with open(p0_file, encoding='utf-8') as f:
+    store = json.load(f)
+esc = check_p0_zero_execution_escalation(store, threshold=4)
+print(json.dumps(esc, ensure_ascii=False))
+"
+```
+
+- `esc.escalate == true` → 复盘报告输出：
+  > 🚨 **P0 执行率连续 {streak} 日 0% → 自动升级人工裁定（REQ-011）**：{esc.message}
+- **写入 `PENDING_CONFIRMATION.md`**（追加到 `## 待确认` 表，格式同 logic_inspect）：
+  `| {序号} | {MM-DD} | REQ-011 | 🚨 P0 执行率连续 {streak} 日 0%（≥4 日红线）→ 自动升级人工裁定：条件单执行通道是否落实/结构性整改 | P0 | +1天 |`
+- `esc.escalate == false` → 无动作（未达红线，仅观察）
+
 ### 8.7 写入验证（‼️ 硬性门禁，禁止跳过；任务4 改为验证云库）
 
 > 🚨 **任务4 修订**：`信号评价/当日信号统计/P0执行追踪` 等 markdown 节已不再生成，
@@ -844,7 +911,8 @@ else:
         if missing_trigger:
             errors.append(f'{len(missing_trigger)} 条已触发信号缺 trigger_price/trigger_time: '
                           + ', '.join(s['signal_id'] for s in missing_trigger))
-        # 录入交易回填：有当日交易且匹配信号时应有 entry_price（见 7.6.1b）
+        # 信号-成交对账（P0 修复 2026-09-24）：有当日交易且匹配信号时，信号应已被 7.6.1b 置为 executed
+        # （匹配成功的信号应带 entry_price 且 status=executed；此处仅提示，不阻塞——对账在 7.6.1b 已完成）
 
 if errors:
     print(f'[FAIL] 信号云库验证失败 ({len(errors)} errors):')

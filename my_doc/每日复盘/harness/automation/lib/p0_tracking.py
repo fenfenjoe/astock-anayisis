@@ -368,3 +368,53 @@ def check_p0_abandon_alert(store: dict, threshold: int = 2) -> dict:
         message = "✅ 无显式放弃（或未达连续放弃告警阈值）"
 
     return {'alert': alert, 'streak': trailing_streak, 'message': message}
+
+
+# ============================================================
+# 连续 N 日 0% → 升级人工裁定（REQ-011 期望结果⑤）
+# ============================================================
+
+def check_p0_zero_execution_escalation(store: dict, threshold: int = 4) -> dict:
+    """P0 执行率连续 N 日 0% → 升级 PENDING_CONFIRMATION 人工裁定（结构性整改）。
+
+    REQ-011 期望结果⑤：连续 4 日 P0 执行率 0% → 自动升级 PENDING_CONFIRMATION 人工裁定。
+
+    口径：按 recorded 日期扫描**最近连续** rate == 0.0 的天数。
+    - rate == 0.0 才算"0% 日"；rate None（当日无 P0 触发）中断计数；
+    - rate > 0（如 100.0）中断计数。
+    - 返回 {'escalate': bool, 'streak': int, 'message': str}
+      streak = 最近连续 0% 的天数（trailing，从最后一天往前）。
+      escalate = streak >= threshold。
+
+    兼容旧格式 daily 条目（缺 waived 键，如 9/8 历史数据）——只用 rate 判定，不触碰其它键。
+    """
+    daily = store.get('daily', {})
+    dates = sorted(daily.keys())
+    if not dates:
+        return {'escalate': False, 'streak': 0,
+                'message': '✅ 无 P0 执行率记录（不升级）'}
+
+    # 最近连续 0% 天数（trailing）
+    trailing_streak = 0
+    for d in reversed(dates):
+        rate = daily[d].get('rate')
+        if rate == 0.0:
+            trailing_streak += 1
+        else:
+            break  # rate None（无触发）或 >0 均中断
+
+    escalate = trailing_streak >= threshold
+    if escalate:
+        message = (
+            f"🚨 P0 执行率连续 {trailing_streak} 日 0%（≥{threshold} 日红线）"
+            f"——自动升级 PENDING_CONFIRMATION 人工裁定（结构性整改：条件单执行通道）"
+        )
+    elif trailing_streak > 0:
+        message = (
+            f"⚠️ P0 执行率连续 {trailing_streak} 日 0%（未达 {threshold} 日红线）"
+            f"——持续观察，达红线将自动升级人工裁定"
+        )
+    else:
+        message = "✅ 最近无 P0 执行率 0% 记录（不升级）"
+
+    return {'escalate': escalate, 'streak': trailing_streak, 'message': message}
