@@ -14,3 +14,7 @@
 [2026-10-08T13:16:53+08:00] BUG-056: FIXED — bug_inspect_data.md 第四步数据完整性判定「自然日>3天」→「交易日」口径（缓存末日期<最近完整交易日即缺失，复用 trading_calendar.is_trading_day，节假日天然跳过）；修复后脚本实测「OK: 所有 13 个活跃 ETF 数据完整」（修复前跨国庆误报 9 个）；last_complete_trading_day 7 场景单测全 PASS；pytest tests/ 全量 706 passed / 17 skipped / 0 failed；报告移入 bugs/closed/
 [2026-10-08T13:16:53+08:00] BUG-054: DEFERRED（保持 OPEN）— 盘中轮 13:09 < 15:00，按 BUG 报告「建议修复」约束禁止盘中以 partial 覆盖 partial（BUG-040/034/026/016 教训），留待收盘后 ≥15:00 轮次（如 16:07）对 159915/510180/513100/518880 执行 get_kline(refresh=True, end=2026-10-08) 补全官方收盘 bar
 [2026-10-08T13:16:53+08:00] AUTO_FIX 结束 — FIXED: 1（BUG-056）, MANUAL_REVIEW: 0, DEFERRED: 1（BUG-054 保持 OPEN）
+[2026-10-08T14:15:00+08:00] AUTO_FIX 开始 — OPEN: 1, AUTO_FIX: 1, MANUAL_REVIEW: 0
+[2026-10-08T14:15:00+08:00] BUG-054: DEFERRED（保持 OPEN）— 盘中轮 14:15 < 15:00，按 BUG 报告「建议修复」约束禁止盘中以 partial 覆盖 partial（BUG-040/034/026/016 教训），留待收盘后 ≥15:00 轮次（如 16:07）对 159915/510180/513100/518880 执行 get_kline(refresh=True, end=2026-10-08) 补全官方收盘 bar；缓存复检 4 ETF 仍含 10-08 盘中 partial bar（mtime 09:42/09:42/11:02/09:42，close 3.184/3.857/2.397/8.498），与 13:16 轮一致
+[2026-10-08T14:15:00+08:00] BUG_INDEX 核验完成：状态无变化（OPEN=1 不变，无新增 FIXED/MANUAL_REVIEW）；9 open + 43 closed = 52 = BUG-001~056 去空号 027/028/049/050，统计口径一致，无需编辑
+[2026-10-08T14:15:00+08:00] AUTO_FIX 结束 — FIXED: 0, MANUAL_REVIEW: 0, DEFERRED: 1（BUG-054 保持 OPEN）
