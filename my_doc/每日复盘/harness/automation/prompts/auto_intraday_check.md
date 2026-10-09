@@ -72,6 +72,33 @@ else:
 - 当前时间 14:25-14:40 → 这是 **14:30 收盘前检查点**（尾盘操作，重点：隔夜风险评估+止损触发强制执行）
 - 更新 task_state.json 中的对应槽位状态
 
+### 1.4 跨实例互斥运行锁（REQ-013，🚨 必须先获取再继续）
+
+> **问题背景**：2026-09-10 复盘双实例并行实证（调度链路 + 手动触发），对同一批文件并发读写 →
+> 归档覆盖 / 后写覆盖 / 重复消耗。盘中检查每次执行（09:40~14:30 各检查点）同样需跨实例互斥。
+> **锁按检查点维度区分**（intraday_0940 / intraday_1000 / ...），不同检查点可并行。
+
+```bash
+
+python my_doc/每日复盘/harness/automation/lib/run_lock.py acquire --task intraday_{检查点ID}
+```
+
+**判断规则**（严格按 bash 输出，禁止凭推理覆盖）：
+- 输出 `LOCK_ACQUIRED` → 记录 instance_id 到日志，继续第二步
+- 输出 `LOCK_HELD ... 检测到运行中实例 {id}（{acquired_at}），本次退出` → **存在并行实例，本次显式退出**（不要继续、不要写任何文件）
+- 锁带 stale 超时 45 分钟：异常中断后 45 分钟自动可获取（不永久阻塞）
+
+**手动触发优先级（REQ-013 期望结果②）**：若用户**显式要求以抢占方式接管**（如"强制接管盘中检查"），执行：
+
+```bash
+
+python my_doc/每日复盘/harness/automation/lib/run_lock.py acquire --task intraday_{检查点ID} --takeover
+```
+
+接管前先确认在跑实例的**中间态产物已落到 `logs/`**，并输出接管说明："⚠️ 接管运行中实例 {原instance_id}（{acquired_at}），其中间态产物见 logs/（如存在）"。
+
+**第七步必须释放本锁**（见文末）。
+
 ---
 
 ## 第二步：数据收集（三路并行）
@@ -320,6 +347,70 @@ PY
   > 数据来自 `signal_trigger_records` 表（按 signal_id 关联信号）。
   > 写失败不阻塞主流程，但要记录到执行日志（云库不可达时晚盘复盘兜底补写）。
 
+### 5.2b 盘中检查记录落库（2026-09-24 新增：每次检查对**每条**信号的检查结果）
+
+> 🚨 **与 §5.2 触发记录的区别**：§5.2 只对"新触发"信号写触发记录；本小节要求对**本次检查点验证到的每条信号**（含未触发/已过期/已执行/跳过终态）都写一条检查记录，形成每个信号的盘中检查轨迹。
+
+**目的**：Dashboard「今日信号」页点击信号**行**展开的"盘中检查记录"表格，数据来自 `signal_check_records` 表（按 signal_id + check_date 关联信号）。用户可在展开表格中看到该信号在 09:40/10:00/10:30/11:00/13:30/14:00/14:30 每个检查点的完整检查结果（现价 vs 交易价、触发判定、状态流转、检查摘要）。
+
+**写入范围**：本次检查点实际验证过的每条信号（§3.0 识别的终态信号 → `condition_met=跳过（终态）`；其余按 §3.1/§3.2 判定结果 → 触发/未触发/已过期/已执行）。
+
+**字段说明**：
+| 字段 | 含义 | 取值示例 |
+|------|------|---------|
+| signal_id | 信号ID | SIG-20260924-01 |
+| check_date | 检查日期 YYYY-MM-DD | 2026-09-24 |
+| check_time | 检查时间 HH:MM | 10:32 |
+| check_point | 检查点标签 | 09:40/10:00/10:30/11:00/13:30/14:00/14:30 |
+| ticker / name | 标的代码/名称 | 515880 / 通信ETF |
+| price | 检查时现价 | 0.714 |
+| trade_price | 交易价（判定基准） | 0.71 |
+| condition_met | 触发判定 | 触发/未触发/已过期/已执行/跳过（终态） |
+| status_before | 检查前状态（中文） | 未触发 |
+| status_after | 检查后状态（中文） | 已触发 |
+| note | 检查摘要 | 现价 0.714 ≥ 交易价 0.71 → 触发；75%窗口过期 |
+
+**写入脚本**（对本次检查点验证过的每条信号组装一条记录，一次性 upsert）：
+
+```bash
+python - <<'PY'
+import sys, datetime
+from pathlib import Path
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.signal_tracking_cloud import cloud_upsert_check_records, cloud_enabled
+
+records = [
+    # 示例：把下面每条替换为本次检查点实际验证的信号
+    {
+        'signal_id': 'SIG-YYYYMMDD-NN',
+        'check_date': datetime.date.today().isoformat(),
+        'check_time': datetime.datetime.now().strftime('%H:%M'),
+        'check_point': '<检查点标签，如 10:30>',
+        'ticker': '<代码>', 'name': '<名称>',
+        'price': <现价>,
+        'trade_price': <交易价>,
+        'condition_met': '<触发/未触发/已过期/已执行/跳过（终态）>',
+        'status_before': '<检查前中文状态>',
+        'status_after': '<检查后中文状态>',
+        'note': '<检查摘要>',
+    },
+    # ... 其余信号
+]
+if records and cloud_enabled():
+    ok = cloud_upsert_check_records(records)
+    print('盘中检查记录落库:', ok, '/', len(records))
+elif not cloud_enabled():
+    print('⚠️ 云库不可用，检查记录未落库（记录到执行日志）')
+PY
+```
+
+> 规则：
+> - **每条验证过的信号都必须有记录**（含"未触发"——这正是检查轨迹的意义），不许只写触发信号。
+> - 终态信号（executed/partial_executed/settled）→ `condition_met=跳过（终态）`，status_before/status_after 保持云库终态。
+> - status_before/status_after 用**中文显示状态**（未触发/已触发/已执行/已过期/已结算），与 每日信号.md 信号总表一致。
+> - 幂等：同信号同 check_time 只一条，同检查点重跑不重复（upsert 自动处理）。
+> - 写失败不阻塞主流程，记录到执行日志（云库不可达时晚盘复盘兜底补写）。
+
 ### 5.3 状态变更云库同步（v3.0）
 
 > 🚨 **每条状态变化的信号都必须写云库 status**，否则 Dashboard「今日信号」页状态不更新。
@@ -439,6 +530,19 @@ PY
 ## 第七步：更新 task_state 和写入日志
 
 （格式同早盘分析，写入对应时间点的日志文件）
+
+### 7.1 释放跨实例运行锁（REQ-013）
+
+> 盘中检查完成时释放 1.4 获取的 REQ-013 运行锁。
+
+```bash
+
+python my_doc/每日复盘/harness/automation/lib/run_lock.py release --task intraday_{检查点ID} --instance {1.4 获取的 instance_id}
+python my_doc/每日复盘/harness/automation/lib/run_lock.py status --task intraday_{检查点ID}
+```
+
+- 输出 `LOCK_RELEASED` + 随后 `LOCK_FREE` → ✅ 锁已释放
+- 输出 `LOCK_HELD`（非预期残留）→ 手动 `release --force`，并在日志标注
 
 ---
 

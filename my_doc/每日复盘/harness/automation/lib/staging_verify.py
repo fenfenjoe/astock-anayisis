@@ -66,6 +66,45 @@ def _dates_in(content: str) -> list:
     return re.findall(r'\d{4}-\d{2}-\d{2}', content)
 
 
+# ============================================================
+# REQ-013：归档幂等保护 — staging 目标日期校验
+# ============================================================
+
+_EXEC_DATE_RE = re.compile(r'执行日期：\*\*(\d{4}-\d{2}-\d{2})')
+
+
+def check_archive_source_date(content: str, today_str: str) -> list:
+    """校验待归档 staging 的"执行日期"是否为今日（REQ-013 期望结果③）。
+
+    11.0 步归档前调用：若 staging 已被并发实例覆盖为次日版本（执行日期=次日），
+    归档会把次日内容写进当日 archive，导致当日原件永久丢失（BUG-002 并行复现）。
+    校验发现"执行日期 != 今日" → 返回错误（调用方跳过复制、写归档说明 + 立 BUG）。
+
+    content: staging 文件内容（模板第 3 行格式：
+             `> 本文件由 {today_date} 收盘复盘自动生成。执行日期：**{tomorrow_date}（周X）早盘**`）
+    today_str: 今日日期 'YYYY-MM-DD'
+    返回错误列表（空=通过，允许归档）。
+    """
+    errors = []
+
+    if not content or len(content.strip()) < 50:
+        errors.append('ARCHIVE_SOURCE_EMPTY: staging 内容为空/过短（文件缺失或未生成）— 拒绝归档')
+        return errors
+
+    m = _EXEC_DATE_RE.search(content)
+    if not m:
+        errors.append(
+            'ARCHIVE_SOURCE_NO_DATE: staging 无"执行日期"标记 — 无法确认是当日原件，拒绝归档')
+        return errors
+
+    exec_date = m.group(1)
+    if exec_date != today_str:
+        errors.append(
+            f'ARCHIVE_SOURCE_STALE: staging 执行日期={exec_date} ≠ 今日({today_str})'
+            ' — 疑似已被并发实例覆盖为次日版本，拒绝归档（避免次日内容写入当日 archive）')
+    return errors
+
+
 def check_review_staging(task_state: dict, staging_results: list, tomorrow: str) -> list:
     """复盘后 staging 新鲜度检查（从 auto_logic_inspect B4 下沉）。
     task_state: 解析后的 task_state dict（tasks.evening_review.status/executed_at/completed_at）

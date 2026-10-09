@@ -121,11 +121,74 @@ for f in ['my_doc/每日复盘/reports/{today}/早盘报告.md', 'my_doc/每日�
 - 输出 `早盘报告.md: EXISTS` 或 `每日信号.md: EXISTS` → **早盘分析已执行**
 - 两者皆 MISSING → **早盘分析确实未执行**（降级模式）
 
+### 1.4 跨实例互斥运行锁（REQ-013，🚨 必须先获取再继续）
+
+> **问题背景**：2026-09-10 复盘出现调度链路实例 + 用户手动实例**并行执行**同一 prompt，
+> 对同一批文件并发读写 → 归档覆盖风险（BUG-002 并行复现）/ 后写覆盖 / 重复数据消耗。
+> 根因：只有幂等检查（1.3），没有跨实例运行锁（调度器 `check_running()` 只覆盖调度派发实例）。
+>
+> **本步在 1.3 之后、第二步之前获取统一运行锁；已持锁 → 显式退出，不得静默并行。**
+
+```bash
+
+python my_doc/每日复盘/harness/automation/lib/run_lock.py acquire --task evening_review
+```
+
+**判断规则**（严格按 bash 输出，禁止凭推理覆盖）：
+- 输出 `LOCK_ACQUIRED` → 锁已获取，记录 instance_id 到日志，继续第二步
+- 输出 `LOCK_HELD ... 检测到运行中实例 {id}（{acquired_at}），本次退出` → **存在并行实例，本次显式退出**（不要继续、不要写任何文件；如需接管见下方手动优先级）
+- 锁带 stale 超时 45 分钟：异常中断后 45 分钟自动可获取（不永久阻塞）
+
+**手动触发优先级（REQ-013 期望结果②）**：若用户**显式要求以抢占方式接管**（如"强制接管复盘"），执行：
+
+```bash
+
+python my_doc/每日复盘/harness/automation/lib/run_lock.py acquire --task evening_review --takeover
+```
+
+接管前必须先确认在跑实例的**中间态产物已落到 `logs/`**（若存在 `logs/{date}/evening_review*.log` 已记录则无需重复），并输出接管说明："⚠️ 接管运行中实例 {原instance_id}（{acquired_at}），其中间态产物见 logs/（如存在）"。
+
+**第十七步必须释放本锁**（见文末）。
+
 ---
 
 ## 第二步：更新 task_state → in_progress
 
 （同早盘分析模式）
+
+> **写入前置校验（REQ-013 期望结果④）**：对 `task_state.json` 等关键 JSON 采用"读-改-写 +
+> mtime 校验"。写回前用 `lib/run_lock.py` 的 `check_modified` 检测文件是否被他人修改：
+> - 未被修改 → 正常写回
+> - **已被修改** → 输出冲突告警，把本实例即将写入的版本存为 `{文件}.conflict` 副本，
+>   不静默覆盖他人的写入；随后在报告中"运行提示"一行标注冲突
+>
+> 参考写法（写入 task_state.json 前先快照 mtime）：
+>
+> ```bash
+>
+> python -c "
+> import json, sys
+> sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+> from datetime import date, datetime
+> from lib.run_lock import snapshot_mtime, check_modified
+>
+> ts_path = 'my_doc/每日复盘/harness/automation/config/task_state.json'
+> snap = snapshot_mtime(ts_path)
+> state = json.load(open(ts_path, encoding='utf-8'))
+> today = date.today().strftime('%Y%m%d')
+> state['date'] = today
+> state['tasks']['evening_review']['status'] = 'in_progress'
+> state['tasks']['evening_review']['started_at'] = datetime.now().isoformat()
+> if check_modified(ts_path, snap):
+>     # 冲突：保存 .conflict 副本，不覆盖
+>     import shutil
+>     shutil.copy(ts_path, ts_path + '.conflict')
+>     print('⚠️ CONFLICT: task_state.json 被其他实例修改，本实例版本已存 .conflict，本次不写入')
+> else:
+>     json.dump(state, open(ts_path, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
+>     print('task_state evening_review → in_progress')
+> "
+> ```
 
 ---
 
@@ -1263,6 +1326,51 @@ else:
 > （8/25 起退化为"仅写归档说明.md"即此根因，BUG-002）。
 > 因此归档必须在覆盖**之前**执行：此时 `今日-早盘分析.md` = 今晨早盘实际执行的 staging，
 > `今日-复盘分析.md` = 今日复盘实际使用的 staging（前一日生成）。
+>
+> **归档前必须校验 staging 原件仍为"当日版本"（REQ-013 期望结果③）**——并发实例若已先覆盖
+> staging，此处校验会发现"执行日期 ≠ 今日"并走降级路径（写归档说明 + 立 BUG），
+> 绝不把次日内容写进当日 archive。
+
+```bash
+python -X utf8 -c "
+import sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from datetime import date
+from lib.staging_verify import check_archive_source_date
+
+today = date.today().strftime('%Y-%m-%d')
+staging_files = [
+    ('my_doc/每日复盘/harness/staging/今日-早盘分析.md', '早盘分析-staging'),
+    ('my_doc/每日复盘/harness/staging/今日-复盘分析.md', '复盘分析-staging'),
+]
+import os
+blocked = []
+for path, label in staging_files:
+    if not os.path.exists(path):
+        print(f'{label}: MISSING（staging 文件不存在）')
+        blocked.append(label)
+        continue
+    content = open(path, encoding='utf-8').read()
+    errors = check_archive_source_date(content, today)
+    if errors:
+        print(f'{label}: 拒绝归档 -> {errors[0]}')
+        blocked.append(label)
+    else:
+        print(f'{label}: 执行日期==今日({today})，允许归档')
+if blocked:
+    print(f'ARCHIVE_BLOCKED: {blocked}')
+    sys.exit(1)
+else:
+    print('ARCHIVE_OK: 两份 staging 均为当日原件，可归档')
+"
+```
+
+**判定**（严格按 bash 输出）：
+- 输出 `ARCHIVE_OK` → 继续下方 cp 归档（staging 原件是当日版本）
+- 输出 `ARCHIVE_BLOCKED` → **跳过 cp**，走降级路径：
+  - 写 `harness/archive/{today}/归档说明.md`：注明"staging 已被并发实例覆盖为次日版本，当日原件不可恢复（BUG-002 失效模式，REQ-013），本次跳过归档" + 时间戳
+  - **立 BUG**：按 `harness/automation/bugs/BUG_TEMPLATE.md` 创建 `bugs/open/BUG-{NNN}.md`，标题 `[REQ-013] 归档校验拦截：staging 已被覆盖为次日版本`，auto_fix_eligible=false（归档流程异常需人工确认）
+  - 仍继续 11.1/11.2 生成次日 staging（不阻塞复盘主流程）
 
 ```bash
 mkdir -p "harness/archive/{today}"
@@ -1753,19 +1861,36 @@ else:
 | Staging 生成失败 | 这是 CRITICAL 错误 — 次日早盘无法执行，必须输出醒目告警 |
 | 经验文件写入冲突 | 先读取最新版本，再合并写入 |
 | 持仓配置同步失败 | 保留旧配置，不覆盖，记录 error |
+| 1.4 检测到并行实例（LOCK_HELD） | 显式退出本次复盘，不写任何文件；如需接管走 --takeover（先落中间态到 logs/） |
+| 11.0 归档校验拦截（ARCHIVE_BLOCKED） | 跳过 cp，写归档说明.md + 立 BUG，继续 11.1/11.2（不阻塞主流程） |
+| 写 task_state 等关键文件冲突（CONFLICT） | 保存 .conflict 副本，不静默覆盖；报告中"运行提示"一行标注，按 §13.5 建单 |
 | 发现系统性改善机会 | 创建 REQ 文档到 `my_doc/每日复盘/harness/automation/steering/open/REQ-{NNN}.md`，按 `steering/REQ_TEMPLATE.md` 模板（模板已内置 superpowers 开发流程：brainstorming→writing-plans→TDD→executing-plans→code-review），并在 `steering/REQ_INDEX.md` 中登记 |
 
 ---
 
 ## 第十七步：标记完成 + 清除运行锁
 
-> 复盘完成时标记调度器任务为已完成，并清除运行锁。
+> 复盘完成时标记调度器任务为已完成，并清除运行锁（调度器锁 + REQ-013 跨实例锁）。
 
 ```bash
 python .claude/scripts/task_scheduler.py --complete evening_review
 python .claude/scripts/task_scheduler.py --clear-running evening_review
+python my_doc/每日复盘/harness/automation/lib/run_lock.py release --task evening_review --instance {1.4 获取的 instance_id}
 ```
 
-> ⚠️ 如果复盘因异常中断，此步骤不会执行。此时 `check_running()` 的 stale 检测会在 45 分钟后自动清除该锁，后续迭代恢复正常。
+> ⚠️ 如果复盘因异常中断，此步骤不会执行。此时 `check_running()` 的 stale 检测会在 45 分钟后自动清除该锁，后续迭代恢复正常；REQ-013 跨实例锁同样带 45 分钟 stale 超时，自动可获取（`run_lock.py acquire` 会检测 stale 自动接管）。
+
+---
+
+## 第十八步：验证跨实例锁已释放（REQ-013 可观测性）
+
+> 确认 REQ-013 运行锁已释放，避免残留锁影响次日任务。
+
+```bash
+python my_doc/每日复盘/harness/automation/lib/run_lock.py status --task evening_review
+```
+
+- 输出 `LOCK_FREE` → ✅ 锁已释放
+- 输出 `LOCK_HELD`（非预期残留）→ 手动执行 release：`run_lock.py release --task evening_review --force`，并在日志标注
 
 

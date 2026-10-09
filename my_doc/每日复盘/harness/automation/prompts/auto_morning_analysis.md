@@ -273,6 +273,34 @@ print(json.dumps(result, ensure_ascii=False, default=str))
 - 如果 `morning_analysis.status` = "completed" → 输出 "今日早盘分析已完成于 {executed_at}" 并**退出**
 - 如果 `morning_analysis.status` = "failed" → 输出 "今日早盘分析之前失败，重试中..." 并继续
 
+### 1.5 跨实例互斥运行锁（REQ-013，🚨 必须先获取再继续）
+
+> **问题背景**：2026-09-10 复盘双实例并行实证（调度链路 + 手动触发），对同一批文件并发读写 →
+> 归档覆盖 / 后写覆盖 / 重复消耗。早盘分析同样属于复盘类任务，需跨实例互斥。
+>
+> **本步在 1.4 之后、第二步之前获取统一运行锁；已持锁 → 显式退出，不得静默并行。**
+
+```bash
+
+python my_doc/每日复盘/harness/automation/lib/run_lock.py acquire --task morning_analysis
+```
+
+**判断规则**（严格按 bash 输出，禁止凭推理覆盖）：
+- 输出 `LOCK_ACQUIRED` → 记录 instance_id 到日志，继续第二步
+- 输出 `LOCK_HELD ... 检测到运行中实例 {id}（{acquired_at}），本次退出` → **存在并行实例，本次显式退出**（不要继续、不要写任何文件）
+- 锁带 stale 超时 45 分钟：异常中断后 45 分钟自动可获取（不永久阻塞）
+
+**手动触发优先级（REQ-013 期望结果②）**：若用户**显式要求以抢占方式接管**（如"强制接管早盘分析"），执行：
+
+```bash
+
+python my_doc/每日复盘/harness/automation/lib/run_lock.py acquire --task morning_analysis --takeover
+```
+
+接管前先确认在跑实例的**中间态产物已落到 `logs/`**，并输出接管说明："⚠️ 接管运行中实例 {原instance_id}（{acquired_at}），其中间态产物见 logs/（如存在）"。
+
+**第八步必须释放本锁**（见文末）。
+
 ---
 
 ## 第二步：更新 task_state
@@ -1085,6 +1113,19 @@ Staging文件: {存在/不存在}
 ========================================
 ```
 
+### 8.1 释放跨实例运行锁（REQ-013）
+
+> 早盘分析完成时释放 1.5 获取的 REQ-013 运行锁。
+
+```bash
+
+python my_doc/每日复盘/harness/automation/lib/run_lock.py release --task morning_analysis --instance {1.5 获取的 instance_id}
+python my_doc/每日复盘/harness/automation/lib/run_lock.py status --task morning_analysis
+```
+
+- 输出 `LOCK_RELEASED` + 随后 `LOCK_FREE` → ✅ 锁已释放
+- 输出 `LOCK_HELD`（非预期残留）→ 手动 `release --force`，并在日志标注
+
 ---
 
 ## 异常处理
@@ -1096,3 +1137,4 @@ Staging文件: {存在/不存在}
 | Staging 文件不存在 | 基于模板直接执行（降级模式），在报告中标注 |
 | 早盘报告生成中超时 | 输出已写内容，标记任务为 partial_complete |
 | task_state.json 损坏 | 重建为默认状态，记录 warning |
+| 1.5 检测到并行实例（LOCK_HELD） | 显式退出本次早盘分析，不写任何文件；如需接管走 --takeover（先落中间态到 logs/） |
