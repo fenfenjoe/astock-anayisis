@@ -11,10 +11,10 @@
 |------|------|
 | OPEN | 0 |
 | IN_PROGRESS | 0 |
-| FIXED | 42 |
+| FIXED | 44 |
 | VERIFIED | 1 |
 | WONT_FIX | 1 |
-| MANUAL_REVIEW | 8 |
+| MANUAL_REVIEW | 9 |
 
 ---
 
@@ -33,6 +33,7 @@
 | BUG-015 | S9/S13 KB资产池数量标注不符（6只 vs 实列5只） | KB 文档口径修订，auto_fix_eligible=false |
 | BUG-038 | agent/__main__._ensure_cloud() 晚于 agent.db 导入执行:USE_CLOUD 导入时固化，「强制 AGENT_DB_BACKEND=cloud」永远无效(靠.env掩盖) | 导入时序/后端选择策略决策（改导入顺序 vs 惰性求值 vs db.py 缺省兜底），auto_fix_eligible=false |
 | BUG-039 | scheduler_agent 与 tick loop 迁移收尾未完成:核心接线已落地(lifecycle.tick→scheduler_agent.tick),但 Dashboard scheduler 仍在跑且无互斥开关(双跑竞态待裁决) | 架构迁移节奏决策（谁是唯一调度方 + 防双跑互斥），auto_fix_eligible=false |
+| BUG-059 | pytest 全量通过但退出码=1（Windows asyncio ProactorEventLoop teardown access violation） | 测试运行环境处置（换 SelectorEventLoop 策略/改 TestClient 生命周期/升级运行时/容忍 exit 1 各有副作用），auto_fix_eligible=false |
 
 ---
 
@@ -93,6 +94,9 @@
 | BUG-054 | 4个活跃ETF缓存含10-08盘中partial bar(159915/510180/513100/518880,BUG-040族复发,REQ-001覆盖,需收盘后补全) | data | HIGH | FIXED | 2026-10-08 |
 | BUG-055 | 非活跃缓存512100过期(止于09-22,缺09-23~09-30共5个交易日bar,BUG-053同集合第7次复发,巡检轮已补拉修复) | data | MEDIUM | FIXED | 2026-10-08 |
 | BUG-056 | bug_inspect_data第四步用自然日>3天判断,跨国庆误报9个活跃ETF数据缺失(09-30为节前最后交易日,应改交易日口径) | data | LOW | FIXED | 2026-10-08 |
+| BUG-057 | 6/13活跃ETF缓存含10-08盘中partial bar(510300/510500/512010/512480/512660/512800),5只跨源>0.5%(BUG-054修复不完整+BUG-040族第8次复发,需收盘后补拉) | data | HIGH | FIXED | 2026-10-09 |
+| BUG-058 | 非活跃缓存512100缺10-08 bar(止于09-30)+4个非活跃ETF(159227/159326/159992/515880)10-08 partial(BUG-055同族复发,需收盘后补拉) | data | MEDIUM | FIXED | 2026-10-09 |
+| BUG-059 | pytest全量测试717通过但退出码=1:Windows asyncio ProactorEventLoop teardown access violation(TestClient(agent_api.app)触发,exit code污染调度判断) | tests | MEDIUM | MANUAL_REVIEW | 2026-10-09 |
 <!-- BUG_TABLE_END -->
 
 ---
@@ -156,6 +160,11 @@
 | 2026-10-08 | 数据巡检 | 3 | 1 | 2 |
 | 2026-10-08 | 代码巡检 | 0 | 1 | 2 |
 | 2026-10-08 | 自动修复 | 0 | 1 | 1 |
+| 2026-10-09 | 数据巡检 | 2 | 0 | 4 |
+| 2026-10-09 | 代码巡检 | 1 | 0 | 5 |
+| 2026-10-09 | 自动修复 | 0 | 0 | 2 |
+| 2026-10-09 | 自动修复 | 0 | 0 | 2 |
+| 2026-10-09 | 自动修复 | 0 | 2 | 0 |
 
 ---
 
