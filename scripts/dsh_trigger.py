@@ -2,8 +2,8 @@
 """精确时刻触发：指定任务到点执行一次（替代 7 分钟轮询架构）。
 
 由 Windows 计划任务在目标时刻调用：
-    python .claude/scripts/dsh_trigger.py --task morning_analysis
-    python .claude/scripts/dsh_trigger.py --task evening_review
+    python scripts/dsh_trigger.py --task morning_analysis
+    python scripts/dsh_trigger.py --task evening_review
 
 内部复用 task_scheduler.py 的交易日/幂等/窗口逻辑：
 - 非交易日自动跳过（交易日历读取失败时按 fail-open 处理，与原架构一致）

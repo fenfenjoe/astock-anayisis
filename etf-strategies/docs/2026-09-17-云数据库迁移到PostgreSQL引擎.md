@@ -1,6 +1,6 @@
 # 云数据库迁移方案：AIDAP Supabase 引擎 → AIDAP PostgreSQL 引擎
 
-> 状态：🟡 进行中（2026-09-17）— Step 1/2 代码侧完成，Step 3 已完成
+> 状态：🟢 迁移完成（2026-09-17，清理完成 2026-09-21）— 新库在用，旧库已全部清理
 > 目标：消除 Supabase 组件算力浪费 + 通过「算力空闲自动挂起」实现算力归零，
 > 月成本从 ~270 元降至 ~5-20 元。数据仍 100% 在云，无本地持久化。
 
@@ -11,10 +11,64 @@
 | Step 1: cloud_db.py 直连后端 | ✅ 完成（27 pg 测试全绿，含 SSL 连接测试，PostgREST 回归无损） |
 | Step 2: agent 节流改造 | ✅ 完成（含发文门控修复 + meta_get_many 预取，模拟验证访问间隔 600s>300s） |
 | Step 3: 新 workspace 创建 | ✅ 完成（API 自动创建，见下） |
-| Step 4: schema 迁移 | ⏳ 待 pg8000 安装 + 连接验证 |
-| Step 5: 数据迁移 | ⏳ 待 schema 就绪 |
-| Step 6: 切换与验证 | ⏳ 待迁移完成 |
-| Step 7: 清理旧 workspace | ⏳ 待验证稳定 |
+| Step 4: schema 迁移 | ✅ 完成（22 表 + 13 索引，pg_exec_sql.py 执行 35/35 DDL） |
+| Step 5: 数据迁移 | ✅ 完成（22 表 2510 行全量迁移，导出→导入） |
+| Step 6: 切换与验证 | ✅ 完成（agent+dashboard 集成验证通过，见下） |
+| Step 7: 清理旧 workspace | ✅ 完成（2026-09-21，3 个旧/空 workspace 全部删除，见下） |
+| BUG-FIX: 清理后信号/策略查不出 | ✅ 完成（2026-09-21，见下） |
+
+### BUG-FIX（2026-09-21）：清理后 Dashboard 每日信号/策略全景查不出
+
+清理旧 workspace + 移除 .env 的 SUPABASE_* 后，用户报告 Dashboard 每日信号和
+策略全景查不出。两个根因 + 修复：
+
+1. **`cloud_db.enabled()` 只检查 postgrest（SUPABASE_*）** → 移除 SUPABASE_* 后
+   `enabled()=False` → `api_daily._cloud_signal_rows` 等直接返回空（每日信号空表）。
+   修复：`enabled()` 改为 `_ENABLED or _PG_ENABLED`（pgdirect 也是合法云后端）。
+2. **pgdirect（pg8000）NUMERIC 列返回 Decimal** → `list_strategies` 的
+   `JSONResponse(data)` 无法序列化 Decimal → 策略全景 500
+   （`TypeError: Object of type Decimal is not JSON serializable`）。
+   修复：`_row_dict` 统一把 Decimal 转 float（与 PostgREST/SQLite 行 shape 一致）。
+
+验证：`/api/daily-signals`（5 条信号）、`/api/strategies`（19 策略）、
+`/api/signal-quality` 全部 HTTP 200。新增 2 个测试（enabled pgdirect 分支、
+Decimal 转换），pg 测试 29 passed，全量 621 passed 无回归。
+重启 Dashboard（后台 job，注意：`| Select-Object -First N` 截断管道会导致
+python 进程 SIGPIPE 崩溃退出；compute Suspended 唤醒需 ~25s，启动会卡在
+`Waiting for application startup` 属正常，等待即可）。
+
+### Step 7 清理记录（2026-09-21）
+
+账号下原有 4 个 workspace，清理后只剩 1 个在用：
+
+| Workspace | 引擎 | 处置 |
+|---|---|---|
+| `great-palm-10353999` | PostgreSQL 17 | ✅ 保留（在用，数据已迁入，挂起 300s 已生效，2026-09-21 已自动 Suspended） |
+| `jolly-ivy-dca877b0` | Supabase | 🗑️ 已删除（旧库，数据已全量迁走；有删除保护，用 `--force` 先关保护再删） |
+| `dandy-rice-22d38a8l` | PostgreSQL 17 | 🗑️ 已删除（空壳，无分支无数据） |
+| `deft-apple-6124db2g` | PostgreSQL 17 | 🗑️ 已删除（空壳，无分支无数据） |
+
+- 删除方式：`scripts/aidap_workspace.py delete --workspace <id> [--force]`
+  （DeleteWorkspace API；删除保护错误码 `OperationDenied_DeletionProtection`，
+  `--force` 先调 ModifyWorkspaceDeletionProtectionPolicy（DeletionProtection=Disabled）再删）。
+- .env 已移除 SUPABASE_URL/SUPABASE_SERVICE_KEY（旧库已删，pgdirect 是唯一后端）。
+- 登录凭据：CLI SSO 缓存 2026-09-21 重新登录刷新（STS 过期时间 09-21 09:48）。
+
+### Step 4-6 完成记录（2026-09-17）
+
+- **Step 4 schema**：`pg_exec_sql.py scripts/cloud_schema_pg.sql` 执行 35 条 DDL，
+  22 张表 + 13 索引全部建好（pg8000 直连 + SSL）。
+- **Step 5 数据**：`migrate_export.py` 从旧 Supabase 库导出 → `migrate_import.py` 导入新库。
+  22 表 2510 行（agent_knowledge 1000 / scheduler_runs 524 / agent_activities 379 /
+  agent_articles 173 / daily_reports 147 ...）。修复：export 的 `order="id.asc"` 对无 id 列
+  表降级无排序；import 的清空逻辑同样降级。
+- **Step 6 切换**：.env 设 `CLOUD_DB_BACKEND=pgdirect`（DASHBOARD/AGENT_DB_BACKEND 保持 cloud，
+  上层 USE_CLOUD=True 走 cloud_db → pgdirect 直连新库）。集成验证：
+  agent meta 读写、dashboard report/holdings/users/meta 读写全部正常。
+- **pg8000 安装**：清华镜像 `pip install pg8000`（1.31.5 + scramp + asn1crypto）。
+  需写 D:\miniconda3\Lib\site-packages（沙箱外），用提升权限完成。
+- **SSL 支持**：cloud_db._pg_connect 与 pg_exec_sql._connect 均加 ssl_context
+  （PGSSLMODE=require，AIDAP 强制 SSL + channel_binding=require，pg8000 实测通过）。
 
 ### Step 3 已完成信息（2026-09-17，API 自动创建）
 

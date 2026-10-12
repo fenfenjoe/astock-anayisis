@@ -2,8 +2,8 @@
 """DSH 定时任务 cron 表生成器 — 从 task_schedule.json 实时生成，方便随时查看。
 
 用法:
-    python .claude/scripts/dsh_cron.py            # 终端打印 markdown 表格
-    python .claude/scripts/dsh_cron.py --save     # 同时写入 docs/定时任务cron表.md
+    python scripts/dsh_cron.py            # 终端打印 markdown 表格
+    python scripts/dsh_cron.py --save     # 同时写入 docs/定时任务cron表.md
 
 cron 格式: 分 时 日 月 周（周: 0/7=周日, 1=周一 … 6=周六）
 注: A股节假日由调度器交易日历自动跳过，cron 的周几只表达"计划星期"。
@@ -15,8 +15,10 @@ from datetime import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parent.parent
-SCHEDULE = REPO_ROOT / ".claude" / "scripts" / "task_schedule.json"
+# 2026-09-21 搬至 scripts/ 后：parent 即仓库根（原 .claude/scripts/ 时代为 parent.parent）
+REPO_ROOT = SCRIPT_DIR.parent
+# 2026-09-21：调度基础设施从 .claude/scripts/ 迁至 scripts/（Claude Code 清理）
+SCHEDULE = REPO_ROOT / "scripts" / "task_schedule.json"
 OUT_FILE = REPO_ROOT / "docs" / "定时任务cron表.md"
 
 DOW_CN = {0: "周一", 1: "周二", 2: "周三", 3: "周四", 4: "周五", 5: "周六", 6: "周日"}
@@ -88,7 +90,7 @@ def main() -> int:
     lines = [
         "# DSH 定时任务 cron 表",
         "",
-        f"> 由 `.claude/scripts/dsh_cron.py` 从 `task_schedule.json` 生成 · {gen}",
+        f"> 由 `scripts/dsh_cron.py` 从 `task_schedule.json` 生成 · {gen}",
         "",
         "cron 格式：`分 时 日 月 周`（周：0/7=周日，1=周一 … 6=周六）",
         "",

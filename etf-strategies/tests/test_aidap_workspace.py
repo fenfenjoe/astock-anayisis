@@ -150,7 +150,8 @@ def test_main_parse_suspend_args(monkeypatch):
             seen.update(action=action, params=params) or {})
     aw.main()
     assert seen["action"] == "ModifyComputeSettings"
-    assert seen["params"] == {"WorkspaceId": "ws-1", "SuspendTimeoutSeconds": 300}
+    assert seen["params"] == {"WorkspaceId": "ws-1", "SuspendTimeoutSeconds": 300,
+                              "AutoScalingLimitMinCU": 0.25, "AutoScalingLimitMaxCU": 2}
 
 
 def test_main_uses_login_cache_when_no_ak(monkeypatch):
@@ -169,3 +170,58 @@ def test_main_uses_login_cache_when_no_ak(monkeypatch):
     monkeypatch.setattr(aw, "cmd_list", lambda ak, sk, st, args: seen.update(cmd="list") or {})
     aw.main()
     assert seen["cmd"] == "list"
+
+
+def test_main_delete_sends_workspace_id(monkeypatch):
+    """delete 命令调用 DeleteWorkspace（只传 WorkspaceId）。"""
+    monkeypatch.setattr(sys, "argv", [
+        "aidap_workspace", "--ak", "AK", "--sk", "SK", "delete",
+        "--workspace", "ws-del",
+    ])
+    seen = {}
+    monkeypatch.setattr(
+        aw, "call",
+        lambda ak, sk, action, params, session_token=None:
+            seen.update(action=action, params=params) or {})
+    aw.main()
+    assert seen["action"] == "DeleteWorkspace"
+    assert seen["params"] == {"WorkspaceId": "ws-del"}
+
+
+def test_delete_force_disables_protection_first(monkeypatch):
+    """delete --force：遇删除保护先关保护再删。"""
+    calls = []
+
+    def fake_call(ak, sk, action, params, session_token=None):
+        calls.append(action)
+        if action == "DeleteWorkspace" and len([c for c in calls if c == "DeleteWorkspace"]) == 1:
+            raise RuntimeError('HTTP 400: {"Error": {"Code": "OperationDenied_DeletionProtection"}}')
+        return {}
+
+    monkeypatch.setattr(aw, "call", fake_call)
+    monkeypatch.setattr(aw, "load_sts_from_login_cache",
+                        lambda: ("AK", "SK", "ST"))
+    monkeypatch.setattr(sys, "argv", [
+        "aidap_workspace", "delete", "--workspace", "ws-prot", "--force",
+    ])
+    aw.main()
+    # 顺序：Delete → ModifyDeletionProtection → Delete
+    assert calls[0] == "DeleteWorkspace"
+    assert calls[1] == "ModifyWorkspaceDeletionProtectionPolicy"
+    assert calls[2] == "DeleteWorkspace"
+
+
+def test_delete_without_force_raises_on_protection(monkeypatch):
+    """delete 无 --force：删除保护错误直接抛出。"""
+    def fake_call(ak, sk, action, params, session_token=None):
+        raise RuntimeError('HTTP 400: {"Error": {"Code": "OperationDenied_DeletionProtection"}}')
+
+    monkeypatch.setattr(aw, "call", fake_call)
+    monkeypatch.setattr(aw, "load_sts_from_login_cache",
+                        lambda: ("AK", "SK", "ST"))
+    monkeypatch.setattr(sys, "argv", [
+        "aidap_workspace", "delete", "--workspace", "ws-prot",
+    ])
+    import pytest
+    with pytest.raises(RuntimeError):
+        aw.main()

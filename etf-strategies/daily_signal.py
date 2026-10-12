@@ -35,6 +35,8 @@ from backtest.strategies.rsrs_momentum import TrendFilterMomentum
 from backtest.strategies.canary_defense import CanaryDefense, CanaryDefenseDaily
 from backtest.strategies.rsrs_reversal_momentum import RsrsReversalMomentum
 from backtest.strategies.low_correlation_rotation import LowCorrelationRotation
+from backtest.strategies.etf_timing_rotation import EtfTimingRotation
+from backtest.strategies.wufu_momentum_rotation import WufuMomentumRotation
 
 # ── 策略注册表 ──
 STRAT_MAP = {
@@ -57,6 +59,8 @@ STRAT_MAP = {
     "S17": ("金丝雀防御动量(日频)",     CanaryDefenseDaily(mom_lookback=25, top_n=2)),
     "S18": ("RSRS增强反转动量",     RsrsReversalMomentum()),
     "S19": ("低相关ETF轮动",        LowCorrelationRotation()),
+    "S20": ("四基轮动RSRS择时",     EtfTimingRotation()),
+    "S21": ("五福动量轮动",          WufuMomentumRotation()),
 }
 
 # ── ETF 名称映射（静态 + API 缓存） ──
@@ -245,7 +249,7 @@ def generate_signal(strat_id, strat_name, strat):
 def main():
     parser = argparse.ArgumentParser(description="ETF策略每日信号")
     parser.add_argument("strategy", nargs="?", default=None,
-                        help="策略编号 (S1-S19) 或 '--all'")
+                        help="策略编号 (S1-S21) 或 '--all'")
     parser.add_argument("--all", action="store_true", default=False,
                         help="显示所有策略信号")
     args = parser.parse_args()

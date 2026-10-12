@@ -28,18 +28,62 @@ print('上周信号数:', len(week), '已结算:', len(settled))
 " 2>&1
 ```
 
+## 二·五、分维度切片 + 历史存档（P0a，自进化框架）
+
+> 进化闭环的第一步：结算器产出**分维度可比指标**并**存档为时间序列**，为 gap_analysis（差距分析）提供原料。
+> 每次运行必须执行本节，否则进化无法闭环。
+
+```bash
+python -X utf8 -c "
+import json, sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.signal_quality import generate_quality_dashboard, dimension_dashboard
+from lib.signal_quality_history import save_weekly_snapshot
+from lib.signal_tracking_cloud import load_signals
+from datetime import date, datetime
+signals = load_signals()
+today = date.today()
+last_mon = today - datetime.timedelta(days=today.weekday() + 7)
+last_fri = last_mon + datetime.timedelta(days=4)
+week = [s for s in signals if last_mon.isoformat() <= s.get('trigger_date','') <= last_fri.isoformat()]
+settled = [s for s in week if s.get('status') == 'settled']
+iso = last_mon.isocalendar()
+week_key = f'{iso[0]}-W{iso[1]:02d}'
+snap = {
+  'week_key': week_key,
+  'cohort_start': last_mon.isoformat(),
+  'cohort_end': last_fri.isoformat(),
+  'dashboard': generate_quality_dashboard(week, settled, today.isoformat()),
+  'dims': dimension_dashboard(week, settled, today.isoformat()),
+}
+path = save_weekly_snapshot(snap)
+print('已存档:', path)
+print(json.dumps(snap['dims'], ensure_ascii=False))
+" 2>&1
+```
+
+注意：
+- **幂等**：同 `week_key`（同 cohort 周）重复运行会覆盖，不会产生重复周——周报可安全重跑。
+- 输出 `dims` 即为本周分维度切片（priority/source/trade_type），下方周报渲染为表格。
+
 ## 三、周报输出（reports/weekly/信号质量周报.md）
 
 1. **本周指标表**（同复盘仪表盘：触发率/达成率/盈亏比/方向准确率/持有天数/偏差/期望价值/最大亏损）
-2. **P0 执行率（REQ-007）**：读取 `config/p0_tracking.json` 的 `daily`，统计上周 P0 执行率均值 + 连续 <100% 天数；连续 ≥2 日 <100% → P1 级告警（输出到周报头部）。调用 `lib/p0_tracking.check_p0_alert`
-3. **信号价值排名**：按 `pnl` 排序已结算信号，标记 TOP 值得保留的信号类型 vs 该淘汰的
-4. **环比上周**：与上周周报指标对比（读上一份周报或累计值）
-5. **校准建议**：
+2. **分维度指标表（P0a 新增）**：按上方 `dims` 渲染三张子表——
+   - 按优先级（P0/P1/P2）、按来源（早盘/盘中/复盘）、按操作类型（buy/sell）
+   - 每张子表列：样本数 / 已结算 / 已执行 / 触发率 / 命中率 / 方向准确率 / 期望价值 / 模拟数
+   - **标注"样本不足"**：`n_executed < 3` 的切片标注 ⚠️ 样本不足，结论仅供观察
+   - **归因提示**：命中率或触发率显著低于整体口径的切片，标注为"短板维度"（这是进化的定向信号）
+3. **P0 执行率（REQ-007）**：读取 `config/p0_tracking.json` 的 `daily`，统计上周 P0 执行率均值 + 连续 <100% 天数；连续 ≥2 日 <100% → P1 级告警（输出到周报头部）。调用 `lib/p0_tracking.check_p0_alert`
+4. **信号价值排名**：按 `pnl` 排序已结算信号，标记 TOP 值得保留的信号类型 vs 该淘汰的
+5. **环比上周**：与上周周报指标对比（读上一份周报或累计值）
+6. **校准建议**：
    - P1 周触发率 <40% → 条件过严/类型需调整的具体建议
    - 目标达成率 <50% → 目标价设定校准
    - 预期vs实际偏差 → 生成者校准
+   - **短板维度（新增）**：针对分维度表中标注的短板切片给出定向校准建议（如"早盘信号触发率 0%，建议检查早盘生成逻辑/纳入标准"）
    - 保留/淘汰/调整信号类型决策（如"农业延续验证类信号已连续 N 周 0 触发，建议移除"）
-6. **沉淀经验**：将可复用结论按**事件驱动**沉淀到 OpenViking（本会话 peer=xiaoman）——
+7. **沉淀经验**：将可复用结论按**事件驱动**沉淀到 OpenViking（本会话 peer=xiaoman）——
    - 触发 T1（新规律：本周信号质量揭示新的信号设计规律）→ `viking_remember`（category=experiences，
      按 `_schema.md` 模板：领域=信号设计，置信度默认中，证据链记本周指标）；
    - 触发 T2（旧信号设计经验被本周数据证伪/校准）→ 更新对应条目证据链 + 贝叶斯置信度

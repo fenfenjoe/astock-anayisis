@@ -95,8 +95,8 @@ class TestSeedAll:
         """seed_all should call metrics_upsert for each strategy definition."""
         sync_mod.seed_all()
 
-        # 19 strategies defined in STRATEGY_DEFS
-        assert sync_mod.metrics_upsert.call_count == 19
+        # 21 strategies defined in STRATEGY_DEFS (S1~S21)
+        assert sync_mod.metrics_upsert.call_count == 21
 
     def test_seeds_kb_from_strategy_kb_module(self, mock_db):
         """seed_all should call kb_upsert for each KB entry."""
@@ -117,7 +117,7 @@ class TestSeedAll:
         sync_mod.seed_all()
 
         # Metrics and KB should still be synced (idempotent upsert)
-        assert sync_mod.metrics_upsert.call_count == 19
+        assert sync_mod.metrics_upsert.call_count == 21
         assert sync_mod.kb_upsert.call_count >= 1
         # But mark_seeded should NOT be called again
         sync_mod.mark_seeded.assert_not_called()
@@ -396,7 +396,7 @@ class TestSyncBacktestNav:
 
         results = sync_mod.sync_backtest_nav()
         assert isinstance(results, dict)
-        assert len(results) == 19  # 19 strategy definitions
+        assert len(results) == 21  # 21 strategy definitions (S1~S21)
 
     def test_progress_callback(self, mock_db, monkeypatch):
         _mock_get_kline(monkeypatch,return_value=pd.DataFrame())
@@ -406,9 +406,9 @@ class TestSyncBacktestNav:
             progress_callback=lambda msg: progress_msgs.append(msg)
         )
 
-        assert len(progress_msgs) >= 19
+        assert len(progress_msgs) >= 21
         # First message should mention strategy 1
-        assert "1/19" in progress_msgs[0]
+        assert "1/21" in progress_msgs[0]
 
     def test_handles_import_error_for_strategy_module(self, mock_db, monkeypatch):
         """Strategies whose module can't be imported should be skipped with -1."""
@@ -416,8 +416,8 @@ class TestSyncBacktestNav:
         _mock_get_kline(monkeypatch,return_value=pd.DataFrame())
 
         results = sync_mod.sync_backtest_nav()
-        # All strategies should have result entries
-        for i in range(1, 18):
+        # All strategies should have result entries (S1~S21)
+        for i in range(1, 22):
             name = f"S{i}"
             assert any(k.startswith(name + "_") for k in results), \
                 f"Missing result for {name}"

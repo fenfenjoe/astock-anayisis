@@ -368,17 +368,18 @@ class TestReachabilityProbe:
         ok, _ = reachability.probe_platform(xueqiu)
         assert ok is True
 
-    def test_social_platforms_has_7_places(self):
-        """合并后「爱逛的地方」= 5 社交 + 财联社 + 华尔街见闻，共 7 个。"""
+    def test_social_platforms_has_8_places(self):
+        """「爱逛的地方」= 6 社交/量化平台 + 财联社 + 华尔街见闻，共 8 个（2026-10 增聚宽）。"""
         ids = {p["id"] for p in config.SOCIAL_PLATFORMS}
         assert ids == {
-            "weibo", "xhs", "x", "zhihu", "xueqiu", "cls", "wallstreetcn",
+            "weibo", "xhs", "x", "zhihu", "xueqiu", "joinquant", "cls", "wallstreetcn",
         }
-        # kind 分类正确（知乎/雪球 2026-09-09 由 rss 改 cookie）
+        # kind 分类正确（知乎/雪球/聚宽为 cookie 类）
         kinds = {p["id"]: p["kind"] for p in config.SOCIAL_PLATFORMS}
         assert kinds["cls"] == "rss" and kinds["wallstreetcn"] == "rss"
         assert kinds["weibo"] == "cookie" and kinds["xhs"] == "cookie"
         assert kinds["zhihu"] == "cookie" and kinds["xueqiu"] == "cookie"
+        assert kinds["joinquant"] == "cookie"
         assert kinds["x"] == "none"
         # cookie 平台带关键 key 提示（提示用户取哪个 key-value）
         keys = {p["id"]: p.get("cookie_keys") for p in config.SOCIAL_PLATFORMS}
@@ -386,9 +387,10 @@ class TestReachabilityProbe:
         assert "web_session" in keys["xhs"]
         assert "z_c0" in keys["zhihu"]
         assert "xq_a_token" in keys["xueqiu"]
-        # playable：4 个 cookie 平台可逛（逛状态素材源），X/RSS 源不可逛
+        assert "token" in keys["joinquant"] and "uid" in keys["joinquant"]
+        # playable：5 个 cookie 平台可逛（逛状态素材源），X/RSS 源不可逛
         playable = {p["id"] for p in config.SOCIAL_PLATFORMS if p.get("playable")}
-        assert playable == {"weibo", "xhs", "zhihu", "xueqiu"}
+        assert playable == {"weibo", "xhs", "zhihu", "xueqiu", "joinquant"}
 
     def test_browse_state_mapping(self):
         """逛状态 id ↔ 平台映射（含新增知乎/雪球）。"""
@@ -425,6 +427,46 @@ class TestReachabilityProbe:
         for p in config.SOCIAL_PLATFORMS:
             assert p["id"] in cache2
             assert "reachable" in cache2[p["id"]]
+
+    def test_joinquant_probe_not_logged_in(self, monkeypatch):
+        """聚宽未登录（isLogin=0）→ 不可达，即使有 Cookie。"""
+        agent_db.platform_cookie_set("joinquant", "token=abc; uid=xyz")
+
+        class NotLoggedIn:
+            status_code = 200
+            headers = {"Content-Type": "application/json"}
+
+            def json(self):
+                return {"data": {"isLogin": 0}, "status": "0", "code": "00000"}
+
+        monkeypatch.setattr("requests.get", lambda *a, **kw: NotLoggedIn())
+        jq = next(p for p in config.SOCIAL_PLATFORMS if p["id"] == "joinquant")
+        ok, reason = reachability.probe_platform(jq)
+        assert ok is False
+
+    def test_joinquant_probe_logged_in(self, monkeypatch):
+        """聚宽已登录（isLogin=1）→ 可达。"""
+        agent_db.platform_cookie_set("joinquant", "token=abc; uid=xyz")
+
+        class LoggedIn:
+            status_code = 200
+            headers = {"Content-Type": "application/json"}
+
+            def json(self):
+                return {"data": {"isLogin": 1}, "status": "0", "code": "00000"}
+
+        monkeypatch.setattr("requests.get", lambda *a, **kw: LoggedIn())
+        jq = next(p for p in config.SOCIAL_PLATFORMS if p["id"] == "joinquant")
+        ok, reason = reachability.probe_platform(jq)
+        assert ok is True
+
+    def test_joinquant_probe_no_cookie(self):
+        """聚宽无 Cookie → 不可达且提示关键 key。"""
+        jq = next(p for p in config.SOCIAL_PLATFORMS if p["id"] == "joinquant")
+        ok, reason = reachability.probe_platform(jq)
+        assert ok is False
+        assert "Cookie" in reason
+        assert "token" in reason
 
 
 # ═══════════════════════════════════════════
@@ -552,7 +594,8 @@ class TestPlaywrightCollector:
             and (n.get("todo_data") or {}).get("platform_id") == "weibo"
         ]
         assert todos, "Cookie 失效应生成待办"
-        assert "失效" in todos[0]["content"]
+        assert "爱逛的地方" in todos[0]["content"]
+        assert "刷新" in todos[0]["content"]
 
     def test_weibo_json_ok(self, monkeypatch):
         """微博接口正常返回 JSON → 解析出热榜条目。"""
@@ -573,6 +616,146 @@ class TestPlaywrightCollector:
         assert len(items) == 1
         assert items[0]["title"] == "热搜一"
         assert items[0]["url"].endswith("/status/1")
+
+
+# ═══════════════════════════════════════════
+# playwright_collector：聚宽社区采集（无需登录，匿名可用）
+# ═══════════════════════════════════════════
+
+
+class TestJoinQuantCollector:
+    """聚宽社区 listV2 API 采集（2026-10 实测匿名可用，无需 Cookie）。"""
+
+    def _listv2_resp(self, posts=None):
+        """构造 listV2 响应：data.list 含 postId/title/content/tagInfo/viewCount/replyCount。"""
+        import json as _json
+
+        posts = posts or [
+            {
+                "postId": "aaa111",
+                "title": "ETF轮动策略分享",
+                "content": "```python\ninitialize(context)\n```\n完整源码正文",
+                "tagInfo": [{"name": "策略"}, {"name": "轮动"}],
+                "viewCount": "100",
+                "replyCount": "5",
+                "backtestId": "bt123",
+            },
+            {
+                "postId": "bbb222",
+                "title": "无标签无热度帖子",
+                "content": "简短内容",
+                "tagInfo": [],
+                "viewCount": "0",
+                "replyCount": "0",
+            },
+        ]
+
+        class FakeResp:
+            headers = {"Content-Type": "text/html; charset=utf-8"}
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"data": {"list": posts}, "code": "00000", "status": "0"}
+
+        return FakeResp()
+
+    def test_joinquant_hot_items_parses(self, monkeypatch):
+        """listV2 正常返回 → 解析出标题/URL/摘要（含标签与热度）。"""
+        monkeypatch.setattr("requests.get", lambda *a, **k: self._listv2_resp())
+        items = playwright_collector._joinquant_hot_items(None, 10)
+        assert len(items) == 2
+        it = items[0]
+        assert it["title"] == "ETF轮动策略分享"
+        assert it["url"] == "https://www.joinquant.com/view/community/detail/aaa111"
+        assert "[策略,轮动]" in it["summary"]
+        assert "浏览100/回复5" in it["summary"]
+
+    def test_joinquant_hot_items_no_cookie_ok(self, monkeypatch):
+        """无 Cookie 也能采集（聚宽 API 匿名可用，区别于微博等登录态平台）。"""
+        monkeypatch.setattr("requests.get", lambda *a, **k: self._listv2_resp())
+        items = playwright_collector._joinquant_hot_items(None, 10)
+        assert len(items) == 2
+
+    def test_joinquant_hot_items_with_cookie_passes_header(self, monkeypatch):
+        """有 Cookie 时请求头带上 Cookie。"""
+        sent = {}
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            sent["cookie"] = headers.get("Cookie")
+            return self._listv2_resp()
+
+        monkeypatch.setattr("requests.get", fake_get)
+        playwright_collector._joinquant_hot_items("token=abc; uid=xyz", 10)
+        assert sent["cookie"] == "token=abc; uid=xyz"
+
+    def test_joinquant_hot_items_system_error_returns_empty(self, monkeypatch):
+        """接口返回系统异常（code≠00000）→ []（不阻塞状态机）。"""
+
+        class ErrResp:
+            headers = {"Content-Type": "text/html"}
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"data": None, "code": "20000", "status": "2", "msg": "系统异常"}
+
+        monkeypatch.setattr("requests.get", lambda *a, **k: ErrResp())
+        items = playwright_collector._joinquant_hot_items(None, 10)
+        assert items == []
+
+    def test_joinquant_hot_items_skips_bad_rows(self, monkeypatch):
+        """缺 postId 或缺 title 的行跳过。"""
+        posts = [
+            {"postId": "ok1", "title": "好帖子", "content": "正文", "tagInfo": []},
+            {"postId": "", "title": "无id", "content": "跳过", "tagInfo": []},
+            {"postId": "ok2", "title": "", "content": "跳过", "tagInfo": []},
+        ]
+        monkeypatch.setattr("requests.get", lambda *a, **k: self._listv2_resp(posts))
+        items = playwright_collector._joinquant_hot_items(None, 10)
+        assert len(items) == 1
+        assert items[0]["title"] == "好帖子"
+
+    def test_collect_joinquant_no_cookie_succeeds(self, monkeypatch):
+        """聚宽无 Cookie → 仍可采集（区别于微博，不硬门槛 Cookie）。"""
+        monkeypatch.setattr(
+            playwright_collector,
+            "_joinquant_hot_items",
+            lambda cookie, limit: [
+                {"title": "聚宽文章一", "url": "https://www.joinquant.com/view/community/detail/x1", "summary": "s"}
+            ],
+        )
+        result = playwright_collector.collect_platform("joinquant")
+        assert result["ok"] is True
+        assert result["added"] == 1
+        assert agent_db.reachability_get("joinquant")["reachable"] is True
+
+    def test_collect_joinquant_still_respects_cookie_when_present(self, monkeypatch):
+        """有 Cookie 时照常采集（cookie 作为可选增强，不是门槛）。"""
+        agent_db.platform_cookie_set("joinquant", "token=abc; uid=xyz")
+        seen = {}
+
+        def fake_collect(cookie, limit):
+            seen["cookie"] = cookie
+            return [{"title": "t", "url": "https://www.joinquant.com/view/community/detail/x", "summary": "s"}]
+
+        monkeypatch.setattr(playwright_collector, "_joinquant_hot_items", fake_collect)
+        result = playwright_collector.collect_platform("joinquant")
+        assert result["ok"] is True
+        assert seen["cookie"] == "token=abc; uid=xyz"
+
+    def test_collect_joinquant_failure_writes_unreachable(self, monkeypatch):
+        """聚宽采集异常 → ok=False + 回写 reachability=false。"""
+
+        def boom(cookie, limit):
+            raise RuntimeError("接口超时")
+
+        monkeypatch.setattr(playwright_collector, "_joinquant_hot_items", boom)
+        result = playwright_collector.collect_platform("joinquant")
+        assert result["ok"] is False
+        assert agent_db.reachability_get("joinquant")["reachable"] is False
 
 
 # ═══════════════════════════════════════════
@@ -637,7 +820,8 @@ class TestExecuteBrowse:
             if n.get("todo_type") == "cookie_provide"
             and (n.get("todo_data") or {}).get("platform_id") == "weibo"
         ]
-        assert todos and "失效" in todos[0]["content"]
+        assert todos and "爱逛的地方" in todos[0]["content"]
+        assert todos and "刷新" in todos[0]["content"]
         # 活动记录 note 说明未逛原因
         latest = agent_db.activity_list(limit=1)
         assert "Cookie 失效" in (latest[0].get("note") or "")
@@ -714,3 +898,56 @@ class TestExecuteBrowse:
         result = behavior.execute_browse("weibo", llm_fn=fake_llm)
         assert result["ok"] is True
         assert result["posted_count"] == 0
+
+
+class TestExecuteBrowseJoinQuant:
+    """聚宽逛流程：无 Cookie 也能逛（API 匿名可用），区别于微博等登录态平台。"""
+
+    def test_browse_joinquant_no_cookie_success(self, monkeypatch):
+        """聚宽无 Cookie → 逛流程正常执行（采集→浏览），不因缺 Cookie 失败。"""
+        # 先入库 1 条 joinquant 素材（模拟采集结果，execute_browse 从库中读未读浏览）
+        agent_db.knowledge_upsert(
+            "joinquant",
+            "聚宽策略分享",
+            "https://www.joinquant.com/view/community/detail/aaa111",
+            "[策略] 浏览100/回复5 轮动策略正文",
+        )
+        # mock 采集成功（无 cookie 参数）
+        monkeypatch.setattr(
+            playwright_collector,
+            "collect_platform",
+            lambda pid, db=None: {
+                "platform_id": pid, "ok": True, "collected": 1,
+                "added": 1, "dup": 0,
+            },
+        )
+
+        def fake_llm(task):
+            return json.dumps({
+                "viewpoint": "聚宽策略观点",
+                "emotion": "curious",
+                "memory": "值得研究",
+                "post_content": "逛聚宽看到个轮动策略思路，有点意思。",
+                "worth_post": True,
+            }, ensure_ascii=False)
+
+        result = behavior.execute_browse("joinquant", llm_fn=fake_llm)
+        assert result["ok"] is True
+        assert result["read_count"] >= 1
+        assert result["posted_count"] >= 1
+        # 逛冷却时间戳已写（与 reading 独立）
+        assert agent_db.meta_get("xiaoman_last_browse_at") is not None
+
+    def test_browse_joinquant_failure_reports(self, monkeypatch):
+        """聚宽采集失败 → 逛流程返回失败，不崩。"""
+        monkeypatch.setattr(
+            playwright_collector,
+            "collect_platform",
+            lambda pid, db=None: {
+                "platform_id": pid, "ok": False, "collected": 0,
+                "error": "采集失败: 接口超时",
+            },
+        )
+        result = behavior.execute_browse("joinquant")
+        assert result["ok"] is False
+        assert "采集失败" in result["error"]

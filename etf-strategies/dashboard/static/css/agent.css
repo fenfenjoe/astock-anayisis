@@ -66,22 +66,10 @@
 .agent-pane.active { display: block; }
 
 /* ── 聊天布局：会话侧栏 + 消息区 ── */
-/* 📌 提示与待办面板（REQ-002）：聊天页顶部，列表式展示 */
-.agent-notices {
-  background: var(--bg-surface); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4);
-  margin-bottom: var(--space-4);
-  min-width: 0; /* 防长内容撑开面板 → 横向滚动条 */
-}
-.agent-notices-head {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: var(--space-2);
-}
-.agent-notices-actions { display: flex; gap: var(--space-2); }
+/* 📌 提示与待办（REQ-002）：小满主动发；提示不需回复，待办回复后回调执行。
+   详情卡片展示在聊天主区（agent-notice-detail），侧边栏仅列标题（见下方
+   agent-notice-title-* 样式）。旧版顶部整块面板（agent-notices 容器）已移除。 */
 /* 列表自适应高度（分页兜底 5 条/页）：不设 max-height，天然无纵向滚动条 */
-.agent-notices-list {
-  display: flex; flex-direction: column; gap: var(--space-2);
-}
 .agent-notice {
   display: flex; gap: var(--space-3); align-items: flex-start;
   padding: var(--space-3) var(--space-4);
@@ -179,6 +167,9 @@
   display: grid; grid-template-columns: 240px 1fr;
   gap: var(--space-4); min-height: 60vh;
 }
+/* [hidden] 兜底：下面各面板显式 display:flex 会覆盖 hidden 的 UA 默认 display:none，
+   必须用 !important 强制隐藏，保证「会话 / 提示与待办」两个 Tab 严格互斥展示 */
+.agent-chat-layout [hidden] { display: none !important; }
 .agent-sessions {
   background: var(--bg-surface); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: var(--space-4);
@@ -209,6 +200,79 @@
 .agent-session-item:hover .agent-session-del,
 .agent-session-item.active .agent-session-del { opacity: 1; }
 .agent-session-del:hover { color: var(--accent-red); background: var(--bg-surface-2); }
+
+/* ── 会话侧边栏双 Tab（会话 / 提示与待办） ── */
+.agent-sidebar-tabs {
+  display: flex; gap: var(--space-1);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--space-2);
+}
+.agent-sidebar-tab {
+  flex: 1; background: none; border: none; cursor: pointer;
+  color: var(--text-secondary); font-family: var(--font-body);
+  font-size: 0.85rem; padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-md);
+  transition: color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+  white-space: nowrap;
+}
+.agent-sidebar-tab:hover { color: var(--text-primary); background: var(--bg-hover); }
+.agent-sidebar-tab.active {
+  color: var(--xm-accent);
+  background: color-mix(in oklch, var(--xm-accent) 10%, transparent);
+}
+/* 侧边栏 tab 上的未读小圆点（比顶部 tab 徽章更小巧） */
+.agent-sidebar-tab .agent-sidebar-badge {
+  margin-left: 4px; transform: translateY(-2px); vertical-align: middle;
+}
+
+/* 提示与待办标题列表（侧边栏） */
+.agent-notice-title-list {
+  display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-height: 0;
+}
+.agent-notice-titles {
+  overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-1); flex: 1;
+}
+.agent-notice-title-item {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+  color: var(--text-secondary); cursor: pointer; font-size: 0.85rem;
+  transition: background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+.agent-notice-title-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.agent-notice-title-item.active { background: var(--bg-selected); color: var(--xm-accent); }
+.agent-notice-title-item.is-unread { color: var(--text-primary); }
+.agent-notice-title-item.is-processed { opacity: 0.55; filter: saturate(0.5); }
+.agent-notice-title-tag {
+  flex: none; font-size: 0.6rem; font-weight: 700; padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+.agent-notice-title-tag.todo { background: color-mix(in oklch, var(--accent-amber) 18%, transparent); color: var(--accent-amber); }
+.agent-notice-title-tag.notice { background: color-mix(in oklch, var(--accent-cyan) 16%, transparent); color: var(--accent-cyan); }
+.agent-notice-title-name {
+  flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* 待办未处理红点（open 状态） */
+.agent-notice-title-dot {
+  flex: none; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent-red);
+  box-shadow: 0 0 4px color-mix(in oklch, var(--accent-red) 60%, transparent);
+}
+
+/* 提示与待办详情（右侧主区） */
+.agent-notice-detail {
+  flex: 1; overflow-y: auto; padding: var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-3);
+  min-height: 46vh; max-height: 60vh;
+}
+.agent-notice-detail-head {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.agent-notice-detail-body { display: flex; flex-direction: column; gap: var(--space-2); }
+.agent-notice-detail-body .agent-notice {
+  max-width: 100%;
+}
 
 .agent-chat-main {
   background: var(--bg-surface); border: 1px solid var(--border);
@@ -395,13 +459,34 @@
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 
-/* ── 爱逛的地方（方案 v1.10 §9.4 + 2026-09 合并）：品牌 SVG + 可访问性高亮/置灰 ── */
+/* ── 爱逛的地方（方案 v1.10 §9.4 + 2026-09 合并）：品牌 SVG + 可访问性高亮/置灰 ──
+   2026-10 更新：条目改为 wrapper div（内嵌链接 + 可选「去登录」按钮），
+   卡片头部新增「↻ 刷新」按钮（刷新可达性，含本机浏览器 Cookie 检查）。 */
+.xm-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-2);
+}
+.xm-social-refresh {
+  border: 1px solid var(--border);
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+  border-radius: var(--radius-full);
+  padding: 2px 10px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+.xm-social-refresh:hover:not(:disabled) {
+  border-color: var(--xm-accent-2); color: var(--xm-accent);
+}
+.xm-social-refresh:disabled { opacity: 0.5; cursor: wait; }
 .xm-social {
   display: flex; flex-wrap: wrap; gap: var(--space-2);
   margin-top: var(--space-3);
 }
 .xm-social-item {
-  display: flex; align-items: center; gap: var(--space-2);
+  display: inline-flex; align-items: center; gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   background: var(--bg-surface-2);
   border: 1px solid var(--border);
@@ -415,6 +500,10 @@
 .xm-social-item:focus-visible {
   outline: 2px solid var(--xm-accent);
   outline-offset: 2px;
+}
+.xm-social-link {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  text-decoration: none;
 }
 .xm-social-icon {
   width: 1.05rem; height: 1.05rem; display: inline-flex;
@@ -437,6 +526,20 @@
   opacity: 0.55;
 }
 .xm-social-item.is-off .xm-social-name { color: var(--text-muted); opacity: 0.7; }
+/* 去登录（仅不可达的 Cookie 平台显示） */
+.xm-social-login {
+  border: 1px solid var(--xm-accent-2);
+  background: transparent;
+  color: var(--xm-accent);
+  border-radius: var(--radius-full);
+  padding: 1px 10px;
+  font-size: 0.68rem;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+.xm-social-login:hover:not(:disabled) { background: var(--xm-accent); color: var(--bg-deep); }
+.xm-social-login:disabled { opacity: 0.5; cursor: wait; }
 .xm-social-note { font-size: 0.68rem; margin-top: var(--space-2); }
 @media (max-width: 480px) {
   .xm-social-item { flex: 1 1 auto; justify-content: center; }
@@ -458,6 +561,13 @@
 .xm-basic-item { line-height: 1.6; }
 .xm-basic-item b { color: var(--text-primary); font-weight: 600; }
 .xm-basic-item b::after { content: '：'; }
+
+/* 「关于我」精简版自我介绍（2026-10：100~200 字段落，替代人设卡字段列表） */
+.xm-about-me {
+  margin: var(--space-3) 0 0; padding: 0;
+  font-size: 0.92rem; line-height: 1.85;
+  color: var(--text-secondary);
+}
 
 .xm-main { min-width: 0; }
 .xm-act-head {

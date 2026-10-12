@@ -1,0 +1,9 @@
+﻿[2026-10-08T17:10:46] LOGIC_INSPECT 开始 | 交易日=是
+[2026-10-08 17:17:51] ===== 巡检汇总开始 =====
+[2026-10-08 17:17:51] 交易日=是 | A组: A1 PASS (早盘分析-staging 15345B) / A2 PASS (复盘分析-staging 5171B)
+[2026-10-08 17:17:51] B组: B1 PASS (早盘staging 章节完整) / B2 PASS (复盘staging 章节+教训+变量) / B3 PASS (ETF代码-名称一致) / B4 PASS (staging 新鲜指向明日)
+[2026-10-08 17:17:51] C组: C1 PASS (早盘报告 7节) / C2 PASS (每日信号 7节) / C3 FAIL 2处 (早盘预测回顾/次日核心关注) -> BUG-018 第4次复发 / C4 PASS (task_state 一致)
+[2026-10-08 17:17:51] D组: D1 PASS (持仓 7只一致) / D2 PASS (date=20261008 trading_day=True) / D3 PASS (无孤立信号 42条) / D4 WARN->auto_fix 实施后 PASS (BUG-036 FIXED)
+[2026-10-08 17:17:51] E组: E1 PASS (经验库无矛盾, 跨领域均有场景限定) / E2 PASS (OPEN=18/FIXED=14/WONT_FIX=1 与实际一致)
+[2026-10-08 17:17:51] 新增BUG=0 | 修复BUG=1 (BUG-036 D4 路径+SKILL标记) | PENDING_CONFIRMATION 沿用 #8/#16
+[2026-10-08 17:17:51] LOGIC_INSPECT 结束

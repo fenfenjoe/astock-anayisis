@@ -39,6 +39,49 @@ function renderMarkdown(md) {
   return '<pre class="md-plain">' + escapeHtml(md) + '</pre>';
 }
 
+// ── HTML 报告渲染（2026-10 回退：早盘/复盘报告恢复 markdown 渲染；以下仅作历史 HTML 行兜底）──
+function isHtmlReport(s) {
+  // 剥离 UTF-8 BOM 与首尾空白后再判定（LLM 写入的 HTML 可能带 \ufeff）
+  const t = String(s || '').replace(/^\uFEFF/, '').trim().toLowerCase();
+  return /^<!doctype html/.test(t) || /^<html[\s>]/.test(t) || /<style[\s>]/.test(t);
+}
+
+function sanitizeReportHtml(html) {
+  if (typeof DOMParser === 'undefined') {
+    // 极旧浏览器兜底：粗粒度剥离危险内容
+    return String(html || '')
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+      .replace(/<object[\s\S]*?<\/object>/gi, '')
+      .replace(/<embed[\s\S]*?>/gi, '')
+      .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      .replace(/javascript:/gi, '');
+  }
+  const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+  // 移除危险/交互节点（保留 <style>，报告自带设计系统）
+  const bad = doc.querySelectorAll('script, iframe, object, embed, link, meta, base, form, input, button, select, textarea');
+  bad.forEach((n) => n.remove());
+  // 剥离事件属性与 javascript: URL
+  doc.querySelectorAll('*').forEach((el) => {
+    Array.from(el.attributes).forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      const val = (attr.value || '').toLowerCase();
+      if (name.startsWith('on') || val.startsWith('javascript:')) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+  return doc.body ? doc.body.innerHTML : String(html || '');
+}
+
+function renderReportContent(raw) {
+  if (!raw) return '<p class="muted">（空）</p>';
+  if (isHtmlReport(raw)) {
+    return '<div class="rep-html">' + sanitizeReportHtml(raw) + '</div>';
+  }
+  return renderMarkdown(raw);
+}
+
 function fmtMoney(v) {
   if (v === null || v === undefined || v === '—') return '—';
   const n = parseFloat(v);
@@ -419,6 +462,8 @@ let sigHistState = {};        // 历史查询条件
 async function sigLoad(force) {
   // 进入视图时同时加载今日信号 + 历史查询（sigqLoad 由 switchView 调用）
   try {
+    _sigTrigCache = {};   // 触发记录展开缓存：视图每次进入时清空，避免陈旧
+    _sigCheckCache = {};  // 盘中检查记录展开缓存：同上
     if (!sigEnums) {
       sigEnums = await apiGet('/api/signal-enums');
       _fillSigSelects();
@@ -478,8 +523,9 @@ async function sigTodayLoad() {
       box.innerHTML = '<p class="muted">今日暂无信号（非交易日或无信号生成）</p>';
       return;
     }
-    const cols = ['优先级', '标的', '操作类型', '仓位', '有效时段', '状态', '交易价', '目标价', '止损价', '信号ID'];
+    const cols = ['优先级', '标的', '操作类型', '仓位', '有效时段', '状态', '交易价', '目标价', '止损价', '信号ID', '操作'];
     box.innerHTML = '<div class="table-wrap"><table class="data-table sig-table"><thead><tr>' +
+      '<th class="sig-toggle-th" title="点击信号行展开盘中检查记录"></th>' +
       cols.map((c) => '<th>' + escapeHtml(c) + '</th>').join('') +
       '</tr></thead><tbody>' +
       d.signals.map((s) => _sigRowHtml(s, cols, false)).join('') +
@@ -491,6 +537,7 @@ async function sigTodayLoad() {
 
 function _sigRowHtml(s, cols, withDate) {
   const typeLabel = _tradeTypeLabel(s.trade_type);
+  const sid = s.signal_id || '';
   const cells = {
     '日期': withDate ? escapeHtml((s.signal_date || '').slice(5)) : '',
     '优先级': escapeHtml(s.priority || '—'),
@@ -503,9 +550,327 @@ function _sigRowHtml(s, cols, withDate) {
     '交易价': s.trade_price != null && s.trade_price !== '' ? escapeHtml(s.trade_price) : '—',
     '目标价': escapeHtml(s.target_price || '—'),
     '止损价': escapeHtml(s.stop_price || '—'),
-    '信号ID': '<code class="sig-id">' + escapeHtml(s.signal_id || '—') + '</code>',
+    '信号ID': sid
+      ? '<span class="sig-expand" data-signal-id="' + escapeHtml(sid) +
+        '" onclick="sigToggleTriggers(event,\'' + escapeHtml(sid).replace(/'/g, "\\'") + '\')">' +
+        '<span class="sig-caret">▸</span> <code class="sig-id">' + escapeHtml(sid) + '</code></span>'
+      : '<span class="muted">—</span>',
+    '操作': _sigActionCell(s),
   };
-  return '<tr>' + cols.map((c) => '<td>' + (cells[c] || '') + '</td>').join('') + '</tr>';
+  // 行首展开指示器：点击整行展开「盘中检查记录」（再次点击收起）
+  const caretCell = '<td class="sig-toggle-cell"><span class="sig-caret sig-row-caret">▸</span></td>';
+  return '<tr class="sig-row" data-signal-id="' + escapeHtml(sid) + '"' +
+    (sid ? ' onclick="sigToggleChecks(event,\'' + escapeHtml(sid).replace(/'/g, "\\'") + '\')"' : '') + '>' +
+    caretCell +
+    cols.map((c) => '<td>' + (cells[c] || '') + '</td>').join('') + '</tr>';
+}
+
+// ── 信号触发记录展开（2026-09-21 新增）──────────────────────────
+// 点击信号ID → 从 /api/signal-trigger-records 拉取该信号的触发记录明细，
+// 在信号行下方插入一个 colspan 明细行，内嵌一张触发记录表格。再次点击收起。
+const _sigTrigCacheInit = {};   // signal_id -> {loaded, html, loading}（sigLoad 时整体替换清空）
+let _sigTrigCache = _sigTrigCacheInit;
+
+async function sigToggleTriggers(ev, signalId) {
+  ev.stopPropagation();
+  const toggle = ev.currentTarget;
+  const row = toggle.closest('tr.sig-row');
+  if (!row) return;
+  const tbody = row.parentNode;
+  if (!tbody) return;
+
+  // 已有触发记录展开行 → 收起
+  const next = row.nextElementSibling;
+  if (next && next.classList.contains('sig-trigger-detail')) {
+    next.remove();
+    const caret = toggle.querySelector('.sig-caret');
+    if (caret) caret.textContent = '▸';
+    return;
+  }
+
+  // 展开前收起该行的盘中检查记录（互斥，避免同一信号行下两个展开面板）
+  const checkDetail = row.nextElementSibling;
+  if (checkDetail && checkDetail.classList.contains('sig-check-detail')) {
+    checkDetail.remove();
+    const rowCaret = row.querySelector('.sig-row-caret');
+    if (rowCaret) rowCaret.textContent = '▸';
+  }
+
+  // 展开：插入明细行
+  const detail = document.createElement('tr');
+  detail.className = 'sig-trigger-detail';
+  detail.innerHTML = '<td colspan="' + row.children.length + '"><div class="sig-trigger-box">' +
+    '<span class="muted">加载触发记录...</span></div></td>';
+  tbody.insertBefore(detail, row.nextSibling);
+  const caret = toggle.querySelector('.sig-caret');
+  if (caret) caret.textContent = '▾';
+
+  // 有缓存 → 直接渲染
+  if (_sigTrigCache[signalId] && _sigTrigCache[signalId].loaded) {
+    _renderTrigDetail(detail, _sigTrigCache[signalId].items, signalId);
+    return;
+  }
+
+  try {
+    const d = await apiGet('/api/signal-trigger-records?signal_id=' + encodeURIComponent(signalId));
+    const items = d.items || [];
+    _sigTrigCache[signalId] = { loaded: true, items };
+    _renderTrigDetail(detail, items, signalId);
+  } catch (e) {
+    detail.innerHTML = '<td colspan="' + row.children.length + '"><div class="sig-trigger-box">' +
+      '<span class="num-danger">加载失败: ' + escapeHtml(e.message) + '</span></div></td>';
+    if (caret) caret.textContent = '▸';
+  }
+}
+
+function _renderTrigDetail(detail, items, signalId) {
+  const prev = detail.previousElementSibling;
+  const cols = prev ? prev.children.length : 8;
+  if (!items || !items.length) {
+    detail.innerHTML = '<td colspan="' + cols + '"><div class="sig-trigger-box"><span class="muted">' +
+      '该信号暂无触发记录（signal_id=' + escapeHtml(signalId) + '）</span></div></td>';
+    return;
+  }
+  // 归因优先（2026-09-24）：早盘预填的「已生成」记录（内容=生成原因）排最前，
+  // 其后按时间倒序展示盘中「已触发」等记录 —— 用户先看到"为什么生成"，再看到触发过程
+  const sorted = items.slice().sort((a, b) => {
+    const aGen = (a.status || '').indexOf('已生成') !== -1 ? 0 : 1;
+    const bGen = (b.status || '').indexOf('已生成') !== -1 ? 0 : 1;
+    if (aGen !== bGen) return aGen - bGen;
+    return String(b.trigger_time || '').localeCompare(String(a.trigger_time || ''));
+  });
+  const head = ['触发时间', '优先级', '标的', '操作类型', '触发条件摘要', '状态', '建议操作', '用户操作'];
+  const body = sorted.map((r) => {
+    const isGen = (r.status || '').indexOf('已生成') !== -1;
+    const statusCls = isGen ? 'sig-gen-status' : 'sig-status';
+    return '<tr>' +
+      '<td class="mono">' + escapeHtml(r.trigger_time || '—') + '</td>' +
+      '<td>' + escapeHtml(r.priority || '—') + '</td>' +
+      '<td>' + escapeHtml((r.name || '') + (r.ticker ? ' <span class="muted">' + r.ticker + '</span>' : '')) + '</td>' +
+      '<td>' + escapeHtml(r.action_type || '—') + '</td>' +
+      '<td class="sig-trig-cond">' + escapeHtml(r.condition || '—') + '</td>' +
+      '<td><span class="' + statusCls + '">' + escapeHtml(r.status || '—') + '</span></td>' +
+      '<td>' + escapeHtml(r.suggest || '—') + '</td>' +
+      '<td>' + escapeHtml(r.result || '—') + '</td>' +
+      '</tr>';
+  }).join('');
+  detail.innerHTML = '<td colspan="' + cols + '"><div class="sig-trigger-box">' +
+    '<div class="sig-trigger-head">📋 信号触发记录 <span class="muted">(' + items.length + ' 条 · 首条=生成归因)</span></div>' +
+    '<div class="table-wrap"><table class="data-table sig-trigger-table"><thead><tr>' +
+    head.map((h) => '<th>' + escapeHtml(h) + '</th>').join('') +
+    '</tr></thead><tbody>' + body + '</tbody></table></div></div></td>';
+}
+
+// ── 盘中检查记录展开（2026-09-24 新增）──────────────────────────
+// 点击信号**行** → 从 /api/signal-check-records 拉取该信号每个检查点的盘中检查结果，
+// 在信号行下方插入一个 colspan 明细行，内嵌检查记录表格。再次点击收起。
+const _sigCheckCacheInit = {};   // signal_id -> {loaded, html, loading}
+let _sigCheckCache = _sigCheckCacheInit;
+
+// 行内交互元素（点击不触发整行展开）
+function _isSigInnerClick(ev) {
+  const t = ev && ev.target;
+  if (!t || !t.closest) return false;
+  return !!t.closest('.sig-expand, .sig-exec-btn, button, a, input, select, textarea');
+}
+
+async function sigToggleChecks(ev, signalId) {
+  if (_isSigInnerClick(ev)) return;  // 内部交互（信号ID展开/执行按钮）不触发行展开
+  const row = ev.currentTarget.closest('tr.sig-row');
+  if (!row) return;
+  const tbody = row.parentNode;
+  if (!tbody) return;
+
+  // 已有检查记录展开行 → 收起
+  const next = row.nextElementSibling;
+  if (next && next.classList.contains('sig-check-detail')) {
+    next.remove();
+    const caret = row.querySelector('.sig-row-caret');
+    if (caret) caret.textContent = '▸';
+    return;
+  }
+
+  // 展开前先收起该行的触发记录展开（互斥，避免同一信号行下两个展开面板）
+  const triggerDetail = row.nextElementSibling;
+  if (triggerDetail && triggerDetail.classList.contains('sig-trigger-detail')) {
+    triggerDetail.remove();
+    const idCaret = row.querySelector('.sig-expand .sig-caret');
+    if (idCaret) idCaret.textContent = '▸';
+  }
+
+  // 展开：插入明细行
+  const detail = document.createElement('tr');
+  detail.className = 'sig-check-detail';
+  detail.innerHTML = '<td colspan="' + row.children.length + '"><div class="sig-trigger-box">' +
+    '<span class="muted">加载盘中检查记录...</span></div></td>';
+  tbody.insertBefore(detail, row.nextSibling);
+  const caret = row.querySelector('.sig-row-caret');
+  if (caret) caret.textContent = '▾';
+
+  // 有缓存 → 直接渲染
+  if (_sigCheckCache[signalId] && _sigCheckCache[signalId].loaded) {
+    _renderCheckDetail(detail, _sigCheckCache[signalId].items, signalId);
+    return;
+  }
+
+  try {
+    const d = await apiGet('/api/signal-check-records?signal_id=' + encodeURIComponent(signalId));
+    const items = d.items || [];
+    _sigCheckCache[signalId] = { loaded: true, items };
+    _renderCheckDetail(detail, items, signalId);
+  } catch (e) {
+    detail.innerHTML = '<td colspan="' + row.children.length + '"><div class="sig-trigger-box">' +
+      '<span class="num-danger">加载失败: ' + escapeHtml(e.message) + '</span></div></td>';
+    if (caret) caret.textContent = '▸';
+  }
+}
+
+function _renderCheckDetail(detail, items, signalId) {
+  const prev = detail.previousElementSibling;
+  const cols = prev ? prev.children.length : 9;
+  if (!items || !items.length) {
+    detail.innerHTML = '<td colspan="' + cols + '"><div class="sig-trigger-box"><span class="muted">' +
+      '该信号暂无盘中检查记录（signal_id=' + escapeHtml(signalId) + '）</span></div></td>';
+    return;
+  }
+  const head = ['检查点', '检查时间', '现价', '交易价', '触发判定', '状态变化', '检查摘要'];
+  // 按 日期+时间 升序展示（09:40 → 14:30 的当日检查轨迹，读取更自然）
+  const sorted = items.slice().sort((a, b) =>
+    String(a.check_date || '').localeCompare(String(b.check_date || '')) ||
+    String(a.check_time || '').localeCompare(String(b.check_time || ''))
+  );
+  const body = sorted.map((r) => {
+    const price = r.price != null && r.price !== '' ? escapeHtml(String(r.price)) : '—';
+    const tp = r.trade_price != null && r.trade_price !== '' ? escapeHtml(String(r.trade_price)) : '—';
+    const condCls = _checkCondClass(r.condition_met);
+    const sb = escapeHtml(r.status_before || '—');
+    const sa = escapeHtml(r.status_after || '—');
+    const flow = (r.status_before && r.status_after && r.status_before !== r.status_after)
+      ? sb + ' → <b class="' + condCls + '">' + sa + '</b>'
+      : (sb + (r.status_after && r.status_after !== r.status_before ? '' : ''));
+    return '<tr>' +
+      '<td>' + escapeHtml(r.check_point || '—') + '</td>' +
+      '<td class="mono">' + escapeHtml(r.check_time || '—') + '</td>' +
+      '<td class="mono">' + price + '</td>' +
+      '<td class="mono">' + tp + '</td>' +
+      '<td><span class="' + condCls + '">' + escapeHtml(r.condition_met || '—') + '</span></td>' +
+      '<td>' + flow + '</td>' +
+      '<td class="sig-trig-cond">' + escapeHtml(r.note || '—') + '</td>' +
+      '</tr>';
+  }).join('');
+  detail.innerHTML = '<td colspan="' + cols + '"><div class="sig-trigger-box">' +
+    '<div class="sig-trigger-head">🔍 盘中检查记录 <span class="muted">(' + items.length + ' 条检查点)</span></div>' +
+    '<div class="table-wrap"><table class="data-table sig-trigger-table"><thead><tr>' +
+    head.map((h) => '<th>' + escapeHtml(h) + '</th>').join('') +
+    '</tr></thead><tbody>' + body + '</tbody></table></div></div></td>';
+}
+
+function _checkCondClass(c) {
+  const s = String(c || '');
+  if (s.indexOf('触发') !== -1 && s.indexOf('未') === -1) return 'num-positive';
+  if (s.indexOf('已过期') !== -1) return 'muted';
+  if (s.indexOf('跳过') !== -1) return 'muted';
+  if (s.indexOf('未触发') !== -1) return 'muted';
+  return 'muted';
+}
+
+// 操作列：可执行信号（open/triggered + buy/sell）渲染「执行」按钮，其余渲染状态态文本
+function _sigActionCell(s) {
+  const status = s.status || '';
+  const type = s.trade_type || '';
+  if ((status === 'open' || status === 'triggered') && (type === 'buy' || type === 'sell')) {
+    const sid = escapeHtml(s.signal_id || '');
+    const price = (s.trade_price != null && s.trade_price !== '') ? s.trade_price
+      : (s.entry_price != null && s.entry_price !== '') ? s.entry_price : '';
+    const qty = (s.shares != null && s.shares !== '') ? s.shares : '';
+    return '<button class="btn-mini sig-exec-btn" data-signal-id="' + sid +
+      '" data-price="' + escapeHtml(String(price)) + '" data-qty="' + escapeHtml(String(qty)) +
+      '" onclick="sigExecute(\'' + sid + '\')">执行</button>';
+  }
+  if (status === 'executed') return '<span class="muted">✓ 已执行</span>';
+  if (status === 'settled') return '<span class="muted">已结算</span>';
+  return '<span class="muted">—</span>';
+}
+
+// ── 一键执行信号：弹窗（成交价/数量可改，信号已有值默认填入）→ POST /api/signal-execute → 刷新
+function sigExecute(signalId) {
+  const btn = document.querySelector('.sig-exec-btn[data-signal-id="' + signalId + '"]');
+  const name = btn ? (btn.closest('tr')?.querySelector('.sig-name')?.textContent || signalId) : signalId;
+  const knownPrice = btn ? btn.dataset.price : '';
+  const knownQty = btn ? btn.dataset.qty : '';
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `<div class="modal-card sig-exec-modal">
+    <div class="modal-head">
+      <b>执行信号 ${escapeHtml(signalId)}</b>
+      <span class="muted">${escapeHtml(name)} · 将录入交易并更新持仓/资产</span>
+      <button class="btn-icon-only" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    </div>
+    <div class="modal-body sig-exec-body">
+      <div class="sig-exec-form">
+        <label class="sig-exec-field">
+          <span>成交价（元/份）</span>
+          <input type="number" step="0.001" min="0" id="sig-exec-price"
+                 value="${escapeHtml(String(knownPrice))}" placeholder="必填，如 1.620">
+        </label>
+        <label class="sig-exec-field">
+          <span>成交数量（份）</span>
+          <input type="number" step="1" min="0" id="sig-exec-qty"
+                 value="${escapeHtml(String(knownQty))}" placeholder="必填，如 1000">
+        </label>
+        <div class="sig-exec-actions">
+          <button class="btn btn-secondary sig-exec-cancel">取消</button>
+          <button class="btn btn-primary sig-exec-confirm">确认执行</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  // 关闭（取消 / 点遮罩 / ✕）
+  const close = () => modal.remove();
+  modal.querySelector('.sig-exec-cancel').addEventListener('click', close);
+  modal.querySelector('.btn-icon-only').addEventListener('click', close);
+  modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+  // 确认：校验 → 提交 → 关闭 → 刷新
+  const confirmBtn = modal.querySelector('.sig-exec-confirm');
+  confirmBtn.addEventListener('click', async () => {
+    const priceNum = parseFloat(modal.querySelector('#sig-exec-price').value);
+    const qtyNum = parseFloat(modal.querySelector('#sig-exec-qty').value);
+    if (!isFinite(priceNum) || priceNum <= 0 || !isFinite(qtyNum) || qtyNum <= 0) {
+      toast('成交价与数量必须为正数', 'error');
+      return;
+    }
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = '执行中...';
+    try {
+      const r = await apiPost('/api/signal-execute', {
+        signal_id: signalId,
+        price: priceNum,
+        quantity: qtyNum,
+      });
+      close();
+      toast(r.message || '信号已执行，持仓/资产已更新', 'success');
+      await sigTodayLoad();
+      await sigHistorySearch(1);  // 历史表状态同步刷新
+    } catch (e) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = '确认执行';
+      toast('执行失败: ' + e.message, 'error');
+    }
+  });
+
+  document.body.appendChild(modal);
+  // 焦点给第一个输入框，Enter 提交
+  const priceInput = modal.querySelector('#sig-exec-price');
+  priceInput.focus();
+  priceInput.select();
+  modal.querySelectorAll('input').forEach((inp) => {
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') confirmBtn.click();
+    });
+  });
 }
 
 // ── 表2 历史信号查询 ──
@@ -538,6 +903,7 @@ async function sigHistorySearch(page) {
       return;
     }
     box.innerHTML = '<div class="table-wrap"><table class="data-table sig-table"><thead><tr>' +
+      '<th class="sig-toggle-th" title="点击信号行展开盘中检查记录"></th>' +
       cols.map((c) => '<th>' + escapeHtml(c) + '</th>').join('') +
       '</tr></thead><tbody>' +
       d.items.map((s) => _sigRowHtml(s, cols, true)).join('') +
@@ -668,7 +1034,7 @@ async function repSelectType(type) {
     document.querySelectorAll('.rep-type').forEach((b) => {
       b.classList.toggle('rep-type-active', b.textContent === type);
     });
-    safeSetHTML('rep-content', renderMarkdown(r.markdown));
+    safeSetHTML('rep-content', renderReportContent(r.markdown));
   } catch (e) {
     safeSetHTML('rep-content', '<p class="muted">加载失败: ' + escapeHtml(e.message) + '</p>');
   }

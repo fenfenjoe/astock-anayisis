@@ -2,7 +2,7 @@
 
 > 定时任务: A股交易日 07:55 CST | CronCreate durable
 > 依赖: 前一交易日晚间复盘生成的 staging 文件
-> 产出: reports/{today}/早盘报告.md + reports/{today}/每日信号.md + **reports/{today}/早盘报告.html（2026-10 起强制，供 Dashboard 展示）**
+> 产出: reports/{today}/早盘报告.md + reports/{today}/每日信号.md（2026-10 回退：仅 .md，Dashboard 以 markdown 渲染）
 > **{today} 格式**: `yyyyMMdd`（如 `20260727`），不是 `yyyy-MM-dd`！所有 Python 代码中必须用 `date.today().strftime("%Y%m%d")`，禁用 `date.today().isoformat()`
 
 ---
@@ -611,6 +611,7 @@ for key, p in paths.items():
 - 优先级: P0/P1
 - 标的: `{ETF名称}({代码})`
 - 触发条件: 量化条件，必须可验证（含具体数值/阈值）；P1 需含双向设计（触发路径+证伪路径）
+- **生成原因（2026-09-24 新增，必填）**：每条信号必须写明"为什么生成此信号"——即该信号的**归因**（驱动因素/逻辑链，如"北向资金持续净流入 + 通信板块涨停潮 + 技术面放量突破"）。生成原因 ≠ 触发条件（触发条件是"什么价位/量能会触发"，生成原因是"为什么早盘判断此机会"）。生成原因写入 §5.2 信号触发记录表的"触发条件摘要"列（状态=已生成），供 Dashboard 展开查看与复盘归因。
 - 操作类型: 减仓/止损/锁利/正T/反T/建仓（P1 主要为 正T/减仓/建仓/锁利）
 - 状态: 初始全部为"未触发"
 - 方向: 买入/卖出/中性
@@ -635,20 +636,28 @@ for key, p in paths.items():
 
 ---
 
-### 5.2 信号触发记录（占位）
+### 5.2 信号触发记录（早盘预填第一条生成记录 · 2026-09-24 改版）
+
+> **早盘生成信号时，为每条信号预填第一条触发记录**（触发条件摘要 = 该信号的**生成原因**，
+> 当前状态 = `已生成`）——这是该信号的归因起点，Dashboard「每日信号」页点击信号行/信号ID
+> 展开可见，供复盘与归因分析追溯"为什么早盘生成此信号"。
+> **盘中分析执行时**，若信号触发，在下方**追加**一条 `已触发` 记录（不覆盖、不修改早盘 `已生成` 行）。
+> 同一信号允许有多个时间点的记录（生成 + 多次触发检查），构成完整生命周期。
 
 ```markdown
 ## 信号触发记录
 
-> 盘中分析执行时，若信号总表中"未触发"信号的触发条件满足，则在此追加触发记录。
-
 | 触发时间 | 信号ID | 优先级 | 标的 | 操作类型 | 触发条件摘要 | 当前状态 | 建议操作 | 用户操作 |
 |----------|--------|:---:|------|:------:|-------------|:------:|----------|:------:|
-
-> **用户操作填写规范：** `已执行` `部分执行` `显式放弃` `放弃` `错过`
+{每条信号一行，触发时间=生成时间，触发条件摘要=生成原因，当前状态=已生成，用户操作=—}
 ```
 
-> ⚠️ 早盘生成时此表为空，盘中检查 Agent 负责填充。
+> **早盘生成记录示例**：
+> `| 07:55 | SIG-20260924-01 | P1 | 通信ETF(515880) | 建仓 | 北向资金持续净流入+通信板块涨停潮+技术面放量突破 | 已生成 | 按 7,500 份建仓 | — |`
+>
+> **状态语义**：`已生成`（早盘预填，归因记录）→ `已触发`（盘中条件满足）→ `已执行/已过期/已取消`。
+> **用户操作填写规范**：`已执行` `部分执行` `显式放弃` `放弃` `错过`（早盘生成记录填 `—`）。
+> **必须与信号总表一一对应**：信号总数 N 条 → 本表预填 N 行（每条信号的生成原因都在此留痕）。
 
 ---
 
@@ -826,6 +835,8 @@ else:
 - [ ] 若存在 P0 信号 → `## 条件单清单（REQ-011）` 节存在，且每条 P0 的条件单参数（标的/代码/触发价/数量/有效期）由信号表机械推导（REQ-011）
 - [ ] 条件单指令格式为 `{代码} 触发价 {交易价} {方向} {份额}份 有效期至 14:45`（可直接照抄）
 - [ ] 无 P0 信号 → 条件单清单节约略（不生成空节）
+- [ ] `## 信号触发记录` 节已预填 N 行生成记录（N=信号总数），每行 触发条件摘要=该信号生成原因、当前状态=已生成（2026-09-24）
+- [ ] 每条信号的生成原因与信号总表一一对应，且不含触发条件原文重复（生成原因=为什么生成，触发条件=什么价位触发）
 
 ---
 
@@ -835,6 +846,8 @@ else:
 > 自 2026-09-14 全云库化后只读云库 `signal_tracking`（按 `signal_date = 今天` 过滤）。
 > 若早盘只写 `每日信号.md` 不写云库 → 页面整天为空（"早盘分析后信号没展示"必现）。
 > 晚盘复盘虽也会 parse→upsert，但那要等到收盘后 —— 早盘入库让盘中/页面即时可见。
+> **2026-09-24 扩展**：同时把 §5.2 预填的**生成记录**（第一条触发记录，内容=生成原因）
+> 写入云库 `signal_trigger_records` 表 —— Dashboard 展开信号可见归因，复盘可追溯。
 
 生成完 `每日信号.md`（第五步）后**立即**执行：
 
@@ -843,8 +856,8 @@ python -X utf8 -c "
 import sys
 sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
 from datetime import date
-from lib.signal_tracking import parse_signal_rows_all
-from lib.signal_tracking_cloud import cloud_upsert_signals, cloud_enabled
+from lib.signal_tracking import parse_signal_rows_all, parse_trigger_records_from_md
+from lib.signal_tracking_cloud import cloud_upsert_signals, cloud_upsert_trigger_records, cloud_enabled
 
 today = date.today().strftime('%Y%m%d')  # ⚠️ 路径必须用 yyyyMMdd，不能用 isoformat()！
 md = open(f'my_doc/每日复盘/reports/{today}/每日信号.md', encoding='utf-8').read()
@@ -860,6 +873,13 @@ else:
         print('云库 upsert 成功条数:', ok)
         if ok < len(recs):
             print('⚠️ 部分信号入库失败，请检查字段合法性')
+        # 2026-09-24：同步写入 §5.2 预填的生成记录（第一条触发记录，内容=生成原因）
+        trigs = parse_trigger_records_from_md(md, date.today().isoformat())
+        if trigs:
+            ok_t = cloud_upsert_trigger_records(trigs)
+            print('生成记录落库:', ok_t, '/', len(trigs), '条（signal_trigger_records）')
+            if ok_t < len(trigs):
+                print('⚠️ 部分生成记录入库失败，请检查字段合法性')
     else:
         print('⚠️ 云库不可用（配置缺失/网络），信号未入库 —— 记录到执行日志，不阻塞')
 "
@@ -868,6 +888,8 @@ else:
 > 说明：`parse_signal_rows_all`（lib/signal_tracking.py）解析信号总表**全部行**（含 未触发→status='open'、已过期→status='expired'，
 > 与 `parse_signal_markdown` 只追踪已触发不同），`trigger_date` 键经 `_COLUMN_MAP` 正确落云库 `signal_date`。
 > upsert 幂等（on_conflict=signal_id）：盘中/晚盘后续写入互补，不会清掉本步已写字段（to_row 跳过 None 列）。
+> **生成记录**由 `parse_trigger_records_from_md` 解析 §5.2 节（触发条件摘要=生成原因、状态=已生成），
+> upsert 幂等（on_conflict=signal_id+trigger_time）：盘中触发时追加 `已触发` 记录，不覆盖早盘 `已生成` 行。
 > 云库不可达 → 打印提示 + 写执行日志，不阻塞主流程（降级只保留 md，晚盘复盘兜底补写）。
 
 ---
@@ -995,19 +1017,8 @@ else:
 
 **内部自检（不写入报告）**：输出后逐节核对上述 9 节是否全部存在且非空；缺失 → 补充后重新输出。
 
-### 第六步-HTML：同步产出 `早盘报告.html`（2026-10 起强制）
-
-在 `.md` 报告定稿后，**必须**再产出一份同内容的 **`my_doc/每日复盘/reports/{today}/早盘报告.html`**，供 Dashboard「报告」页展示（Dashboard 展示 HTML 版；`.md` 保留供自动化解析）。
-
-**规则**：
-1. 严格遵循 `my_doc/每日复盘/harness/prompts/报告HTML样式指南.md`（Tech Noir 暗色设计系统，组件库复制即用）。
-2. 内容与 `.md` **完全一致**（同一数据/结论/评分），仅呈现形式升级：
-   - 顶部 KPI 卡片组（大盘方向/核心矛盾/信号数等 3-4 张）
-   - 板块七维评分 → `.rp-table` 彩色行（建仓=绿/关注=琥珀/回避=红）+ 综合分 `.rp-score-row` 评分条
-   - 做T建议 → `.rp-badge` + `.rp-timeline`；核心关注时间表 → `.rp-timeline`
-   - 风险提示 → `.rp-risks`；核心判断 → `.rp-callout`
-3. 完整 HTML 文档（`<!DOCTYPE html>` + 内嵌 `<style>`），自包含、零 JS、零外链、零事件属性。
-4. 每个模块**结论置顶**；连续纯文字段落 ≤3 行。
+> 📄 **输出说明（2026-10 回退）**：早盘报告仅产出 **`早盘报告.md`**（Dashboard 以 markdown 渲染，
+> 恢复 HTML 改造前的呈现方式）；不再产出 `.html` 版本。
 
 ---
 
@@ -1064,7 +1075,7 @@ import json
 from datetime import datetime
 state = json.load(open('my_doc/每日复盘/harness/automation/config/task_state.json', encoding='utf-8'))
 state['tasks']['morning_analysis']['status'] = 'completed'
-state['tasks']['morning_analysis']['reports_generated'] = ['早盘报告.md', '早盘报告.html', '每日信号.md']
+state['tasks']['morning_analysis']['reports_generated'] = ['早盘报告.md', '每日信号.md']
 state['tasks']['morning_analysis']['signal_count'] = {N}  # 替换为实际生成信号数
 json.dump(state, open('my_doc/每日复盘/harness/automation/config/task_state.json', 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
 "
@@ -1107,7 +1118,7 @@ Staging文件: {存在/不存在}
   - 资金面与情绪: {成功/失败}
   - 事件日历: {成功/失败}
 信号生成: {N} 条 (P0: {p0} P1: {p1})
-报告产出: 早盘报告.md, 早盘报告.html, 每日信号.md
+报告产出: 早盘报告.md, 每日信号.md
 错误: 无
 警告: {如有}
 ========================================

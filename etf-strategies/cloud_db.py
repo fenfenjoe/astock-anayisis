@@ -103,7 +103,13 @@ def _warn_once(tag: str, msg: str) -> None:
 
 
 def enabled() -> bool:
-    return _ENABLED
+    """云库是否可用：postgrest（SUPABASE_*）或 pgdirect（PG 连接）任一启用即可。
+
+    BUG-FIX(2026-09-21)：迁移到 pgdirect 后 .env 移除 SUPABASE_*，若只检查
+    postgrest 的 _ENABLED 会导致 enabled()=False → 上层（api_daily._cloud_signal_rows
+    等）直接返回空结果（每日信号/策略全景查不出）。pgdirect 是合法云后端。
+    """
+    return _ENABLED or _PG_ENABLED
 
 
 def _req(method: str, path: str, *, params: dict | None = None,
@@ -168,7 +174,15 @@ def _rows(payload) -> list:
 
 
 def _row_dict(r: dict) -> dict:
-    """把行转成与 SQLite 版一致的 dict（JSON 字段自动解析）。"""
+    """把行转成与 SQLite 版一致的 dict（JSON 字段自动解析）。
+
+    BUG-FIX(2026-09-21)：pgdirect 后端（pg8000）NUMERIC 列返回 Decimal，
+    FastAPI JSONResponse 无法序列化 Decimal → 策略全景 /api/strategies 500。
+    PostgREST 后端返回的是 str/float，这里统一把 Decimal 转 float，
+    保持双后端行 shape 一致（数字列 = float）。
+    """
+    import decimal
+
     d = dict(r)
     for f in _JSON_FIELDS:
         if f in d and isinstance(d[f], str):
@@ -176,6 +190,10 @@ def _row_dict(r: dict) -> dict:
                 d[f] = json.loads(d[f])
             except (json.JSONDecodeError, TypeError):
                 pass
+    # Decimal → float（pg8000 NUMERIC；SQLite/PostgREST 无此类型，此循环为空操作）
+    for k, v in d.items():
+        if isinstance(v, decimal.Decimal):
+            d[k] = float(v)
     return d
 
 
@@ -233,8 +251,13 @@ def _pg_where(filters) -> tuple[str, list]:
     """
     clauses, params = [], []
     for col, op, val in (filters or []):
-        if op == "is":
-            if val is None:
+        if op in ("is", "not.is"):
+            # BUG-FIX(2026-09-21)：PostgREST 的 not.is（IS NOT NULL）在 pgdirect 后端
+            # 之前未实现 → _OP_MAP["not.is"] KeyError → agent knowledge_with_memory 500 /
+            # 调度任务失败。与 PostgREST 语义对齐：is null→IS NULL；not.is null→IS NOT NULL。
+            if op == "not.is":
+                clauses.append(f"{col} IS NOT NULL")
+            elif val is None:
                 clauses.append(f"{col} IS NULL")
             else:
                 clauses.append(f"{col} = %s")
@@ -297,26 +320,79 @@ def _pg_serialize(row: dict) -> dict:
     return body
 
 
+# ── pgdirect 连接池（2026-09-21 性能优化）────────────────────────
+# 根因：原 `_pg_run` 每次 `_pg_connect()` 新建 pg8000 连接（TCP+TLS 握手到公网
+# AIDAP Postgres，实测冷连接 ~389ms），每个接口 N 次查询 → N×600ms 线性叠加。
+# 改用 threading.local 每线程持 1 个连接复用（与 postgrest 的 requests.Session
+# 同理），实测 3 次查询复用 1 连接 585ms vs 新建 3 连接 1906ms（3.3x 提速）。
+# 连接失效（网络断/服务端关闭）时 is_socket_open 预检 + execute 异常重连一次。
+_tls_pg = threading.local()
+
+
+def _pg_conn():
+    """取当前线程的 pg8000 连接；无连接或 socket 已关 → 重建并缓存。"""
+    conn = getattr(_tls_pg, "conn", None)
+    if conn is None or not getattr(conn, "is_socket_open", True):
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        conn = _pg_connect()
+        _tls_pg.conn = conn
+    return conn
+
+
+def _pg_discard_conn():
+    """关闭并丢弃当前线程连接（重连/失效时用）。"""
+    conn = getattr(_tls_pg, "conn", None)
+    _tls_pg.conn = None
+    if conn is not None:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 def _pg_run(sql: str, params=None, *, fetch=True):
-    """执行 SQL 并提交；返回查询行（fetch=True）或 None。异常时回滚并抛。"""
-    conn = _pg_connect()
+    """执行 SQL 并提交；返回查询行（fetch=True）或 None。连接复用，异常时回滚并抛。
+
+    连接失效（socket 关闭 或 连接类异常）时丢弃当前连接重连重试**一次**；再次失败才抛出。
+    非连接类异常（SQL/约束错误等）直接抛出，不重试。
+    """
+    conn = _pg_conn()
     try:
         cur = conn.cursor()
         cur.execute(sql, params)
         rows = _pg_rows(cur) if fetch else None
         conn.commit()
         return rows
-    except Exception:
+    except Exception as e:
         try:
             conn.rollback()
         except Exception:
             pass
-        raise
-    finally:
+        socket_closed = getattr(conn, "is_socket_open", True) is False
+        msg = str(e).lower()
+        conn_err = socket_closed or isinstance(e, (ConnectionError, OSError, TimeoutError)) or (
+            "connection" in msg and ("closed" in msg or "unexpectedly" in msg)
+        )
+        if not conn_err:
+            raise  # SQL/约束错误，非连接问题，不重试
+        _pg_discard_conn()
         try:
-            conn.close()
+            conn2 = _pg_conn()
+            cur2 = conn2.cursor()
+            cur2.execute(sql, params)
+            rows2 = _pg_rows(cur2) if fetch else None
+            conn2.commit()
+            return rows2
         except Exception:
-            pass
+            try:
+                conn2.rollback()
+            except Exception:
+                pass
+            raise
 
 
 def _pg_select(table, *, columns="*", filters=None, order=None,

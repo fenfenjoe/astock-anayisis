@@ -207,11 +207,15 @@ class TestSchedulerScope:
 class TestReportImport:
     @pytest.mark.parametrize("name,expected", [
         ("复盘报告.md", "复盘报告"),
+        ("复盘报告.html", "复盘报告"),
         ("早盘报告.md", "早盘报告"),
+        ("早盘报告.html", "早盘报告"),
         ("早盘机会.md", "早盘机会"),
         ("每日信号.md", "每日信号"),
         ("每日信号-复盘填充版.md", None),   # 影子产物（降级执行），不导入
         ("2026-08-27_周报.md", "周报"),
+        ("2026-09-24_进化周报.md", "进化周报"),  # P2 自进化周报
+        ("2026-09-24_进化周报.html", "进化周报"),  # P2 HTML 版
         ("周度组合回顾.md", "周度组合回顾"),
         ("README.md", None),
     ])
@@ -233,6 +237,111 @@ class TestReportImport:
         rep = db_mod.report_get("20260730", "周度组合回顾")
         assert rep is not None
         assert "# 周度组合回顾" in rep["markdown"]
+        in_mem.close()
+
+
+# ═══════════════════════════════════════════════════════════════
+# D5b: 报告导入 — Markdown 优先（2026-10 回退：Dashboard 恢复 markdown 渲染）
+# ═══════════════════════════════════════════════════════════════
+
+class TestReportImportHtmlPreference:
+    def _setup(self, tmp_path, monkeypatch):
+        from dashboard import db as db_mod
+        in_mem = _in_memory_db(monkeypatch)
+        db_mod.init_db()
+        monkeypatch.setattr(scheduler, "REPORTS_DIR", tmp_path)
+        (tmp_path / "20260922").mkdir()
+        return db_mod, in_mem
+
+    def test_md_wins_when_both_exist(self, tmp_path, monkeypatch):
+        """早盘/复盘报告同时存在 .md 与 .html → DB 入库 .md（Dashboard 恢复 markdown 渲染）。"""
+        db_mod, in_mem = self._setup(tmp_path, monkeypatch)
+        (tmp_path / "20260922" / "早盘报告.md").write_text("# 早盘报告 md 版", encoding="utf-8")
+        (tmp_path / "20260922" / "早盘报告.html").write_text(
+            "<!DOCTYPE html><html><head><style>.rp-x{}</style></head><body><h1>早盘报告 html 版</h1></body></html>",
+            encoding="utf-8",
+        )
+        result = scheduler.import_reports_from_disk()
+        # html 被跳过（不入库），md 入库 → 只计 1 个
+        assert result["imported"] == 1
+        rep = db_mod.report_get("20260922", "早盘报告")
+        assert rep is not None
+        assert "md 版" in rep["markdown"]
+        assert "html 版" not in rep["markdown"]
+        in_mem.close()
+
+    def test_html_only_imports_fallback(self, tmp_path, monkeypatch):
+        """只有 .html（历史 HTML 报告，无 .md 兄弟）→ 兜底入库。"""
+        db_mod, in_mem = self._setup(tmp_path, monkeypatch)
+        (tmp_path / "20260922" / "复盘报告.html").write_text(
+            "<!DOCTYPE html><html><body><h1>复盘报告</h1></body></html>", encoding="utf-8",
+        )
+        assert scheduler.import_reports_from_disk()["imported"] == 1
+        rep = db_mod.report_get("20260922", "复盘报告")
+        assert rep is not None
+        assert "<h1>复盘报告</h1>" in rep["markdown"]
+        in_mem.close()
+
+    def test_md_only_imports(self, tmp_path, monkeypatch):
+        """只有 .md → 照常入库。"""
+        db_mod, in_mem = self._setup(tmp_path, monkeypatch)
+        (tmp_path / "20260922" / "复盘报告.md").write_text("# 复盘报告 纯md", encoding="utf-8")
+        assert scheduler.import_reports_from_disk()["imported"] == 1
+        rep = db_mod.report_get("20260922", "复盘报告")
+        assert "# 复盘报告 纯md" in rep["markdown"]
+        in_mem.close()
+
+    def test_html_replaced_by_md_on_rescan(self, tmp_path, monkeypatch):
+        """先只有 .html 入库，随后补 .md → 重扫后 DB 被 md 覆盖。"""
+        db_mod, in_mem = self._setup(tmp_path, monkeypatch)
+        (tmp_path / "20260922" / "早盘报告.html").write_text(
+            "<!DOCTYPE html><html><body><h1>早盘报告 html 版</h1></body></html>", encoding="utf-8",
+        )
+        assert scheduler.import_reports_from_disk()["imported"] == 1
+        assert "html 版" in db_mod.report_get("20260922", "早盘报告")["markdown"]
+
+        (tmp_path / "20260922" / "早盘报告.md").write_text("# 早盘报告 md 版", encoding="utf-8")
+        result = scheduler.import_reports_from_disk()
+        assert result["imported"] == 1  # 仅 md 新文件入库
+        assert "md 版" in db_mod.report_get("20260922", "早盘报告")["markdown"]
+        assert "html 版" not in db_mod.report_get("20260922", "早盘报告")["markdown"]
+        in_mem.close()
+
+    def test_non_html_type_imports_md(self, tmp_path, monkeypatch):
+        """非 HTML 优先类型（每日信号）仅 .md → 照常入库（历史行为不变）。"""
+        db_mod, in_mem = self._setup(tmp_path, monkeypatch)
+        (tmp_path / "20260922" / "每日信号.md").write_text("# 每日信号", encoding="utf-8")
+        assert scheduler.import_reports_from_disk()["imported"] == 1
+        assert db_mod.report_get("20260922", "每日信号")["markdown"] == "# 每日信号"
+        in_mem.close()
+
+    def test_evolution_weekly_md_wins(self, tmp_path, monkeypatch):
+        """P2 进化周报：weekly/ 下 .md + .html 并存 → DB 入库 .md（markdown 优先）。"""
+        db_mod, in_mem = self._setup(tmp_path, monkeypatch)
+        (tmp_path / "weekly").mkdir()
+        (tmp_path / "weekly" / "2026-09-24_进化周报.md").write_text(
+            "# 进化周报 md 版", encoding="utf-8")
+        (tmp_path / "weekly" / "2026-09-24_进化周报.html").write_text(
+            "<!DOCTYPE html><html><head><style>.rp-x{}</style></head><body><h1>进化周报 html 版</h1></body></html>",
+            encoding="utf-8",
+        )
+        result = scheduler.import_reports_from_disk()
+        assert result["imported"] == 1  # 仅 md 入库
+        rep = db_mod.report_get("20260924", "进化周报")
+        assert rep is not None
+        assert "md 版" in rep["markdown"]
+        assert "html 版" not in rep["markdown"]
+        in_mem.close()
+
+    def test_evolution_weekly_html_only_fallback(self, tmp_path, monkeypatch):
+        """P2 进化周报仅 .html（无 md 兄弟）→ 兜底入库（向后兼容）。"""
+        db_mod, in_mem = self._setup(tmp_path, monkeypatch)
+        (tmp_path / "weekly").mkdir()
+        (tmp_path / "weekly" / "2026-09-24_进化周报.html").write_text(
+            "<!DOCTYPE html><html><body><h1>进化周报</h1></body></html>", encoding="utf-8")
+        assert scheduler.import_reports_from_disk()["imported"] == 1
+        rep = db_mod.report_get("20260924", "进化周报")
+        assert "<h1>进化周报</h1>" in rep["markdown"]
         in_mem.close()
 
 
@@ -299,7 +408,7 @@ class TestWindowTolerance:
 
 
 # ═══════════════════════════════════════════════════════════════
-# 双引擎：dsh 主 / claude 辅，可切换
+# 执行引擎：DSH headless（2026-09-21 移除 claude 兜底引擎）
 # ═══════════════════════════════════════════════════════════════
 
 class TestEngineSelection:
@@ -315,18 +424,21 @@ class TestEngineSelection:
         monkeypatch.setattr(scheduler, "_engine_from_meta", lambda: None)
         monkeypatch.setattr(scheduler, "DEFAULT_ENGINE", "auto")
         assert scheduler.resolve_engine("dsh") == "dsh"
-        assert scheduler.resolve_engine("claude") == "claude"
+        # claude 已移除：显式传 claude 也归一到 dsh（不再兜底）
+        assert scheduler.resolve_engine("claude") == "dsh"
 
     def test_resolve_meta_override(self, monkeypatch):
+        # 历史 meta 值 "claude" 被忽略（归一到 dsh）
         monkeypatch.setattr(scheduler, "_engine_from_meta", lambda: "claude")
-        assert scheduler.resolve_engine(None) == "claude"
+        assert scheduler.resolve_engine(None) == "dsh"
         assert scheduler.resolve_engine("dsh") == "dsh"  # 调用方优先
 
-    def test_resolve_auto_falls_back_to_claude(self, monkeypatch):
+    def test_resolve_auto_no_dsh(self, monkeypatch):
         monkeypatch.setattr(scheduler, "_engine_from_meta", lambda: None)
         monkeypatch.setattr(scheduler, "DEFAULT_ENGINE", "auto")
         monkeypatch.setattr(scheduler, "_find_dsh", lambda: None)
-        assert scheduler.resolve_engine(None) == "claude"
+        # 无 dsh 时不再回退 claude，直接返回 dsh（执行时报错提示安装 dsh）
+        assert scheduler.resolve_engine(None) == "dsh"
 
     def test_dsh_directive(self):
         t = {"task_id": "evening_review", "prompt_file": "my_doc/每日复盘/harness/automation/prompts/auto_evening_review.md",

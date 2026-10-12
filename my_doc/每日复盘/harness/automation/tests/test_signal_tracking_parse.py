@@ -712,3 +712,98 @@ class TestResolveTargetPriceFallback:
         })
         assert target == pytest.approx(1.75)
         assert stop == pytest.approx(1.66)
+
+
+# ============================================================
+# parse_trigger_records_from_md — 信号触发记录节解析（2026-09-24 新增）
+# 早盘生成信号时预填"第一条生成记录"（内容=生成原因），盘中触发时追加"已触发"记录，
+# 本函数把 `## 信号触发记录` 节解析为 cloud_upsert_trigger_records 可用的记录列表。
+# ============================================================
+
+def _mk_trigger_md(rows: list[str]) -> str:
+    header = (
+        "## 信号触发记录\n\n"
+        "| 触发时间 | 信号ID | 优先级 | 标的 | 操作类型 | 触发条件摘要 | 当前状态 | 建议操作 | 用户操作 |\n"
+        "|----------|--------|:---:|------|:------:|-------------|:------:|----------|:------:|\n"
+    )
+    return header + "\n".join(rows) + "\n"
+
+
+class TestParseTriggerRecordsFromMd:
+    """parse_trigger_records_from_md：解析信号触发记录节 → 云表记录。"""
+
+    def test_parses_generation_record(self):
+        from signal_tracking import parse_trigger_records_from_md
+        md = _mk_trigger_md([
+            "| 07:55 | SIG-20260924-01 | P1 | 通信ETF(515880) | 建仓 | "
+            "北向资金持续净流入+通信板块涨停潮+技术面放量突破 | 已生成 | 按 7,500 份建仓 | — |",
+        ])
+        recs = parse_trigger_records_from_md(md, '2026-09-24')
+        assert len(recs) == 1
+        r = recs[0]
+        assert r['signal_id'] == 'SIG-20260924-01'
+        assert r['trigger_date'] == '2026-09-24'
+        assert r['trigger_time'] == '07:55'
+        assert r['priority'] == 'P1'
+        assert r['ticker'] == '515880'
+        assert r['name'] == '通信ETF'
+        assert r['action_type'] == '建仓'
+        assert '北向资金' in r['condition']
+        assert '涨停潮' in r['condition']
+        assert r['status'] == '已生成'
+        assert r['suggest']
+        assert 'result' in r
+
+    def test_parses_trigger_record(self):
+        from signal_tracking import parse_trigger_records_from_md
+        md = _mk_trigger_md([
+            "| 10:32 | SIG-20260924-01 | P1 | 通信ETF(515880) | 建仓 | "
+            "现价 0.714 ≥ 交易价 0.71 触发 | 已触发 | 按 7,500 份建仓 | 已执行 |",
+        ])
+        recs = parse_trigger_records_from_md(md, '2026-09-24')
+        assert len(recs) == 1
+        assert recs[0]['status'] == '已触发'
+        assert recs[0]['result'] == '已执行'
+        assert recs[0]['trigger_time'] == '10:32'
+
+    def test_parses_multiple_and_sorts(self):
+        from signal_tracking import parse_trigger_records_from_md
+        md = _mk_trigger_md([
+            "| 10:32 | SIG-20260924-02 | P1 | 创新药ETF(159992) | 建仓 | 条件B | 已触发 | 建议B | — |",
+            "| 07:55 | SIG-20260924-01 | P1 | 通信ETF(515880) | 建仓 | 条件A | 已生成 | 建议A | — |",
+        ])
+        recs = parse_trigger_records_from_md(md, '2026-09-24')
+        assert len(recs) == 2
+        assert {r['signal_id'] for r in recs} == {'SIG-20260924-01', 'SIG-20260924-02'}
+
+    def test_skips_empty_and_separator(self):
+        from signal_tracking import parse_trigger_records_from_md
+        md = _mk_trigger_md([])  # 空表（仅表头+分隔线）
+        assert parse_trigger_records_from_md(md, '2026-09-24') == []
+
+    def test_skips_placeholder_text(self):
+        from signal_tracking import parse_trigger_records_from_md
+        md = (
+            "## 信号触发记录\n\n"
+            "> 早盘生成时此表为空，盘中检查 Agent 负责填充。\n\n"
+            "| 触发时间 | 信号ID | 优先级 | 标的 | 操作类型 | 触发条件摘要 | 当前状态 | 建议操作 | 用户操作 |\n"
+            "|----------|--------|:---:|------|:------:|-------------|:------:|----------|:------:|\n"
+            "| — | — | — | — | — | — | — | — | — |\n"
+        )
+        assert parse_trigger_records_from_md(md, '2026-09-24') == []
+
+    def test_missing_today_defaults(self):
+        from signal_tracking import parse_trigger_records_from_md
+        import datetime
+        md = _mk_trigger_md([
+            "| 07:55 | SIG-20260924-01 | P1 | 通信ETF(515880) | 建仓 | 原因 | 已生成 | 建议 | — |",
+        ])
+        recs = parse_trigger_records_from_md(md)
+        assert recs[0]['trigger_date'] == datetime.date.today().isoformat()
+
+    def test_skips_row_without_signal_id(self):
+        from signal_tracking import parse_trigger_records_from_md
+        md = _mk_trigger_md([
+            "| 07:55 | — | P1 | 通信ETF(515880) | 建仓 | 原因 | 已生成 | 建议 | — |",
+        ])
+        assert parse_trigger_records_from_md(md, '2026-09-24') == []

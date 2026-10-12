@@ -6,10 +6,10 @@
     python -m dashboard.scheduler_cli --task morning_analysis --dry-run  # 只判定不执行
 
 与 dashboard 引擎的关系:
-- 本入口**同步执行**（进程内等待 dsh/claude 完成），退出码 = 任务成败（cron 可感知）
+- 本入口**同步执行**（进程内等待 dsh headless 完成），退出码 = 任务成败（cron 可感知）
 - 幂等/交易日判定与引擎一致（scheduler_runs.window_key + trading_calendar）
 - 触发类型记 'cron'：window_key 与引擎 auto 相同 → 外部 cron 与 dashboard 引擎互斥防双跑
-- 执行引擎与 dashboard 一致（dsh 主 / claude 辅，DASHBOARD_SCHEDULER_ENGINE 可切换）
+- 执行引擎与 dashboard 一致（仅 dsh headless，2026-09-21 起移除 claude 兜底）
 
 典型配置:
     # Linux crontab（交易日 09:07 早盘；crontab 无星期-交易日混合，用脚本内判定）

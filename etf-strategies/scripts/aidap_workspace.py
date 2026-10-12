@@ -240,6 +240,26 @@ def cmd_conn(ak, sk, st, args):
     return r
 
 
+def cmd_delete(ak, sk, st, args):
+    """删除 workspace（不可逆；有删除保护时先关闭保护再删）。"""
+    params = {"WorkspaceId": args.workspace}
+    print(f"[aidap] 删除 workspace: {args.workspace}")
+    try:
+        r = call(ak, sk, "DeleteWorkspace", params, session_token=st)
+    except Exception as e:
+        if args.force and "DeletionProtection" in str(e):
+            print("[aidap] 检测到删除保护，先关闭保护...")
+            call(ak, sk, "ModifyWorkspaceDeletionProtectionPolicy",
+                 {"WorkspaceId": args.workspace, "DeletionProtection": "Disabled"},
+                 session_token=st)
+            print("[aidap] 删除保护已关闭，重试删除...")
+            r = call(ak, sk, "DeleteWorkspace", params, session_token=st)
+        else:
+            raise
+    print(json.dumps(r, ensure_ascii=False, indent=2))
+    return r
+
+
 def _resolve_creds(args):
     """按优先级解析凭据：显式参数 > 环境变量 > 登录缓存。"""
     ak, sk, st = args.ak, args.sk, getattr(args, "session_token", None)
@@ -278,6 +298,11 @@ def main():
     p_conn.add_argument("--workspace", required=True)
     p_conn.add_argument("--account", default=None)
     p_conn.add_argument("--db", default=None)
+
+    p_delete = sub.add_parser("delete", help="删除 workspace（不可逆，需先关删除保护）")
+    p_delete.add_argument("--workspace", required=True)
+    p_delete.add_argument("--force", action="store_true",
+                          help="遇删除保护时自动关闭保护再删")
 
     args = ap.parse_args()
     creds = _resolve_creds(args)

@@ -21,7 +21,8 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 # --- Paths ---
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+# 2026-09-21 搬至 scripts/ 后：parent.parent 即仓库根（原 .claude/scripts/ 时代为 parent.parent.parent）
+REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEDULE_PATH = Path(__file__).resolve().parent / "task_schedule.json"
 STATE_PATH = Path(__file__).resolve().parent / "scheduler_state.json"
 TRADING_CALENDAR = (

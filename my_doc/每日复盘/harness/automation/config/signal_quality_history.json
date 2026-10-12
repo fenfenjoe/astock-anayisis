@@ -1,0 +1,160 @@
+[
+ {
+  "week_key": "2026-W38",
+  "cohort_start": "2026-09-14",
+  "cohort_end": "2026-09-18",
+  "dashboard": {
+   "date": "2026-09-23",
+   "trigger_rate_p1": 66.7,
+   "trigger_rate_all": 50.0,
+   "target_hit_rate": 0.0,
+   "avg_hit_days": 0.0,
+   "avg_profit_loss_ratio": 0.0,
+   "direction_accuracy": 0.0,
+   "expected_vs_actual": {
+    "rows": [
+     {
+      "signal_id": "SIG-20260915-04",
+      "expected": 35.0,
+      "triggered": true
+     },
+     {
+      "signal_id": "SIG-20260915-05",
+      "expected": 30.0,
+      "triggered": false
+     },
+     {
+      "signal_id": "SIG-20260915-06-盘中",
+      "expected": 40.0,
+      "triggered": false
+     },
+     {
+      "signal_id": "SIG-20260916-04",
+      "expected": 35.0,
+      "triggered": true
+     },
+     {
+      "signal_id": "SIG-20260916-05",
+      "expected": 40.0,
+      "triggered": true
+     },
+     {
+      "signal_id": "SIG-20260916-06",
+      "expected": 35.0,
+      "triggered": true
+     }
+    ],
+    "avg_gap": 30.8
+   },
+   "signal_expected_value": 0.0,
+   "max_loss": 0.0,
+   "simulated_count": 4,
+   "simulated_pnl_amount": 24.8,
+   "simulated_expected_value": 6.2,
+   "simulated_target_hit_rate": 75.0
+  },
+  "dims": {
+   "date": "2026-09-23",
+   "overall": {
+    "n_signals": 12,
+    "n_settled": 4,
+    "n_executed": 0,
+    "trigger_rate": 50.0,
+    "target_hit_rate": 0.0,
+    "direction_accuracy": 0.0,
+    "signal_expected_value": 0.0,
+    "max_loss": 0.0,
+    "avg_profit_loss_ratio": 0.0,
+    "simulated_count": 4,
+    "simulated_pnl_amount": 24.8
+   },
+   "dimensions": {
+    "priority": {
+     "P0": {
+      "n_signals": 6,
+      "n_settled": 0,
+      "n_executed": 0,
+      "trigger_rate": 33.3,
+      "target_hit_rate": 0.0,
+      "direction_accuracy": 0.0,
+      "signal_expected_value": 0.0,
+      "max_loss": 0.0,
+      "avg_profit_loss_ratio": 0.0,
+      "simulated_count": 0,
+      "simulated_pnl_amount": 0
+     },
+     "P1": {
+      "n_signals": 6,
+      "n_settled": 4,
+      "n_executed": 0,
+      "trigger_rate": 66.7,
+      "target_hit_rate": 0.0,
+      "direction_accuracy": 0.0,
+      "signal_expected_value": 0.0,
+      "max_loss": 0.0,
+      "avg_profit_loss_ratio": 0.0,
+      "simulated_count": 4,
+      "simulated_pnl_amount": 24.8
+     }
+    },
+    "source": {
+     "morning_analysis": {
+      "n_signals": 2,
+      "n_settled": 0,
+      "n_executed": 0,
+      "trigger_rate": 0.0,
+      "target_hit_rate": 0.0,
+      "direction_accuracy": 0.0,
+      "signal_expected_value": 0.0,
+      "max_loss": 0.0,
+      "avg_profit_loss_ratio": 0.0,
+      "simulated_count": 0,
+      "simulated_pnl_amount": 0
+     },
+     "intraday_check": {
+      "n_signals": 7,
+      "n_settled": 4,
+      "n_executed": 0,
+      "trigger_rate": 85.7,
+      "target_hit_rate": 0.0,
+      "direction_accuracy": 0.0,
+      "signal_expected_value": 0.0,
+      "max_loss": 0.0,
+      "avg_profit_loss_ratio": 0.0,
+      "simulated_count": 4,
+      "simulated_pnl_amount": 24.8
+     }
+    },
+    "trade_type": {
+     "buy": {
+      "n_signals": 6,
+      "n_settled": 4,
+      "n_executed": 0,
+      "trigger_rate": 66.7,
+      "target_hit_rate": 0.0,
+      "direction_accuracy": 0.0,
+      "signal_expected_value": 0.0,
+      "max_loss": 0.0,
+      "avg_profit_loss_ratio": 0.0,
+      "simulated_count": 4,
+      "simulated_pnl_amount": 24.8
+     },
+     "sell": {
+      "n_signals": 6,
+      "n_settled": 0,
+      "n_executed": 0,
+      "trigger_rate": 33.3,
+      "target_hit_rate": 0.0,
+      "direction_accuracy": 0.0,
+      "signal_expected_value": 0.0,
+      "max_loss": 0.0,
+      "avg_profit_loss_ratio": 0.0,
+      "simulated_count": 0,
+      "simulated_pnl_amount": 0
+     }
+    }
+   }
+  },
+  "saved_at": "2026-09-23T11:07:11"
+ }
+]

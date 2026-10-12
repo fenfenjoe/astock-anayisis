@@ -288,3 +288,163 @@ def test_signal_trigger_post_bad_status(client, monkeypatch):
     r = client.post("/api/signal-trigger", json={"signal_id": "SIG-X",
                                                  "trigger_price": 1.0, "trigger_time": "10:00"})
     assert r.status_code == 422
+
+
+# ═══════════════════════════════════════════════════════════════
+# POST /api/signal-execute 一键执行信号（录入交易 + 状态置已执行）
+# ═══════════════════════════════════════════════════════════════
+
+def _mock_execute_deps(monkeypatch):
+    """Mock 交易录入链路（不碰真实账本文件）与信号字段更新。"""
+    appended = {}
+    synced = {}
+    updated = {}
+
+    def _fake_append(trade):
+        appended["trade"] = dict(trade)
+        return {"positions": [], "trades": [trade], "cash": 100000.0}
+
+    def _fake_sync(state):
+        synced["state"] = state
+
+    def _fake_update(signal_id, fields):
+        updated["signal_id"] = signal_id
+        updated["fields"] = fields
+        return {"ok": True}
+
+    import dashboard.api_daily as _api
+    monkeypatch.setattr(_api.portfolio, "append_trade", _fake_append)
+    monkeypatch.setattr(_api, "_sync_ledger_to_db", _fake_sync)
+    monkeypatch.setattr(_api, "_update_signal_field", _fake_update)
+    return appended, synced, updated
+
+
+def test_signal_execute_buy_success(client, monkeypatch):
+    """买入信号一键执行：交易录入 + 信号状态置 executed + 成交价/时间回写。"""
+    appended, _, updated = _mock_execute_deps(monkeypatch)
+
+    r = client.post("/api/signal-execute", json={"signal_id": "SIG-20260908-01"})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["ok"] is True
+    assert d["status"] == "executed"
+    # 交易组装：buy → 买入，ticker=159326，shares=1000，entry_price=1.6
+    tr = appended["trade"]
+    assert tr["side"] == "买入"
+    assert tr["code"] == "159326"
+    assert tr["name"] == "电网ETF"
+    assert tr["quantity"] == 1000
+    assert tr["price"] == 1.6
+    assert "执行信号 SIG-20260908-01" in tr["remark"]
+    # 信号状态更新
+    assert updated["signal_id"] == "SIG-20260908-01"
+    assert updated["fields"]["status"] == "executed"
+    assert updated["fields"]["entry_price"] == 1.6
+    assert updated["fields"]["entry_time"]
+
+
+def test_signal_execute_override_price_quantity(client, monkeypatch):
+    """前端补填交易价/数量 → 覆盖信号自带值。"""
+    appended, _, _ = _mock_execute_deps(monkeypatch)
+
+    r = client.post("/api/signal-execute", json={
+        "signal_id": "SIG-20260908-01",
+        "price": 1.55,
+        "quantity": 2000,
+        "remark": "盘中触发执行",
+    })
+    assert r.status_code == 200
+    tr = appended["trade"]
+    assert tr["price"] == 1.55
+    assert tr["quantity"] == 2000
+    assert "盘中触发执行" in tr["remark"]
+
+
+def test_signal_execute_already_executed_409(client, monkeypatch):
+    """已执行/已结算信号 → 409 拒绝重复执行。"""
+    _mock_execute_deps(monkeypatch)
+    r = client.post("/api/signal-execute", json={"signal_id": "SIG-20260907-01"})  # executed
+    assert r.status_code == 409
+    r2 = client.post("/api/signal-execute", json={"signal_id": "SIG-20260907-02"})  # settled
+    assert r2.status_code == 409
+
+
+def test_signal_execute_unknown_404(client, monkeypatch):
+    """不存在的信号 → 404。"""
+    _mock_execute_deps(monkeypatch)
+    r = client.post("/api/signal-execute", json={"signal_id": "SIG-NOPE"})
+    assert r.status_code == 404
+
+
+def test_signal_execute_missing_price_400(client, monkeypatch):
+    """信号无交易价且未传 → 400 提示填成交价。"""
+    # SIG-20260908-01 有 entry_price=1.6，改用无价格的信号 → 直接传 price=None 场景
+    # 这里模拟"信号 trade_price 为空"：_sample_sigs 的 SIG-20260908-01 entry_price=1.6 但无 trade_price
+    # → append 前价格校验走 payload.price or sig.trade_price → None → 400
+    appended, _, _ = _mock_execute_deps(monkeypatch)
+
+    _no_price_sig = {
+        "signal_id": "SIG-20260908-01",
+        "status": "triggered",
+        "trade_type": "buy",
+        "ticker": "159326",
+        "name": "电网ETF",
+        "shares": 1000,
+        "trade_price": None,
+        "entry_price": None,
+    }
+
+    import dashboard.api_daily as _api
+    monkeypatch.setattr(_api, "_load_tracking_signals", lambda: [_no_price_sig])
+    r = client.post("/api/signal-execute", json={"signal_id": "SIG-20260908-01"})
+    assert r.status_code == 400
+    assert "交易价" in r.json()["detail"]
+
+
+def test_signal_execute_validate_error_400(client, monkeypatch):
+    """交易校验失败（如卖出超持仓）→ 400 透传 append_trade 的 ValueError。"""
+    import dashboard.api_daily as _api
+
+    def _bad_append(trade):
+        raise ValueError("卖出失败：当前无 XXX 持仓")
+
+    monkeypatch.setattr(_api.portfolio, "append_trade", _bad_append)
+    monkeypatch.setattr(_api, "_sync_ledger_to_db", lambda s: None)
+    monkeypatch.setattr(_api, "_update_signal_field", lambda sid, f: {"ok": True})
+
+    # SIG-20260908-01 是 buy → 用 buy 信号触发 append_trade 抛错
+    r = client.post("/api/signal-execute", json={"signal_id": "SIG-20260908-01"})
+    assert r.status_code == 400
+    assert "卖出失败" in r.json()["detail"]
+
+
+def test_signal_execute_nan_price_400(client, monkeypatch):
+    """非有限交易价（NaN/inf）→ 400 拒绝。"""
+    import dashboard.api_daily as _api
+
+    _sig = {
+        "signal_id": "SIG-20260908-01",
+        "status": "triggered",
+        "trade_type": "buy",
+        "ticker": "159326",
+        "name": "电网ETF",
+        "shares": 1000,
+        "trade_price": None,
+        "entry_price": None,
+    }
+    monkeypatch.setattr(_api, "_load_tracking_signals", lambda: [_sig])
+
+    class _P:
+        signal_id = "SIG-20260908-01"
+        trade_date = ""
+        price = float("nan")
+        quantity = 1000
+        remark = ""
+
+    from fastapi import HTTPException as _HE
+    try:
+        _api.post_signal_execute(_P())
+        assert False, "应抛 400"
+    except _HE as e:
+        assert e.status_code == 400
+        assert "交易价" in e.detail

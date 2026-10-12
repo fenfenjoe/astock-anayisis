@@ -158,3 +158,80 @@ def generate_quality_dashboard(signals: list, settled: list, today: str = '') ->
         'simulated_target_hit_rate': calc_target_hit_rate(simulated),
     }
     return dashboard
+
+
+# ============================================================
+# P0a: 分维度切片（自进化框架，供 gap_analysis 消费）
+# ============================================================
+
+# 切片维度与 docs/signal-enums.md 一致；取值顺序即枚举顺序
+_DIMENSION_KEYS = ('priority', 'source', 'trade_type')
+_PRIORITY_ORDER = ('P0', 'P1', 'P2')
+_SOURCE_ORDER = ('morning_analysis', 'intraday_check', 'evening_review')
+_TRADE_TYPE_ORDER = ('buy', 'sell')
+_DIMENSION_ORDER = {
+    'priority': _PRIORITY_ORDER,
+    'source': _SOURCE_ORDER,
+    'trade_type': _TRADE_TYPE_ORDER,
+}
+
+
+def _slice_metrics(signals: list, settled: list) -> dict:
+    """对给定信号/已结算子集计算统一指标集（供维度切片与 overall 复用）。"""
+    executed, simulated = split_executed_simulated(settled)
+    return {
+        'n_signals': len(signals),
+        'n_settled': len(settled),
+        'n_executed': len(executed),
+        'trigger_rate': calc_trigger_rate(signals),
+        'target_hit_rate': calc_target_hit_rate(executed),
+        'direction_accuracy': calc_direction_accuracy(executed),
+        'signal_expected_value': calc_signal_expected_value(executed),
+        'max_loss': calc_max_loss(executed),
+        'avg_profit_loss_ratio': calc_avg_profit_loss_ratio(executed),
+        'simulated_count': len(simulated),
+        'simulated_pnl_amount': round(sum(s.get('pnl', 0.0) for s in simulated), 2),
+    }
+
+
+def _dim_values(signals: list, settled: list, key: str, order: tuple) -> list:
+    """某维度实际出现的值（信号∪已结算），按枚举顺序排序；未出现的值不出现。"""
+    present = {s.get(key) for s in signals + settled if s.get(key) is not None}
+    ordered = [v for v in order if v in present]
+    # 兜底：枚举外的脏值也保留（排后面），保证不静默丢弃
+    extra = sorted(v for v in present if v not in order)
+    return ordered + extra
+
+
+def dimension_dashboard(signals: list, settled: list, today: str = '') -> dict:
+    """按维度切片的指标集，供差距分析（gap_analysis）使用。
+
+    返回:
+    {
+      'date': today,
+      'overall': {...指标集...},                  # 全口径（与 dashboard 口径一致）
+      'dimensions': {
+        'priority':   {'P0': {...}, 'P1': {...}, ...},
+        'source':     {'morning_analysis': {...}, ...},
+        'trade_type': {'buy': {...}, 'sell': {...}},
+      }
+    }
+    口径（REQ-006 保持一致）：账户级指标仅基于"已执行样本"；
+    未执行模拟样本单独披露（simulated_*）。维度取值取"信号+已结算中实际出现的值"，
+    按枚举顺序稳定排序。
+    """
+    dims = {}
+    for key in _DIMENSION_KEYS:
+        order = _DIMENSION_ORDER[key]
+        values = _dim_values(signals, settled, key, order)
+        slices = {}
+        for v in values:
+            sub_signals = [s for s in signals if s.get(key) == v]
+            sub_settled = [s for s in settled if s.get(key) == v]
+            slices[v] = _slice_metrics(sub_signals, sub_settled)
+        dims[key] = slices
+    return {
+        'date': today,
+        'overall': _slice_metrics(signals, settled),
+        'dimensions': dims,
+    }

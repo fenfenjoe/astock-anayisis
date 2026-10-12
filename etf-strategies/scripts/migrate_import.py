@@ -50,11 +50,14 @@ def main():
         if not rows:
             print(f"  - {table}: 空，跳过")
             continue
-        # 清空目标表（快照覆盖，幂等）
+        # 清空目标表（快照覆盖，幂等）；无 id 列的表降级全删
         try:
             cloud_db.delete(table, filters=[("id", "gt", 0)])
         except Exception:
-            cloud_db.delete(table, filters=[("id", "neq", 0)])
+            try:
+                cloud_db.delete(table, filters=[("id", "neq", 0)])
+            except Exception:
+                cloud_db.delete(table, filters=[])
         n = cloud_db.insert_many(table, rows)
         total += n
         print(f"  - {table}: 插入 {n}/{len(rows)} 行")

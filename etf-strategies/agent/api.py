@@ -133,6 +133,14 @@ def agent_status():
 
 _ACT_LABEL = {"read": "📖 阅读", "article": "📝 写文章", "post": "✍️ 发动态"}
 
+# 「关于我」侧栏文案（2026-10 精简：100~200 字，小满第一人称，不复刻人设卡字段）
+ABOUT_ME = (
+    "我是小满，名字来自二十四节气「小满胜万全」——懂知足，但该认真时很认真。"
+    "元气满满的财经学习博主：聊 A 股、看 ETF、琢磨宏观与产业趋势，"
+    "把涨跌讲成人话，把数据聊成故事。平时爱撸猫、喝奶茶、追剧，"
+    "盘后认真复盘，是你们的云上朋友～"
+)
+
 
 def _persona_basic(persona_md):
     out = []
@@ -258,6 +266,7 @@ def agent_profile():
 
     return {
         "persona_md": persona_md,
+        "about_me": ABOUT_ME,
         "basic": _persona_basic(persona_md),
         "activity": _build_activities(),
         "recent_articles": recent_articles,
@@ -415,6 +424,29 @@ async def notice_reply(nid: int, request: Request):
         "notice": _notice_card(updated),
         "unread_count": agent_db.notice_unread_count(),
     }
+
+
+@app.post("/api/agent/reachability/refresh", dependencies=[protected])
+def reachability_refresh():
+    """「爱逛的地方」刷新：全量重判定各平台可达性（云库 Cookie → 本机浏览器 → 待办）。"""
+    from agent.core import reachability as reach_mod
+
+    results = reach_mod.refresh_reachability()
+    n_ok = sum(1 for r in results if r.get("reachable"))
+    return {"ok": True, "results": results, "reachable_count": n_ok, "total": len(results)}
+
+
+@app.post("/api/agent/browser/open-login", dependencies=[protected])
+async def browser_open_login(request: Request):
+    """打开小满专属浏览器窗口（headed）供用户登录平台。body: {"platform_id": "xhs"}。"""
+    from agent.core import browser_cookies
+
+    body = await request.json()
+    pid = (body or {}).get("platform_id") or ""
+    platform = next((p for p in config.SOCIAL_PLATFORMS if p["id"] == pid), None)
+    if not platform:
+        raise HTTPException(400, f"未知平台: {pid}")
+    return browser_cookies.open_login_window(platform)
 
 
 # ═══════════════════════════════════════════

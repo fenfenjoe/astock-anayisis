@@ -1,0 +1,57 @@
+[
+ {
+  "date": "2026-09-24",
+  "report_path": "my_doc/每日复盘/reports/20260922/复盘报告.md",
+  "scores": {
+   "data_validation": 4,
+   "logic_consistency": 4,
+   "completeness": 3,
+   "format": 4
+  },
+  "issues": [
+   {
+    "severity": "low",
+    "dimension": "completeness",
+    "desc": "部分持仓可补充更多反向推演细节"
+   },
+   {
+    "severity": "low",
+    "dimension": "data_validation",
+    "desc": "北向断供期间以广度替代，可标注口径"
+   }
+  ],
+  "reviewer_model": "deepseek-v4-flash",
+  "total": 15,
+  "scored_at": "2026-09-23T11:12:07"
+ },
+ {
+  "date": "2026-10-08",
+  "report_path": "my_doc/每日复盘/reports/20261008/复盘报告.md",
+  "scores": {
+   "data_validation": 4,
+   "logic_consistency": 5,
+   "completeness": 5,
+   "format": 5
+  },
+  "issues": [
+   {
+    "severity": "medium",
+    "dimension": "data_validation",
+    "desc": "P0执行率连续不达标天数跨文件口径不一致：复盘报告称连续7日<100%触发P1告警（与p0_tracking/云库一致），而每日信号.md称连续1日，次日<100%将触发P1告警，需以p0_tracking为准统一口径"
+   },
+   {
+    "severity": "low",
+    "dimension": "data_validation",
+    "desc": "二节较节前放量下跌（9/30约1.84万亿）表述与引用数据矛盾：今日两市1.68万亿<9/30的1.84万亿，实为缩量，放量用词需澄清口径（或改引节前日均）"
+   },
+   {
+    "severity": "low",
+    "dimension": "data_validation",
+    "desc": "黄金减仓份数跨文件不一致：每日信号.md 10:30盘中备注已减仓600份，而每日调仓.md/复盘报告/每日信号自身信号评价均为1,000份（超建议600份）；复盘报告与调仓.md一致，属配套文件盘中备注过期未更正"
+   }
+  ],
+  "reviewer_model": "deepseek-v4-flash",
+  "total": 19,
+  "scored_at": "2026-10-08T17:32:34"
+ }
+]

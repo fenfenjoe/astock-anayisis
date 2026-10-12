@@ -279,6 +279,43 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 ---
 
+## 第五步半：REQ 工作流沉淀（自进化 · 走通的工作流 → 可复用 skill）
+
+> 用户理解的自进化方向："将走通的工作流程总结成 skill/workflow，下次遇到类似任务少走弯路"。
+> 本步在 REQ 实施完成（测试通过）后**立即**把 REQ 沉淀为可复用 skill draft，
+> 周三 `experience_health` 第八步全量重扫刷新（REQ 到 CLOSED 后自动升级为正式版）。
+
+```bash
+python -X utf8 -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.workflow_harvest import parse_req, build_harvest, write_skill
+
+req_path = Path('my_doc/每日复盘/harness/automation/steering/closed') / '{REQ-ID}.md'
+if not req_path.exists():
+    req_path = Path('my_doc/每日复盘/harness/automation/steering/open') / '{REQ-ID}.md'
+req = parse_req(req_path.read_text(encoding='utf-8'))
+h = build_harvest(req)
+if h.get('is_closed'):
+    out = write_skill(h)
+    print(f'已沉淀 skill: {out}')
+else:
+    print(f'REQ 尚未 CLOSED，跳过沉淀（周三 health 会自动处理 CLOSED）')
+"
+```
+
+### 5.5 执行要点
+
+1. **只沉淀已实施完成的 REQ**（IMPLEMENTED/CLOSED，有完整流程与处理记录）
+2. **幂等覆盖**：`harness/skills/{REQ-ID}.md` 以最新 REQ 为准，重复执行无副作用
+3. **沉淀产物**：任务签名 + 流程时间线 + 关键命令 + 陷阱 + 验收标准
+4. **消费方式**：后续同类任务先检索 `harness/skills/`，直接引用已有 skill 的流程与关键点
+5. **三层互补**：experience=知识规律（Situation/Approach/Reflect）、workflow_harvest skill=任务工作流、
+   OpenViking=证据链（置信度贝叶斯更新）
+
+---
+
 ## 第六步：输出执行日志
 
 写入 `my_doc/每日复盘/harness/automation/logs/req_implement_{YYYY-MM-DD}.log`：

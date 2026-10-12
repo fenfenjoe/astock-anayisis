@@ -6,8 +6,8 @@
 零上下文累积，崩溃自愈），与 Claude /loop 的隔离性等价且更强。
 
 用法:
-    python .claude/scripts/dsh_loop_scheduler.py          # 常规轮询（任务计划调用）
-    python .claude/scripts/dsh_loop_scheduler.py --dry-run  # 只检查是否到期，不派发
+    python scripts/dsh_loop_scheduler.py          # 常规轮询（任务计划调用）
+    python scripts/dsh_loop_scheduler.py --dry-run  # 只检查是否到期，不派发
 
 依赖: task_scheduler.py（同目录）、dsh CLI（PATH 上的 dsh.ps1 垫片）、pwsh。
 """
@@ -22,7 +22,8 @@ from pathlib import Path
 
 # --- Paths ---
 SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parent.parent
+# 2026-09-21 搬至 scripts/ 后：parent 即仓库根（原 .claude/scripts/ 时代为 parent.parent）
+REPO_ROOT = SCRIPT_DIR.parent
 LOG_DIR = REPO_ROOT / ".dsh" / "logs"
 
 sys.path.insert(0, str(SCRIPT_DIR))
@@ -54,7 +55,7 @@ def build_directive(result: dict) -> str:
     else:
         suffix = (
             " 任务完成后（无论成功与否），运行："
-            f"python .claude/scripts/task_scheduler.py --complete {task_id}"
+            f"python scripts/task_scheduler.py --complete {task_id}"
         )
     return f"执行 {prompt_file} 的全部内容。{suffix}"
 

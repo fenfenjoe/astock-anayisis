@@ -21,8 +21,15 @@
   align-items: flex-end;
   user-select: none;
   -webkit-user-select: none;
+  /* 收起=缩小（transform 缩放，仍展示且渲染循环不中断 → 不触发"召唤后头被裁"bug） */
+  transition: transform 0.28s var(--ease-out);
+  transform-origin: bottom right;
 }
-.xm-pet.is-min { display: none; }
+/* 收起态：缩小到约 58%，锚定右下角，仍可见、仍可交互（LIVE2D 持续渲染） */
+.xm-pet.is-min {
+  transform: scale(0.58);
+  opacity: 0.92;
+}
 .xm-pet.dragging { cursor: grabbing; }
 
 /* ── 舞台 ── */
@@ -196,14 +203,16 @@
 }
 .xm-pet-mode:focus-visible { outline: 2px solid var(--xm-accent); outline-offset: 2px; }
 
-/* ── 控制条 ── */
+/* ── 控制条（单个「收起/展开」切换按钮）── */
 .xm-pet-bar {
   display: flex;
   gap: var(--space-1);
   padding: 2px 2px 0 0;
 }
 .xm-pet-btn {
-  width: 22px; height: 22px;
+  min-width: 46px;
+  height: 22px;
+  padding: 0 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -211,7 +220,7 @@
   border-radius: var(--radius-full);
   background: oklch(0.12 0.02 210 / 0.85);
   color: var(--text-secondary);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   line-height: 1;
   cursor: pointer;
   transition: color var(--duration-fast) var(--ease-out),
@@ -222,7 +231,7 @@
 .xm-pet-btn:active { transform: translateY(1px); }
 .xm-pet-btn:focus-visible { outline: 2px solid var(--xm-accent); outline-offset: 2px; }
 
-/* ── 小圆点（召回入口）── */
+/* ── 小圆点（召回入口）：仅移动端窄屏自动收起时显示（桌面"收起"=缩小，不走小圆点）── */
 .xm-pet-mini {
   position: fixed;
   right: 20px; bottom: 16px;
@@ -252,6 +261,9 @@
 
 /* ── 无障碍：尊重 reduced-motion ── */
 @media (prefers-reduced-motion: reduce) {
+  .xm-pet {
+    transition: none;          /* 收起/展开改为瞬时切换 */
+  }
   .xm-pet-fallback,
   .xm-pet-zzz span {
     animation: none !important;

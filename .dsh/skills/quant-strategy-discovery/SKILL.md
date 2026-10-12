@@ -237,7 +237,7 @@ score = np.log(closes[-1] / closes[0]) * efficiency
 
 ## 六、策略库索引
 
-### 已实现（16个）
+### 已实现（20个）
 
 #### 被动/基准类
 | # | 策略 | 文件 | 类型 | 年化 | 夏普 | 回撤 | 来源 |
@@ -256,6 +256,7 @@ score = np.log(closes[-1] / closes[0]) * efficiency
 | S14 | 动态波动率调整动量 | `adaptive_momentum.py` | 动量/自适应 | — | — | — | JoinQuant @0xtao |
 | S15 | 趋势过滤+动量增强 | `rsrs_momentum.py` | 动量/趋势过滤 | — | — | — | JoinQuant @蚂蚁量化 |
 | S16 | 金丝雀防御+动量进攻 | `canary_defense.py` | 动量/风险预警 | — | — | — | Meb Faber |
+| S20 | 四基轮动RSRS择时 | `etf_timing_rotation.py` | 动量轮动+RSRS择时 | **18.75%** | 0.91 | **-21.30%** | JoinQuant post/61282 |
 
 #### 多因子类
 | # | 策略 | 文件 | 类型 | 年化 | 夏普 | 回撤 | 来源 |
@@ -317,6 +318,27 @@ score = np.log(closes[-1] / closes[0]) * efficiency
 - **货币ETF兜底**：所有策略应有 `cash="511880"` 作为无信号时的避险选项
 - **避免重复**：检查已有策略库，避免实现逻辑高度重复的策略（如多个动量×R²变体）
 - **来源标注**：每个策略的 docstring 必须标注来源平台+作者+原始指标，便于后续审计
+
+### 7.5 Dashboard 完整注册清单（新增策略必做，2026-10-10 验证）
+
+转化完策略类文件后，要让策略出现在 **Dashboard 策略全景/详情**，必须全部注册（漏任何一处→对应功能缺失）：
+
+| 步骤 | 文件 | 内容 |
+|------|------|------|
+| 1 | `daily_signal.py` STRAT_MAP | 策略实例（今日信号/诊断/调仓数据源） |
+| 2 | `strategy_kb.py` KB | 策略知识条目（详情页简介/因子/择时等） |
+| 3 | `dashboard/sync.py` STRATEGY_DEFS | 策略定义（assets/cls/mod/kwargs/window）→ 策略全景列表 |
+| 4 | `dashboard/sync.py` BENCHMARKS | 初始回测指标（ann/sharpe/dd 等） |
+| 5 | `dashboard/sync.py` _SOURCE_URLS | 来源链接（写 strategy_kb.source_url） |
+| 6 | `dashboard/sync.py` _PROCESS_DESCS | 执行过程描述（写 strategy_kb.process_desc） |
+| 7 | `dashboard/app.py` SCORING_STRATEGIES + `/scores/{sid}` elif 分支 | 打分曲线（如需） |
+| 8 | `list_strategies.py` STRATEGIES 导入 + STRAT_CATEGORY + STRAT_BENCHMARKS | CLI 策略列表 |
+| 9 | `run_backtest.py` 策略列表 | 全量回测入口 |
+| 10 | `backtest/reporting.py` 报告模板 | HTML 报告策略说明 |
+
+**云模式关键坑**：`.env` 设 `DASHBOARD_DB_BACKEND=cloud` 时 Dashboard 用云 Postgres，本地 cache.db 只存缓存表。改完 sync.py 后需**重启 dashboard** 触发 `seed_all()`（幂等，自动同步到云库）。手动 seed 必须先 `load_env_file()` 再跑（USE_CLOUD=True 才写云库）。`_update_source_urls`/`_update_process_descs` 已修复云模式支持（USE_CLOUD 时走 `cloud_db.update`）。
+
+**score_details 坑**：app.py diagnostics 接口只对 `strat.assets` 中的真实 code 加 ETF 名称后缀（非 code key 如 rsrs_signal/阈值保持原样），否则字段名被 get_etf_name 污染。
 
 ### 7.4 常见陷阱
 

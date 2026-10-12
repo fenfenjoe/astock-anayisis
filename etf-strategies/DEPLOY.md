@@ -56,7 +56,7 @@ docker compose logs -f        # 首次 admin 密码在这里
 | `ANTHROPIC_MODEL` | | `deepseek-v4-flash-ga-260731` | 主模型 |
 | `ANTHROPIC_DEFAULT_*_MODEL` | | 见 .env.example | 子模型路由 |
 | `DASHBOARD_SCHEDULER_ENABLED` | | `1` | **1=容器内 auto 调度开启**（迁移后为唯一调度器） |
-| `DASHBOARD_SCHEDULER_ENGINE` | | `auto` | 执行引擎：`auto`（容器内无 dsh → claude）/ `claude`（强制） |
+| `DASHBOARD_SCHEDULER_ENGINE` | | `auto` | 执行引擎：仅 `dsh`（2026-09-21 移除 claude 兜底；历史 claude 值归一到 dsh） |
 | `DASHBOARD_SCHEDULER_WINDOW_MINUTES` | | 7 | 调度窗口容差（休眠恢复场景可 30） |
 | `DASHBOARD_PORT` | | `8000` | 映射端口 |
 | `DASHBOARD_ADMIN_PASSWORD` | | 自动生成 | 预设 admin 密码（推荐设置） |

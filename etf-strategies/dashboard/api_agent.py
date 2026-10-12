@@ -97,6 +97,7 @@ def agent_profile():
     if result is None:
         return {
             "persona_md": "",
+            "about_me": "",
             "basic": [],
             "activity": [],
             "recent_articles": [],
@@ -309,6 +310,30 @@ def toggle_source(sid: int):
     result = _proxy_post(f"/sources/{sid}/toggle")
     if result is None:
         return {"ok": False}
+    return result
+
+
+# ═══════════════════════════════════════════
+# 爱逛的地方：可达性刷新 / 打开小满浏览器登录
+# ═══════════════════════════════════════════
+
+
+@router.post("/reachability/refresh")
+def agent_reachability_refresh():
+    """「爱逛的地方」刷新：全量重判定平台可达性（云库 Cookie → 本机浏览器 → 待办）。"""
+    result = _proxy_post("/reachability/refresh")
+    if result is None:
+        return {"ok": False, "error": "Agent 不可达", "results": []}
+    return result
+
+
+@router.post("/browser/open-login")
+async def agent_browser_open_login(request: Request):
+    """打开小满专属浏览器窗口（headed）供用户登录平台。body: {"platform_id": "xhs"}。"""
+    body = await request.json()
+    result = _proxy_post("/browser/open-login", body)
+    if result is None:
+        return {"ok": False, "message": "Agent 不可达"}
     return result
 
 

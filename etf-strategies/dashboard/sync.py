@@ -13,6 +13,7 @@ if str(_PARENT) not in sys.path:
     sys.path.insert(0, str(_PARENT))
 
 from dashboard.db import (
+    USE_CLOUD,
     get_conn, init_db, is_seeded, mark_seeded,
     kline_latest_date, kline_upsert_batch,
     metrics_upsert, metrics_get_one, metrics_get_all,
@@ -22,12 +23,14 @@ from dashboard.db import (
 )
 try:
     from cloud_db import select as _cd_select
+    from cloud_db import update as _cd_update
 except Exception:  # 云未配置时保持可导入（非云模式不触发）
     _cd_select = None
+    _cd_update = None
 
 import threading
 
-# ── All unique ETF codes used across 16 strategies ──
+# ── All unique ETF codes used across all strategies (S1~S21) ──
 ALL_ETF_CODES = [
     "510300", "510500", "510180", "159915", "588000",  # 宽基
     "511260", "511880", "511010",                        # 债券/货币
@@ -35,6 +38,7 @@ ALL_ETF_CODES = [
     "512010", "512880", "512800", "512660",              # 行业
     "512480", "512690", "512400", "512720",
     "515790", "515030", "512100",
+    "513500", "515880",                                 # S21 五福动量轮动
 ]
 
 # ── Strategy definitions (for seeding + backtest) ──
@@ -136,6 +140,21 @@ STRATEGY_DEFS = [
      "window": "2017-08-24~2026-08-31 (约9年)",
      "cls": "LowCorrelationRotation", "mod": "backtest.strategies.low_correlation_rotation",
      "kwargs": {"lookback": 25, "top_n": 1}},
+    {"id": "S20", "name": "四基轮动RSRS择时", "category": "动量",     "category_cn": "动量轮动 / RSRS择时",
+     "assets": ["518880", "513100", "159915", "510180", "510300", "511880"],
+     "desc": "双仓并行：60%动量轮动仓（4只ETF池20日动量选Top-1）+ 40%RSRS择时仓（沪深300，15日RSRS斜率判趋势）。每3交易日调仓。",
+     "window": "2013-07-29~2026-10-08 (约13年)",
+     "cls": "EtfTimingRotation", "mod": "backtest.strategies.etf_timing_rotation",
+     "kwargs": {"rotation_weight": 0.6, "timing_weight": 0.4,
+               "momentum_period": 20, "rsrs_period": 15, "rebalance_days": 3,
+               "rsrs_buy": 1.0, "rsrs_trim": 0.8}},
+    {"id": "S21", "name": "五福动量轮动", "category": "动量",     "category_cn": "动量轮动 / 加权回归 / 走弱期防御",
+     "assets": ["518880", "513100", "513500", "159915", "510300", "512480", "515880", "512800", "512660", "511880"],
+     "desc": "聚宽「五福闹新春」核心逻辑：25日加权线性回归动量得分（年化斜率×R²）+多层过滤（R²/防连跌/MA）+走弱期全球池防御+无候选退守货币ETF。每日调仓，top-2等权。",
+     "window": "2026-01-05~2026-08-17 (与聚宽平台同窗口)",
+     "cls": "WufuMomentumRotation", "mod": "backtest.strategies.wufu_momentum_rotation",
+     "kwargs": {"lookback": 25, "holdings_num": 2, "r2_threshold": 0.4,
+               "ma_lookback": 10, "loss": 0.97, "score_threshold_ratio": 0.9}},
 ]
 
 # Benchmark metrics (from the last full backtest run) — initial seed
@@ -155,6 +174,8 @@ BENCHMARKS = {
     "S17": {"ann": None, "sharpe": None, "dd": None, "calmar": None, "wr": None, "to": None, "ex": None},
     "S18": {"ann": 34.75, "sharpe": 1.16, "dd": -25.50, "calmar": 1.36, "wr": 55.0, "to": 38.5, "ex": None},
     "S19": {"ann": 21.84, "sharpe": 0.87, "dd": -32.01, "calmar": 0.68, "wr": 53.5, "to": 30.9, "ex": None},
+    "S20": {"ann": 18.75, "sharpe": 0.91, "dd": -21.30, "calmar": 0.88, "wr": 53.0, "to": 35.6, "ex": 11.78},
+    "S21": {"ann": None, "sharpe": None, "dd": None, "calmar": None, "wr": None, "to": None, "ex": None},
 }
 
 
@@ -184,14 +205,23 @@ def _update_source_urls():
         "S17": "S16每日调仓变体 — 内部研发（三层风险预警+日频调仓）",
         "S18": "JoinQuant @hayy — RSRS Beta增强反转动量轮动 (post/23696793, 398克隆, 8年回测年化35.29%)",
         "S19": "知乎专栏 — 低相关ETF动量轮动 (zhuanlan.zhihu.com/p/24155902542, 实盘验证1年+, Sharpe 2.69)",
+        "S20": "JoinQuant @泽安投资 — 稳定而简单的四基轮动策略 (post/61282, 克隆自mackintosh post/61155, backtestId=fedc660c127485408a499e7801c558d5)",
+        "S21": "JoinQuant 社区「五福闹新春」@烟花三月ETF (v2.0→v5.2+v7)，克隆帖 post/81357，克隆算法 algorithmId=89677cfaf5741fc425205f2e1bf79a88，平台回测 backtestId=8d11496f72dd9f31d9a69fab33a5b989",
     }
     try:
-        with get_conn() as conn:
+        if USE_CLOUD and _cd_update is not None:
             for sid, url in _SOURCE_URLS.items():
-                conn.execute(
-                    "UPDATE strategy_kb SET source_url=? WHERE strategy_id=?",
-                    (url, sid)
+                _cd_update(
+                    "strategy_kb", {"source_url": url},
+                    filters=[("strategy_id", "eq", sid)],
                 )
+        else:
+            with get_conn() as conn:
+                for sid, url in _SOURCE_URLS.items():
+                    conn.execute(
+                        "UPDATE strategy_kb SET source_url=? WHERE strategy_id=?",
+                        (url, sid)
+                    )
     except Exception:
         pass
 
@@ -218,14 +248,23 @@ def _update_process_descs():
         "S17": "1. 加载7个资产价格：4只交易ETF（纳指/创业板/上证180/沪深300）+ 债券(511260,金丝雀监测) + 黄金(518880,备用) + 货币(511880,现金管理)\n2. 三层金丝雀预警：\n   a) 金丝雀1-债券趋势：债券价格是否低于150日均线→债市走弱预警\n   b) 金丝雀2-波动率异常：短期波动率/长期波动率>1.5且超半数ETF触发→市场恐慌预警\n   c) 金丝雀3-动量宽度：正动量ETF占比<40%→广度恶化预警\n3. 根据预警数量确定风险预算：\n   - 0个预警→风险预算100%（进攻）\n   - 1个预警→风险预算70%（警戒）\n   - 2个预警→风险预算40%（防御）\n   - 3个预警→风险预算0%（避险全仓货币）\n4. 动量打分选股（25日log-price OLS回归 → 年化收益×R² 排名）\n5. 选Top-2×风险预算分配仓位（如风险预算100%,Top-2各50%）\n6. 剩余仓位→货币（511880）\n7. 每日调仓（反应更快但交易成本更高）",
         "S18": "1. 加载7个资产价格：纳指/创业板/上证180/黄金/沪深300/半导体 + 现金(511880)\n2. RSRS过滤：计算每只ETF的RSRS Beta(log(high) vs log(low) OLS斜率)，用60日滚动z-score\n3. 排除z-score < -2.0的ETF（市场结构弱化）\n4. 反转动量打分：\n   a) 25日动量得分 = 年化收益 × R²\n   b) 200日动量得分 = 年化收益 × R²\n   c) 综合得分 = 25日动量 - (200日动量 / 6)\n5. 得分差过滤：最高最低分差 < 0.02则不调仓\n6. 选Top-1得分最高的ETF满仓持有\n7. 无合格标的→全仓现金(511880)\n8. 每日调仓",
         "S19": "1. 加载5个低相关ETF价格：黄金(518880)/纳指(513100)/创业板(159915)/国债(511260)/沪深300(510300)\n2. 25日log-price OLS回归 → 年化收益 × R² 打分\n3. 选Top-1得分最高的ETF满仓持有\n4. 周度调仓（每周最后交易日评估）\n5. 无显式止损——低相关ETF池本身就是天然风控",
+        "S20": "1. 双仓并行结构：\n   a) 轮动仓（60%）：4只ETF池（黄金518880/纳指513100/创业板159915/上证180 510180）\n   b) 择时仓（40%）：沪深300（510300）RSRS择时\n2. 轮动仓：20日简单动量（(last/first-1)×100）选最高分ETF持有，动量全负→切现金(511880)\n3. 择时仓：15日RSRS（log high vs log low OLS斜率）判趋势：\n   - RSRS>1.0 → 择时仓全仓（40%）\n   - RSRS<0.8 → 择时仓减半（20%）\n   - 中间区 → 半仓维持\n4. 每3个交易日调仓一次（调仓日更新双仓权重，中间2天持有不变）\n5. 信号滞后1日执行（引擎shift(1)），避免前视偏差",
+        "S21": "1. 候选池：固定精选池（全球17只 + 大A约100只行业ETF）双轨合并；大A走弱期→仅用全球池\n2. 动量打分：25日加权线性回归（权重linspace(1,2)^2）对log(price)回归：\n   年化斜率收益 exp(slope×250)-1 × R² = 动量得分（涨得快×涨得稳）\n3. 多层过滤（全部通过才入选）：\n   a) 动量区间 [0, 5.0]\n   b) R² > 0.4（趋势质量）\n   c) 近3日无单日跌 > 3%（防连跌）\n   d) 价格 > MA10\n   e) 5日成交量比 < 1.8（本地无成交量数据降级关闭）\n4. 选择：过滤后 top-10 中取 动量≥第2名×0.9 的候选（走弱期×1.0）\n5. 持仓：最终取 top-2 等权持有\n6. 防御：无候选通过 → 全仓货币ETF(511880)\n7. 走弱期判定：沪深300/中证1000/创业板/中证A500 四指数代理ETF ≥3个低于MA10（连续2日确认）→ 大A走弱期，候选池收窄为全球池；持续20交易日强制退出\n8. 每日调仓（聚宽原13:10午间，本地日频）；信号滞后1日执行",
     }
     try:
-        with get_conn() as conn:
+        if USE_CLOUD and _cd_update is not None:
             for sid, desc in _PROCESS_DESCS.items():
-                conn.execute(
-                    "UPDATE strategy_kb SET process_desc=? WHERE strategy_id=?",
-                    (desc, sid)
+                _cd_update(
+                    "strategy_kb", {"process_desc": desc},
+                    filters=[("strategy_id", "eq", sid)],
                 )
+        else:
+            with get_conn() as conn:
+                for sid, desc in _PROCESS_DESCS.items():
+                    conn.execute(
+                        "UPDATE strategy_kb SET process_desc=? WHERE strategy_id=?",
+                        (desc, sid)
+                    )
     except Exception:
         pass
 

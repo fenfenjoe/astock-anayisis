@@ -224,19 +224,20 @@ DSH 的 goal 工具支持跨轮次自动续跑（create_goal → 自动 continua
 
 ---
 
-## 5. 交付物清单（已落地 ✅ 截至 P3）
+## 5. 交付物清单（已落地 ✅ 截至 cutover 完成 2026-09-21）
 
 | 交付物 | 位置 | 状态 |
 |---|---|---|
 | 8 个原 skill | `.dsh/skills/<name>/SKILL.md` | ✅ 已生效（daily-review-harness 修复了 YAML 冒号 bug） |
 | 18 个命令 skill | `.dsh/skills/<name>/SKILL.md`（user-invocable: true） | ✅ 已生效（WebSearch→web_search 已替换） |
 | dev-workflow skill | `.dsh/skills/dev-workflow/SKILL.md` | ✅ 已生效 |
-| DSH 自动化调度器 | `.claude/scripts/dsh_trigger.py`（精确触发，v2）+ `dsh_loop_scheduler.py`（轮询版，备用） | ✅ 已就绪（dry-run 通过） |
-| skill 同步脚本 | `.claude/scripts/sync_claude_skills.py` | ✅ 已就绪（两侧已一致） |
-| 循环管理指南 | `.claude/prompts/setup_dsh_loop.md`（v2 精确触发版） | ✅ 已就绪 |
+| DSH 自动化调度器 | `scripts/dsh_trigger.py`（精确触发，v2）+ `scripts/dsh_loop_scheduler.py`（轮询版，备用） | ✅ 已迁移（2026-09-21 从 `.claude/scripts/` 迁至 `scripts/`） |
+| 循环管理指南 | `scripts/setup_dsh_loop.md`（v2 精确触发版） | ✅ 已迁移（原 `.claude/prompts/`） |
 | Windows 计划任务 | `dsh-trigger-morning`(09:07) / `dsh-trigger-evening`(15:52)，旧轮询任务已删 | ✅ 已注册（Ready） |
 | 派发日志目录 | `.dsh/logs/`（已加入 .gitignore） | ✅ |
-| 更新后的 CLAUDE.md | 引用替换 + 启动提醒 | ⏳ cutover 时执行 |
+| 调度基础设施 | `scripts/task_schedule.json` + `task_scheduler.py` + `scheduler_state.json`（原 `.claude/scripts/`） | ✅ 已迁移（Agent / Dashboard / dsh 脚本共用） |
+| 更新后的 CLAUDE.md | 第七节改「DSH 自动化循环」+ superpowers→dev-workflow | ✅ 已完成（2026-09-21） |
+| Claude Code 专属代码清理 | `.claude/settings.json` / `loop_runner.md` / `setup_loop.md` / `.claude/skills/` / `sync_claude_skills.py` / `devloop_scanner.py` | ✅ 已删除（2026-09-21） |
 
 ---
 

@@ -1176,10 +1176,16 @@ async def get_strategy_diagnostics(sid: str):
             diagnostics["scores"] = named_scores
 
         # Add ETF names to score_details (年化收益 / R² / 综合得分 明细)
+        # 只对真实 ETF code 加名称后缀；非 code 的 key（如 rsrs_signal、阈值参数）
+        # 保持原样，避免 get_etf_name 把字段名当代码查询。
         if "score_details" in diagnostics:
+            known_codes = set(getattr(strat, "assets", []) or [])
             named_details = {}
             for code, detail in diagnostics["score_details"].items():
-                named_details[f"{code} {get_etf_name(code)}"] = detail
+                if code in known_codes:
+                    named_details[f"{code} {get_etf_name(code)}"] = detail
+                else:
+                    named_details[code] = detail
             diagnostics["score_details"] = named_details
 
         return JSONResponse(diagnostics)
@@ -1399,6 +1405,8 @@ SCORING_STRATEGIES = {
     "S17",
     "S18",
     "S19",
+    "S20",
+    "S21",
 }
 
 
@@ -1593,6 +1601,54 @@ async def get_score_curves(sid: str):
             # S19: 低相关ETF轮动 = 标准25日动量打分
             lb = getattr(strat, "lookback", 25)
             score_df = _compute_momentum_scores(prices, lookback=lb, clamp_r2=True)
+        elif sid == "S20":
+            # S20: 四基轮动RSRS择时 = 轮动仓20日简单动量（与策略 momentum_period 一致）
+            lb = getattr(strat, "momentum_period", 20)
+            # 轮动仓使用简单动量 (last/first - 1)，与策略 _momentum 一致
+            score_df = pd.DataFrame(index=prices.index, columns=prices.columns, dtype=float)
+            for i in range(lb, len(prices)):
+                window = prices.iloc[i - lb : i]
+                for col in prices.columns:
+                    closes = window[col].dropna().values
+                    if len(closes) < lb:
+                        continue
+                    score_df.iloc[i, prices.columns.get_loc(col)] = (
+                        closes[-1] / closes[0] - 1
+                    )
+            # 只展示轮动池（不含现金）
+            etf_pool = getattr(strat, "etf_pool", list(score_df.columns))
+            score_df = score_df[[c for c in etf_pool if c in score_df.columns]]
+        elif sid == "S21":
+            # S21: 五福动量轮动 = 25日加权线性回归动量得分（年化斜率×R²，权重linspace(1,2)^2）
+            lb = getattr(strat, "lookback", 25)
+            score_df = pd.DataFrame(index=prices.index, columns=prices.columns, dtype=float)
+            for i in range(lb + 1, len(prices)):
+                for col in prices.columns:
+                    closes = prices[col].iloc[i - lb: i + 1].dropna().values
+                    if len(closes) < lb + 1:
+                        continue
+                    y = np.log(closes)
+                    x = np.arange(len(y)).astype(float)
+                    w = np.linspace(1, 2, len(y)) ** 2
+                    W = w.sum()
+                    x_bar = (w * x).sum() / W
+                    y_bar = (w * y).sum() / W
+                    dx = x - x_bar
+                    dy = y - y_bar
+                    var_x = (w * dx ** 2).sum()
+                    if var_x == 0:
+                        continue
+                    slope = (w * dx * dy).sum() / var_x
+                    intercept = y_bar - slope * x_bar
+                    ann_ret = np.exp(slope * 250) - 1
+                    y_pred = slope * x + intercept
+                    ss_res = (w * (y - y_pred) ** 2).sum()
+                    ss_tot = (w * (y - y.mean()) ** 2).sum()
+                    r2 = 1 - ss_res / ss_tot if ss_tot > 1e-12 else 0.0
+                    score_df.iloc[i, prices.columns.get_loc(col)] = ann_ret * r2
+            # 只展示候选池（不含防御现金）
+            etf_pool = getattr(strat, "global_pool", []) + getattr(strat, "china_pool", [])
+            score_df = score_df[[c for c in etf_pool if c in score_df.columns]]
         else:
             w = strat.generate(prices)
             score_df = w.reindex(prices.index, method="ffill")

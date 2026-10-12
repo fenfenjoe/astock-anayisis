@@ -65,7 +65,13 @@ class FakeConnection:
 
 @pytest.fixture(autouse=True)
 def _pg_backend(monkeypatch):
-    """强制走 pgdirect 后端，并 mock 掉 _pg_connect（每次返回同一 FakeConnection）。"""
+    """强制走 pgdirect 后端，并 mock 掉 _pg_connect（每次返回同一 FakeConnection）。
+
+    每次测试前清空连接池（_tls_pg），避免上个测试缓存的连接与本次 monkeypatch 冲突。
+    """
+    import cloud_db as _cd
+    import threading as _thr
+    _cd._tls_pg = _thr.local()  # 清空连接池
     monkeypatch.setattr(cloud_db, "_BACKEND", "pgdirect")
     monkeypatch.setattr(cloud_db, "_PG_ENABLED", True)
     _conn_holder = {"conn": FakeConnection(result=[], rowcount=0),
@@ -362,6 +368,38 @@ def test_row_dict_parses_json_in_pg_mode():
     assert d["todo_data"] == {"platform_id": "weibo"}
 
 
+def test_row_dict_converts_decimal_to_float(monkeypatch):
+    """BUG-FIX(2026-09-21)：pg8000 NUMERIC 列返回 Decimal，必须转 float（JSON 可序列化）。"""
+    import decimal
+    import cloud_db
+
+    d = cloud_db._row_dict({
+        "strategy_id": "S1",
+        "annual_return": decimal.Decimal("8.19"),
+        "sharpe": decimal.Decimal("0.3"),
+        "name": "买入持有",
+    })
+    assert isinstance(d["annual_return"], float)
+    assert d["annual_return"] == 8.19
+    assert isinstance(d["sharpe"], float)
+    assert d["name"] == "买入持有"
+    # JSON 序列化不报错
+    import json
+    json.dumps(d)
+
+
+def test_enabled_true_when_pgdirect_configured(monkeypatch):
+    """BUG-FIX(2026-09-21)：移除 SUPABASE_* 后 pgdirect 也是启用后端，enabled() 必须为 True。"""
+    import cloud_db
+
+    monkeypatch.setattr(cloud_db, "_ENABLED", False)
+    monkeypatch.setattr(cloud_db, "_PG_ENABLED", True)
+    assert cloud_db.enabled() is True
+
+    monkeypatch.setattr(cloud_db, "_PG_ENABLED", False)
+    assert cloud_db.enabled() is False
+
+
 # ═══════════════════════════════════════════
 # 连接（SSL）：AIDAP PostgreSQL 引擎要求 sslmode=require
 # ═══════════════════════════════════════════
@@ -411,3 +449,118 @@ def test_pg_connect_url_uses_unquoted_password(monkeypatch, _pg_backend):
     real_connect()
     assert captured["password"] == "3RDLOQ>2L9jKW0.29O", "密码必须 unquote 还原特殊字符"
     assert captured["database"] == "aidb"
+
+
+# ═══════════════════════════════════════════
+# 连接池（2026-09-21 性能优化）：每线程复用 1 个连接 + 失效自动重连
+# ═══════════════════════════════════════════
+
+def _fresh_tls():
+    """清空 threading.local 连接池（避免测试间串状态）。"""
+    import cloud_db as _cd
+    import threading as _threading
+    _cd._tls_pg = _threading.local()
+    return _cd._tls_pg
+
+
+def test_pg_run_reuses_connection_same_thread():
+    """同线程连续查询复用同一连接（_pg_connect 只调 1 次）。"""
+    import cloud_db as _cd
+    _fresh_tls()
+
+    created = []
+    conn = FakeConnection(result=[{"v": 1}], rowcount=1)
+    _cd._pg_connect = lambda: created.append(conn) or conn
+
+    r1 = _cd._pg_run("SELECT 1", params=(), fetch=True)
+    r2 = _cd._pg_run("SELECT 1", params=(), fetch=True)
+    assert r1 == [{"v": 1}]
+    assert r2 == [{"v": 1}]
+    assert len(created) == 1, "连接应复用（只创建一次）"
+    assert conn.committed == 2, "每次查询后应 commit"
+
+
+def test_pg_run_reconnects_on_execute_error():
+    """连接执行抛异常（如连接被服务端关闭）→ 自动关闭重连重试一次。"""
+    import cloud_db as _cd
+    _fresh_tls()
+
+    calls = []
+
+    class _Flaky(FakeConnection):
+        def __init__(self):
+            super().__init__(result=[{"ok": 1}], rowcount=1)
+            self.failed_once = False
+
+        def cursor(self):
+            if not self.failed_once:
+                self.failed_once = True
+                class _BadCursor(FakeCursor):
+                    def execute(self, sql, params=None):
+                        raise ConnectionError("server closed the connection unexpectedly")
+                return _BadCursor()
+            return self.cursor_
+
+    flaky = _Flaky()
+    good = FakeConnection(result=[{"ok": 1}], rowcount=1)
+    _cd._pg_connect = lambda: calls.append(len(calls)) or (flaky if len(calls) == 1 else good)
+
+    rows = _cd._pg_run("SELECT 1", params=(), fetch=True)
+    assert rows == [{"ok": 1}]
+    assert len(calls) == 2, "第一次失败后应重连（共 2 次连接）"
+
+
+def test_pg_run_reconnects_on_socket_closed():
+    """连接 is_socket_open=False（服务端已断）→ 自动重建连接。"""
+    import cloud_db as _cd
+    _fresh_tls()
+
+    conns = []
+
+    class _DeadConn(FakeConnection):
+        is_socket_open = False
+
+    class _AliveConn(FakeConnection):
+        is_socket_open = True
+
+    dead = _DeadConn(result=[{"v": 0}], rowcount=0)
+    alive = _AliveConn(result=[{"v": 9}], rowcount=1)
+    _cd._pg_connect = lambda: conns.append(1) or (dead if not conns else alive)
+
+    # 第一次取连接：dead 的 socket 已关 → 应重建为 alive
+    c = _cd._pg_conn()
+    assert c is alive, "socket 已关闭的连接应被重建"
+
+
+def test_pg_run_threads_isolated():
+    """多线程各自持有连接（互不共享），天然并发安全。"""
+    import cloud_db as _cd
+    import threading
+    _fresh_tls()
+
+    conn_ids = []
+    lock = threading.Lock()
+
+    def make_conn():
+        c = FakeConnection(result=[{"t": threading.get_ident()}], rowcount=1)
+        with lock:
+            conn_ids.append(id(c))
+        return c
+
+    _cd._pg_connect = make_conn
+    results = []
+
+    def worker():
+        r1 = _cd._pg_run("SELECT 1", params=(), fetch=True)
+        r2 = _cd._pg_run("SELECT 1", params=(), fetch=True)
+        results.append((r1[0]["t"], r2[0]["t"]))
+
+    ts = [threading.Thread(target=worker) for _ in range(3)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+
+    assert len(conn_ids) == 3, "3 个线程应各自创建 1 个连接（共 3 个，不复用）"
+    for a, b in results:
+        assert a == b, "同一线程两次查询应命中同一连接（同线程 ID）"

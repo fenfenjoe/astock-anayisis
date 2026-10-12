@@ -126,6 +126,536 @@ class TestLocalFallback:
         assert len(data["signals"]) == 1
 
 
+# ═══════════════════════════════════════════════════════════════
+# 终态状态保护（2026-09-21 BUG-FIX）：盘中检查不得回退 已执行/已结算 信号
+# ═══════════════════════════════════════════════════════════════
+
+class TestProtectTerminalStatus:
+    """protect_terminal_status 纯函数：已执行/部分执行/已结算 状态不可被回退。
+
+    事故背景（2026-09-21）：用户已在 Dashboard 一键执行 通信ETF/创新药ETF
+    （云库 status=executed），盘中检查重新解析 markdown 后整体 upsert，
+    把 executed 覆盖成 expired/triggered。本保护按"终态等级"拦截降级。
+    """
+
+    def _rec(self, sid, status):
+        return {"signal_id": sid, "status": status}
+
+    def test_executed_not_downgraded_to_expired(self):
+        """已执行 → 已过期 被拦截（保留 executed）— 今日事故主场景。"""
+        existing = {"SIG-01": "executed"}
+        out = stc.protect_terminal_status([self._rec("SIG-01", "expired")], existing)
+        assert out[0]["status"] == "executed"
+
+    def test_executed_not_downgraded_to_triggered(self):
+        """已执行 → 已触发 被拦截 — 今日事故另一场景。"""
+        existing = {"SIG-02": "executed"}
+        out = stc.protect_terminal_status([self._rec("SIG-02", "triggered")], existing)
+        assert out[0]["status"] == "executed"
+
+    def test_executed_not_downgraded_to_open(self):
+        existing = {"SIG-01": "executed"}
+        out = stc.protect_terminal_status([self._rec("SIG-01", "open")], existing)
+        assert out[0]["status"] == "executed"
+
+    def test_settled_not_downgraded_to_executed(self):
+        """已结算是最高终态，不可被降回已执行。"""
+        existing = {"SIG-03": "settled"}
+        out = stc.protect_terminal_status([self._rec("SIG-03", "executed")], existing)
+        assert out[0]["status"] == "settled"
+
+    def test_partial_executed_not_downgraded(self):
+        existing = {"SIG-04": "partial_executed"}
+        out = stc.protect_terminal_status([self._rec("SIG-04", "expired")], existing)
+        assert out[0]["status"] == "partial_executed"
+
+    def test_open_to_triggered_allowed(self):
+        """未触发 → 已触发 是升级，放行。"""
+        existing = {"SIG-05": "open"}
+        out = stc.protect_terminal_status([self._rec("SIG-05", "triggered")], existing)
+        assert out[0]["status"] == "triggered"
+
+    def test_triggered_to_expired_allowed(self):
+        """已触发 → 已过期（窗口过期/回落）是盘中正常流转，放行。"""
+        existing = {"SIG-06": "triggered"}
+        out = stc.protect_terminal_status([self._rec("SIG-06", "expired")], existing)
+        assert out[0]["status"] == "expired"
+
+    def test_triggered_to_executed_allowed(self):
+        """已触发 → 已执行（确认执行）是升级，放行。"""
+        existing = {"SIG-07": "triggered"}
+        out = stc.protect_terminal_status([self._rec("SIG-07", "executed")], existing)
+        assert out[0]["status"] == "executed"
+
+    def test_expired_not_revived_to_triggered(self):
+        """已过期不可被复活回已触发。"""
+        existing = {"SIG-08": "expired"}
+        out = stc.protect_terminal_status([self._rec("SIG-08", "triggered")], existing)
+        assert out[0]["status"] == "expired"
+
+    def test_no_existing_status_unchanged(self):
+        """云库无该信号（新增）→ 原样保留。"""
+        out = stc.protect_terminal_status([self._rec("SIG-NEW", "triggered")], {})
+        assert out[0]["status"] == "triggered"
+
+    def test_does_not_mutate_input(self):
+        """不改入参记录（返回新列表）。"""
+        rec = self._rec("SIG-01", "expired")
+        stc.protect_terminal_status([rec], {"SIG-01": "executed"})
+        assert rec["status"] == "expired"
+
+
+class TestCloudUpsertProtectsExecuted:
+    """cloud_upsert_signals 集成保护：upsert 前查既有状态并应用终态保护。"""
+
+    def test_upsert_keeps_executed_status(self, monkeypatch):
+        """云库既有 executed，传入 expired → upsert 的行 status 仍为 executed。"""
+        captured = {}
+
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def select(table, columns="*", filters=None, order=None, limit=None, offset=None):
+                assert table == "signal_tracking"
+                return [{"signal_id": "SIG-20260921-04", "status": "executed"}]
+
+            @staticmethod
+            def upsert_many(table, rows, on_conflict=None):
+                captured["rows"] = rows
+                return len(rows)
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        rec = {
+            "signal_id": "SIG-20260921-04", "trigger_date": "2026-09-21",
+            "status": "expired", "source": "intraday_check",
+        }
+        ok = stc.cloud_upsert_signals([rec])
+        assert ok == 1
+        assert captured["rows"][0]["status"] == "executed"
+
+    def test_upsert_allows_triggered(self, monkeypatch):
+        """既有 triggered，传入 triggered → 保持 triggered（同等级放行）。"""
+        captured = {}
+
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def select(table, columns="*", filters=None, order=None, limit=None, offset=None):
+                return [{"signal_id": "SIG-1", "status": "triggered"}]
+
+            @staticmethod
+            def upsert_many(table, rows, on_conflict=None):
+                captured["rows"] = rows
+                return len(rows)
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        rec = {"signal_id": "SIG-1", "trigger_date": "2026-09-21", "status": "triggered"}
+        stc.cloud_upsert_signals([rec])
+        assert captured["rows"][0]["status"] == "triggered"
+
+    def test_upsert_select_failure_falls_back(self, monkeypatch):
+        """既有状态查询失败 → 不阻塞，按原记录 upsert（降级保持旧行为）。"""
+        captured = {}
+
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def select(table, columns="*", filters=None, order=None, limit=None, offset=None):
+                raise RuntimeError("select 挂了")
+
+            @staticmethod
+            def upsert_many(table, rows, on_conflict=None):
+                captured["rows"] = rows
+                return len(rows)
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        rec = {"signal_id": "SIG-1", "trigger_date": "2026-09-21", "status": "expired"}
+        stc.cloud_upsert_signals([rec])
+        assert captured["rows"][0]["status"] == "expired"
+
+
+# ═══════════════════════════════════════════════════════════════
+# 信号触发记录落库（2026-09-21 新增：signal_trigger_records 表）
+# ═══════════════════════════════════════════════════════════════
+
+class TestTriggerRecordRow:
+    """to_trigger_row：触发记录 dict → 云表行映射。"""
+
+    def _sample(self):
+        return {
+            "signal_id": "SIG-20260921-04",
+            "trigger_date": "2026-09-21",
+            "trigger_time": "10:32",
+            "priority": "P1",
+            "ticker": "515880",
+            "name": "通信ETF",
+            "action_type": "建仓",
+            "condition": "现价 0.714 > 0.71 交易价",
+            "status": "已触发",
+            "suggest": "按 7,500 份建仓",
+            "result": "待用户填写",
+        }
+
+    def test_full_mapping(self):
+        row = stc.to_trigger_row(self._sample())
+        assert row["signal_id"] == "SIG-20260921-04"
+        assert row["trigger_date"] == "2026-09-21"
+        assert row["trigger_time"] == "10:32"
+        assert row["action_type"] == "建仓"
+        assert row["condition"].startswith("现价")
+        assert row["status"] == "已触发"
+        assert row["result"] == "待用户填写"
+        assert row["created_at"]
+        assert row["updated_at"]
+
+    def test_skips_none_columns(self):
+        rec = self._sample()
+        rec["result"] = None
+        rec["suggest"] = None
+        row = stc.to_trigger_row(rec)
+        assert "result" not in row
+        assert "suggest" not in row
+
+    def test_missing_signal_id_returns_empty(self):
+        rec = self._sample()
+        rec["signal_id"] = None
+        assert stc.to_trigger_row(rec) == {}
+
+    def test_missing_trigger_time_returns_empty(self):
+        rec = self._sample()
+        rec["trigger_time"] = ""
+        assert stc.to_trigger_row(rec) == {}
+
+
+class TestCloudUpsertTriggerRecords:
+    """cloud_upsert_trigger_records：写云库 + 幂等键 + 降级。"""
+
+    def _sample(self):
+        return {
+            "signal_id": "SIG-20260921-06-盘中",
+            "trigger_date": "2026-09-21",
+            "trigger_time": "10:32",
+            "priority": "P1",
+            "ticker": "159992",
+            "name": "创新药ETF",
+            "action_type": "建仓",
+            "condition": "医药工业十五五规划 + 涨停潮",
+            "status": "已触发",
+            "suggest": "按 9,400 份建仓",
+            "result": "待用户填写",
+        }
+
+    def test_upsert_many_called_with_on_conflict(self, monkeypatch):
+        captured = {}
+
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def upsert_many(table, rows, on_conflict=None):
+                captured["table"] = table
+                captured["rows"] = rows
+                captured["on_conflict"] = on_conflict
+                return len(rows)
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        ok = stc.cloud_upsert_trigger_records([self._sample()])
+        assert ok == 1
+        assert captured["table"] == "signal_trigger_records"
+        assert captured["on_conflict"] == "signal_id,trigger_time"
+        assert captured["rows"][0]["signal_id"] == "SIG-20260921-06-盘中"
+
+    def test_cloud_disabled_returns_zero(self, monkeypatch):
+        monkeypatch.setattr(stc, "cloud_enabled", lambda: False)
+        assert stc.cloud_upsert_trigger_records([self._sample()]) == 0
+
+    def test_upsert_exception_returns_zero(self, monkeypatch):
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def upsert_many(table, rows, on_conflict=None):
+                raise RuntimeError("upsert 挂了")
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        assert stc.cloud_upsert_trigger_records([self._sample()]) == 0
+
+    def test_invalid_rows_filtered(self, monkeypatch):
+        captured = {}
+
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def upsert_many(table, rows, on_conflict=None):
+                captured["rows"] = rows
+                return len(rows)
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        ok = stc.cloud_upsert_trigger_records([
+            self._sample(),
+            {"signal_id": None, "trigger_time": "10:00"},   # 缺 signal_id → 丢弃
+            {"signal_id": "SIG-X", "trigger_time": ""},     # 缺 trigger_time → 丢弃
+        ])
+        assert ok == 1
+        assert len(captured["rows"]) == 1
+
+
+class TestCloudLoadTriggerRecords:
+    """cloud_load_trigger_records：按 signal_id/日期过滤读取。"""
+
+    def test_filter_by_signal_id(self, monkeypatch):
+        captured = {}
+
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def select(table, columns="*", filters=None, order=None, limit=None, offset=None):
+                captured["table"] = table
+                captured["filters"] = filters
+                return [{"signal_id": "SIG-20260921-04", "trigger_time": "10:32"}]
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        rows = stc.cloud_load_trigger_records(signal_id="SIG-20260921-04")
+        assert len(rows) == 1
+        assert captured["table"] == "signal_trigger_records"
+        assert ("signal_id", "eq", "SIG-20260921-04") in captured["filters"]
+
+    def test_cloud_disabled_returns_empty(self, monkeypatch):
+        monkeypatch.setattr(stc, "cloud_enabled", lambda: False)
+        assert stc.cloud_load_trigger_records(signal_id="SIG-1") == []
+
+    def test_select_exception_returns_empty(self, monkeypatch):
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def select(table, columns="*", filters=None, order=None, limit=None, offset=None):
+                raise RuntimeError("select 挂了")
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        assert stc.cloud_load_trigger_records(signal_id="SIG-1") == []
+
+
+# ═══════════════════════════════════════════════════════════════
+# 盘中检查记录落库（2026-09-24 新增：signal_check_records 表）
+# 每次盘中检查对每条信号的检查结果落库，一行 = 信号 × 检查点
+# ═══════════════════════════════════════════════════════════════
+
+class TestCheckRecordRow:
+    """to_check_row：检查记录 dict → 云表行映射。"""
+
+    def _sample(self):
+        return {
+            "signal_id": "SIG-20260924-01",
+            "check_date": "2026-09-24",
+            "check_time": "10:32",
+            "check_point": "10:30",
+            "ticker": "515880",
+            "name": "通信ETF",
+            "price": 0.714,
+            "trade_price": 0.71,
+            "condition_met": "触发",
+            "status_before": "未触发",
+            "status_after": "已触发",
+            "note": "现价 0.714 ≥ 交易价 0.71 → 触发",
+        }
+
+    def test_full_mapping(self):
+        row = stc.to_check_row(self._sample())
+        assert row["signal_id"] == "SIG-20260924-01"
+        assert row["check_date"] == "2026-09-24"
+        assert row["check_time"] == "10:32"
+        assert row["check_point"] == "10:30"
+        assert row["price"] == 0.714
+        assert row["trade_price"] == 0.71
+        assert row["condition_met"] == "触发"
+        assert row["status_before"] == "未触发"
+        assert row["status_after"] == "已触发"
+        assert row["note"].startswith("现价")
+        assert row["created_at"]
+        assert row["updated_at"]
+
+    def test_skips_none_columns(self):
+        rec = self._sample()
+        rec["note"] = None
+        rec["trade_price"] = None
+        row = stc.to_check_row(rec)
+        assert "note" not in row
+        assert "trade_price" not in row
+        assert row["price"] == 0.714
+
+    def test_missing_signal_id_returns_empty(self):
+        rec = self._sample()
+        rec["signal_id"] = None
+        assert stc.to_check_row(rec) == {}
+
+    def test_missing_check_time_returns_empty(self):
+        rec = self._sample()
+        rec["check_time"] = ""
+        assert stc.to_check_row(rec) == {}
+
+
+class TestCloudUpsertCheckRecords:
+    """cloud_upsert_check_records：写云库 + 幂等键 + 降级。"""
+
+    def _sample(self):
+        return {
+            "signal_id": "SIG-20260924-01",
+            "check_date": "2026-09-24",
+            "check_time": "10:32",
+            "check_point": "10:30",
+            "ticker": "515880",
+            "name": "通信ETF",
+            "price": 0.714,
+            "trade_price": 0.71,
+            "condition_met": "触发",
+            "status_before": "未触发",
+            "status_after": "已触发",
+            "note": "现价 0.714 ≥ 交易价 0.71 → 触发",
+        }
+
+    def test_upsert_many_called_with_on_conflict(self, monkeypatch):
+        captured = {}
+
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def upsert_many(table, rows, on_conflict=None):
+                captured["table"] = table
+                captured["rows"] = rows
+                captured["on_conflict"] = on_conflict
+                return len(rows)
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        ok = stc.cloud_upsert_check_records([self._sample()])
+        assert ok == 1
+        assert captured["table"] == "signal_check_records"
+        assert captured["on_conflict"] == "signal_id,check_date,check_time"
+        assert captured["rows"][0]["signal_id"] == "SIG-20260924-01"
+        assert captured["rows"][0]["condition_met"] == "触发"
+
+    def test_cloud_disabled_returns_zero(self, monkeypatch):
+        monkeypatch.setattr(stc, "cloud_enabled", lambda: False)
+        assert stc.cloud_upsert_check_records([self._sample()]) == 0
+
+    def test_upsert_exception_returns_zero(self, monkeypatch):
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def upsert_many(table, rows, on_conflict=None):
+                raise RuntimeError("upsert 挂了")
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        assert stc.cloud_upsert_check_records([self._sample()]) == 0
+
+    def test_invalid_rows_filtered(self, monkeypatch):
+        captured = {}
+
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def upsert_many(table, rows, on_conflict=None):
+                captured["rows"] = rows
+                return len(rows)
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        ok = stc.cloud_upsert_check_records([
+            self._sample(),
+            {"signal_id": None, "check_time": "10:00"},  # 缺 signal_id → 丢弃
+            {"signal_id": "SIG-X", "check_time": ""},    # 缺 check_time → 丢弃
+        ])
+        assert ok == 1
+        assert len(captured["rows"]) == 1
+
+
+class TestCloudLoadCheckRecords:
+    """cloud_load_check_records：按 signal_id/日期过滤读取。"""
+
+    def test_filter_by_signal_id(self, monkeypatch):
+        captured = {}
+
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def select(table, columns="*", filters=None, order=None, limit=None, offset=None):
+                captured["table"] = table
+                captured["filters"] = filters
+                return [{"signal_id": "SIG-20260924-01", "check_time": "10:32"}]
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        rows = stc.cloud_load_check_records(signal_id="SIG-20260924-01")
+        assert len(rows) == 1
+        assert captured["table"] == "signal_check_records"
+        assert ("signal_id", "eq", "SIG-20260924-01") in captured["filters"]
+
+    def test_filter_by_date(self, monkeypatch):
+        captured = {}
+
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def select(table, columns="*", filters=None, order=None, limit=None, offset=None):
+                captured["filters"] = filters
+                return []
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        stc.cloud_load_check_records(check_date="2026-09-24")
+        assert ("check_date", "eq", "2026-09-24") in captured["filters"]
+
+    def test_cloud_disabled_returns_empty(self, monkeypatch):
+        monkeypatch.setattr(stc, "cloud_enabled", lambda: False)
+        assert stc.cloud_load_check_records(signal_id="SIG-1") == []
+
+    def test_select_exception_returns_empty(self, monkeypatch):
+        class FakeCloud:
+            @staticmethod
+            def enabled():
+                return True
+
+            @staticmethod
+            def select(table, columns="*", filters=None, order=None, limit=None, offset=None):
+                raise RuntimeError("select 挂了")
+
+        monkeypatch.setattr(stc, "cloud_db", FakeCloud)
+        assert stc.cloud_load_check_records(signal_id="SIG-1") == []
+
+
 @pytest.mark.skipif(not REAL_CLOUD, reason="REAL_CLOUD=1 时才对真实云库读写")
 class TestRealCloud:
     def test_cloud_roundtrip(self):

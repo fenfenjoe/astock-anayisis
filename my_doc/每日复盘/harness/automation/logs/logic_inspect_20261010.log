@@ -1,0 +1,13 @@
+﻿[2026-10-10T17:12:28+08:00] LOGIC_INSPECT 开始 | 交易日=是
+[2026-10-10T17:22:44+08:00] LOGIC_INSPECT 完成 | 交易日=是 | 汇总: 14 PASS, 5 FAIL, 0 WARN
+[2026-10-10T17:22:44+08:00] A1 FAIL: archive/20261010/早盘分析-staging.md 不存在（BUG-019 第N+1次复现：补班交易日调度未触发→morning skipped）
+[2026-10-10T17:22:44+08:00] A2 FAIL: archive/20261010/复盘分析-staging.md 不存在（BUG-023 第4次复现：evening_review=not_yet 未启动）
+[2026-10-10T17:22:44+08:00] B1 PASS / B2 PASS / B3 PASS / B4 PASS（evening_review 未完成→staging 新鲜度豁免）
+[2026-10-10T17:22:44+08:00] C1 FAIL: reports/20261010/早盘报告.md 不存在（同 BUG-019 根因）
+[2026-10-10T17:22:44+08:00] C2 FAIL: reports/20261010/每日信号.md 不存在（同 BUG-019 根因）
+[2026-10-10T17:22:44+08:00] C3 FAIL: reports/20261010/复盘报告.md 不存在（同 BUG-023 根因）
+[2026-10-10T17:22:44+08:00] C4 PASS: task_state 一致（morning=skipped, evening=not_yet）
+[2026-10-10T17:22:44+08:00] D1 PASS（7 持仓一致）/ D2 PASS（date=20261010 trading_day=True）/ D3 PASS（43 条无孤立）/ D4 PASS（7 文件一致）
+[2026-10-10T17:22:44+08:00] E1 PASS（经验库无矛盾：做T/跷跷板/高开镜像/主线追高均有显式交叉引用与矛盾统一）
+[2026-10-10T17:22:44+08:00] E2 FAIL→BUG-037 新建+修复（BUG_INDEX 统计 OPEN=18 vs 实际 17，BUG-036 转 FIXED 未减计；已更新 OPEN 18→17/FIXED 14→15，复测 PASS）
+[2026-10-10T17:22:44+08:00] 新增 BUG 1（BUG-037 FIXED）；去重复现追加：BUG-019（A1/C1/C2）+ BUG-023（A2/C3）；PENDING_CONFIRMATION 新增 #18 + 更新 #9/#17

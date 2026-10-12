@@ -9,7 +9,12 @@ from pathlib import Path
 AGENT_DIR = Path(__file__).resolve().parent
 DATA_DIR = AGENT_DIR / "data"
 DB_PATH = DATA_DIR / "agent.db"
-PERSONAS_DIR = AGENT_DIR / "personas"
+# P1 小满解耦：persona 单一事实源上移用户级 ~/.dsh/personas/（运行时 cordis.patch.yml
+# 由 scripts/sync_xiaoman_persona.py 从该源生成；agent 认识页/profile 也从这里读，
+# 保证与运行时 persona 一致）。无 DSH_HOME 时回退项目内（本地开发/测试兜底）。
+PERSONAS_DIR = Path(
+    os.environ.get("DSH_HOME") or str(Path.home() / ".dsh")
+) / "personas"
 
 # dsh 任务执行：仓库根（dsh cwd，可被 DASHBOARD_REPO_ROOT 覆盖）+ 超时
 REPO_ROOT = Path(os.environ.get("DASHBOARD_REPO_ROOT") or AGENT_DIR.parent.parent)
@@ -55,7 +60,7 @@ READING_COOLDOWN_SECONDS = 1200  # 20 分钟
 # ── 社交平台/爱逛的地方（认识小满页「爱逛的地方」+ 素材源；方案 v1.10 §9.4）──
 # kind: 可达性来源分类
 #   rss    = RSSHub 阅读源（财联社/华尔街见闻）：RSS 能拉到条目即可达
-#   cookie = 登录态采集（微博/小红书/知乎/雪球）：有 Cookie 且探测通过即可达
+#   cookie = 登录态采集（微博/小红书/知乎/雪球/聚宽）：有 Cookie 且探测通过即可达
 #   none   = 未实施访问逻辑（X）：固定置灰，仅展示图标
 # needs_cookie: 走 Cookie 登录态采集
 # playable:     可成为"逛"状态素材源；X 暂不实施（仅展示图标置灰）
@@ -75,6 +80,9 @@ SOCIAL_PLATFORMS = [
     {"id": "xueqiu",      "name": "雪球",       "url": "https://xueqiu.com/today",
      "icon": "xueqiu",      "kind": "cookie", "needs_cookie": True,  "playable": True,
      "cookie_keys": ["xq_a_token", "xq_r_token", "u"]},
+    {"id": "joinquant",   "name": "聚宽",       "url": "https://www.joinquant.com/view/community/list?listType=1",
+     "icon": "joinquant",   "kind": "cookie", "needs_cookie": True,  "playable": True,
+     "cookie_keys": ["token", "uid"]},
     {"id": "cls",         "name": "财联社",     "url": "https://www.cls.cn/telegraph",
      "icon": "cls",         "kind": "rss",    "needs_cookie": False, "playable": False},
     {"id": "wallstreetcn", "name": "华尔街见闻", "url": "https://wallstreetcn.com/news/global",

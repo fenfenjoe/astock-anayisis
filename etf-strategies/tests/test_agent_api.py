@@ -102,15 +102,15 @@ def test_mood_demo():
 
 
 def test_profile_social_platforms(client):
-    """认识小满页：/api/agent/profile 返回 social_platforms（7 个爱逛的地方）。"""
+    """认识小满页：/api/agent/profile 返回 social_platforms（8 个爱逛的地方）。"""
     r = client.get("/api/agent/profile")
     assert r.status_code == 200
     data = r.json()
     sps = data.get("social_platforms", [])
     ids = [s["id"] for s in sps]
-    # 微博/小红书/X/知乎/雪球/财联社/华尔街见闻 七处齐全
+    # 微博/小红书/X/知乎/雪球/聚宽/财联社/华尔街见闻 八处齐全
     assert set(ids) == {
-        "weibo", "xhs", "x", "zhihu", "xueqiu", "cls", "wallstreetcn",
+        "weibo", "xhs", "x", "zhihu", "xueqiu", "joinquant", "cls", "wallstreetcn",
     }
     for s in sps:
         assert "name" in s and "url" in s and "icon" in s
@@ -125,6 +125,10 @@ def test_profile_social_platforms(client):
     weibo = next(s for s in sps if s["id"] == "weibo")
     assert weibo["playable"] is True
     assert weibo["needs_cookie"] is True
+    # 聚宽为 Cookie 类量化平台（可采集/逛），URL 指向社区论坛
+    jq = next(s for s in sps if s["id"] == "joinquant")
+    assert jq["playable"] is True and jq["needs_cookie"] is True
+    assert "community/list" in jq["url"]
     # 财联社/华尔街见闻为 RSS 源（playable=False，非 Playwright 采集）
     cls_ = next(s for s in sps if s["id"] == "cls")
     assert cls_["playable"] is False and cls_["needs_cookie"] is False
@@ -268,8 +272,9 @@ def test_articles_list_and_detail(client):
 
 
 def test_profile_returns_basic_and_activity(client):
-    """认识页 v2：侧栏「关于我」=人设卡基本节；右侧「做过的事」=活动台账
-    （已结束的阅读事件显示结束时间；常驻状态进行中置顶；token 均未计量）。"""
+    """认识页 v2：侧栏「关于我」=精简自我介绍（about_me，100~200 字，不复刻人设卡）；
+    右侧「做过的事」=活动台账（已结束的阅读事件显示结束时间；常驻状态进行中置顶；
+    token 均未计量）。"""
     # 造两条台账：昨天读完的阅读事件（已结束）+ 当前正在打游戏（未结束）
     agent_db.activity_start("reading", "📖 阅读", "2026-09-05 17:35:00", source="auto")
     rid = agent_db.activity_open()["id"]
@@ -281,7 +286,12 @@ def test_profile_returns_basic_and_activity(client):
     assert r.status_code == 200
     p = r.json()
 
-    # 侧栏「关于我」：从 persona.md 基本节解析出"姓名"
+    # 侧栏「关于我」：精简版自我介绍（100~200 字，第一人称，不复刻人设卡字段列表）
+    about = p.get("about_me", "")
+    assert about, "profile 应返回 about_me"
+    assert 100 <= len(about) <= 200, f"about_me 应在 100~200 字之间，当前 {len(about)}"
+    assert "小满" in about
+    # basic 仍保留（后端字段兼容），但「关于我」主内容改为 about_me 段落
     basic = p.get("basic", [])
     assert any(b["k"] == "姓名" and "小满" in b["v"] for b in basic)
 

@@ -2,8 +2,8 @@
 """DSH 自动化执行状态一览（一键查看）。
 
 用法:
-    python .claude/scripts/dsh_status.py           # 今日调度状态 + 最近派发日志
-    python .claude/scripts/dsh_status.py --logs 20 # 显示最近 20 条派发日志
+    python scripts/dsh_status.py           # 今日调度状态 + 最近派发日志
+    python scripts/dsh_status.py --logs 20 # 显示最近 20 条派发日志
 
 输出:
     1) 今日任务状态表（已执行/待执行/已过窗口/非今日）
@@ -16,7 +16,8 @@ from datetime import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parent.parent
+# 2026-09-21 搬至 scripts/ 后：parent 即仓库根（原 .claude/scripts/ 时代为 parent.parent）
+REPO_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import task_scheduler as ts  # noqa: E402

@@ -30,11 +30,11 @@
 | `/news-pulse` | 股价异动归因 |
 | `/dyp-ask` | 段永平式思考 |
 
-### 开发能力：superpowers（按需启用）
+### 开发能力：dev-workflow（按需启用）
 
-本项目主线是 A 股投研分析，**日常的估值/财报/个股研判不调用 superpowers**。仅当出现**开发需求**——写或改 Python 脚本、构建数据工具、调试代码、重构工程——时才启用，按它的流程走（brainstorming → writing-plans → TDD → executing-plans → code-review；调试走 systematic-debugging）。
+本项目主线是 A 股投研分析，**日常的估值/财报/个股研判不调用 dev-workflow**。仅当出现**开发需求**——写或改 Python 脚本、构建数据工具、调试代码、重构工程——时才启用，按它的流程走（brainstorming → writing-plans → TDD → executing-plans → code-review；调试走 systematic-debugging）。
 
-- **默认不触发**：即便 superpowers 的 `using-superpowers` skill 自身要求"1% 可能适用就调用"，在本项目里该规则**只对开发任务生效**。取数、过投资框架、写投研报告等任务不进 superpowers 流程，按本规范第一/二节执行。
+- **默认不触发**：即便 dev-workflow 的 skill 自身要求"1% 可能适用就调用"，在本项目里该规则**只对开发任务生效**。取数、过投资框架、写投研报告等任务不进开发流程，按本规范第一/二节执行。
 - **铁律不变**：开发脚本里凡需 A 股真实数据的，仍走 `a-stock-data`，不因进入开发流程而豁免数据纪律。
 - **临时脚本清理**：开发产生的一次性取数脚本仍用 `_*.py` 命名、跑完即删（见第四节）。
 
@@ -106,9 +106,9 @@
 - **Token 不走捷径**：禁止用 `#333`/`#666`/`#999` 等硬编码灰色；禁止 Inter 作为唯一字体；禁止紫色渐变。
 - **投资主线不受影响**：前端 Skills 仅在涉及 UI/前端开发时触发，A 股投研分析流程（第一节）不受干扰。
 
-### 5.3 与 superpowers 的关系
+### 5.3 与 dev-workflow 的关系
 
-前端开发需求同样遵循 superpowers 流程（brainstorming → TDD → code-review），但**在 brainstorming 阶段必须先调用 `frontend-design` 定美学方向**，再进入 writing-plans。
+前端开发需求同样遵循 dev-workflow 流程（brainstorming → TDD → code-review），但**在 brainstorming 阶段必须先调用 `frontend-design` 定美学方向**，再进入 writing-plans。
 
 ```
 前端开发需求
@@ -145,49 +145,51 @@
 
 详见 `my_doc/每日复盘/harness/README.md` 和 `daily-review-harness` skill。
 
-## 七、自动化迭代系统（Claude Code Loop）
+## 七、自动化迭代系统（DSH 自动化循环）
 
-本项目为 `etf-strategies` 和 `每日复盘` 两个项目构建了自动化迭代层，基于 Claude Code `/loop` + Python 调度器实现。
+本项目为 `etf-strategies` 和 `每日复盘` 两个项目构建了自动化迭代层，基于 **DSH（DeepSeek Harness）headless** + Python 调度器实现。定时任务由 **Agent 进程（`scheduler_agent.tick`）** 或 **DSH 计划任务（`dsh_trigger.py`）** 驱动，执行记录写入云库 `scheduler_runs`（Dashboard「运行日志」同源）。
 
 ### 7.1 架构概览
 
 ```
 自动化层（本section定义）
-├── .claude/scripts/
-│   ├── task_schedule.json         #   16条任务调度定义（时间/星期/交易日等）
-│   ├── task_scheduler.py          #   Python调度器（时间匹配+幂等+交易日判断）
-│   └── scheduler_state.json       #   运行时幂等状态（自动创建）
-├── .claude/prompts/
-│   ├── loop_runner.md             #   每7分钟迭代的元prompt
-│   └── setup_loop.md              #   一次性设置指南
-├── etf-strategies/automation/     # ETF策略自动化
-│   ├── prompts/                   #   巡检+发现prompts
-│   ├── config/                    #   正确性定义+发现源配置
-│   ├── bugs/                      #   BUG跟踪（open/closed + INDEX）
-│   └── archive/                   #   历史扫描/转化报告
-└── 每日复盘/harness/automation/   # 每日复盘自动化
-    ├── prompts/                   #   早盘/盘中/复盘/REQ实施/周度/经验健康prompts
-    ├── config/                    #   交易日历 + 跨任务状态 + signal_tracking
-    ├── steering/                  #   优化需求Steering（REQ生命周期管理）
-    └── logs/                      #   执行日志
+├── scripts/                         # 调度基础设施（原 .claude/scripts/，2026-09-21 迁出）
+│   ├── task_schedule.json           #   任务调度定义（时间/星期/交易日等，单一事实源）
+│   ├── task_scheduler.py            #   Python调度器（时间匹配+幂等+交易日判断）
+│   ├── scheduler_state.json         #   运行时幂等状态（自动创建）
+│   ├── dsh_trigger.py               #   精确时刻触发（Windows 计划任务到点调用）
+│   ├── dsh_loop_scheduler.py        #   轮询版调度器（备用）
+│   ├── dsh_cron.py                  #   cron 表生成器
+│   ├── dsh_status.py                #   执行状态一键查看
+│   └── setup_dsh_loop.md            #   DSH 循环管理指南
+├── etf-strategies/automation/       # ETF策略自动化
+│   ├── prompts/                     #   巡检+发现prompts
+│   ├── config/                      #   正确性定义+发现源配置
+│   ├── bugs/                        #   BUG跟踪（open/closed + INDEX）
+│   └── archive/                     #   历史扫描/转化报告
+└── 每日复盘/harness/automation/     # 每日复盘自动化
+    ├── prompts/                     #   早盘/盘中/复盘/REQ实施/周度/经验健康prompts
+    ├── config/                      #   交易日历 + 跨任务状态 + signal_tracking
+    ├── steering/                    #   优化需求Steering（REQ生命周期管理）
+    └── logs/                        #   执行日志
 ```
 
-**核心机制**：一个 `/loop 7m /clear && 执行 loop_runner.md` 替代全部 CronCreate 定时任务。每次迭代先 `/clear` 清空上下文，Python 调度器判断是否有到期任务，有则执行，无则跳过。**零上下文累积**。
+**执行引擎**：Agent 进程（`agent/core/scheduler_agent.tick()`，随 Agent 常驻运行）为**主调度器**，检查到点任务 → 派生 `dsh --profile headless` 执行任务 prompt → 写 `scheduler_runs` 表（Dashboard「运行日志」）。Windows 计划任务（`dsh-trigger-*` → `dsh_trigger.py`）为备用精确触发。每次任务都是**独立 headless 进程**（零上下文累积，崩溃自愈）。
 
-**调度精度**：7 分钟间隔 + 7 分钟窗口，每个任务在目标时间后 0~7 分钟内触发。全部 14 条任务定义见 `.claude/scripts/task_schedule.json`。
+**调度精度**：任务在目标时间窗口内触发（默认 ±7 分钟，可调 `window_minutes`）。全部 18 条任务定义见 `scripts/task_schedule.json`。
 
 **闭环架构**：自动化系统形成完整的 Dev Loop：
 
 ```
 问题发现 (bug_inspect/strategy_scan/evening_review/experience_health)
   → REQ创建 (steering/open/)
-  → 自动实施 (req_implement → superpowers 5步)
+  → 自动实施 (req_implement → dev-workflow 5步)
   → 效果验证 (evening_review 第十三步)
   → CLOSED + 经验沉淀
   → Steering健康监控 (experience_health 第五(B)步)
 ```
 
-### 7.2 全部 16 条任务调度
+### 7.2 全部 18 条任务调度
 
 | task_id | 时间 | 星期 | 需交易日 | Prompt |
 |---------|------|------|---------|--------|
@@ -211,38 +213,31 @@
 | req_implement | 12:57 | 一~五 | ✗ | `auto_req_implement.md` |
 | pending_remind | 每2h:13 (9-21) | 每天 | ✗ | `auto_pending_remind.md` |
 
-> 修改调度：编辑 `.claude/scripts/task_schedule.json`，下次迭代即生效。
+> 修改调度：编辑 `scripts/task_schedule.json`，下次迭代即生效。
 
 ### 7.3 启动与停止
 
-**启动**（每次 Claude Code 启动后手动执行一次）：
+**启动**：Agent 服务（`scripts/start_all.ps1` 启动 `agent` 常驻进程）自带调度器，随 Agent 运行即生效，无需额外启动。Windows 计划任务 `dsh-trigger-*`（→ `dsh_trigger.py`）为备用精确触发，用 `Disable-ScheduledTask` / `Enable-ScheduledTask` 启停。
 
-```
-/loop 7m /clear && 执行 .claude/prompts/loop_runner.md
-```
-
-SessionStart hook 会在启动时提醒此命令。
-
-**停止**：`Ctrl+C` 或回复 `stop`。
-
-**管理**：详见 `.claude/prompts/setup_loop.md`。
-- 查看状态：`python .claude/scripts/task_scheduler.py --status`
+**管理**：详见 `scripts/setup_dsh_loop.md`。
+- 查看状态：`python scripts/task_scheduler.py --status` 或 `python scripts/dsh_status.py`
+- 查看执行记录：Dashboard「运行日志」（云库 `scheduler_runs` 表）
 - 强制重跑：删除 `scheduler_state.json` 中对应 key
 
-### 7.4 与 CronCreate 旧方案的对比
+### 7.4 与旧方案（CronCreate / Claude /loop）的对比
 
-| 特性 | CronCreate (旧) | /loop + /clear (新) |
-|------|----------------|---------------------|
-| 上下文 | 每次累积，越跑越长 | 每次 /clear 重置，零累积 |
-| Token | 越晚任务越贵 | 每次固定 ~400 tokens 开销 |
-| 持久化 | durable=true 写磁盘 | session-only，重启手动启动 |
-| 管理 | 13 个独立 CronCreate | 1 个 task_schedule.json |
-| 过期 | 7 天自动过期需重建 | 无过期概念 |
+| 特性 | CronCreate (旧) | Claude `/loop + /clear` (旧) | DSH headless (新) |
+|------|----------------|------------------------------|-------------------|
+| 上下文 | 每次累积 | 每次 /clear 重置 | 独立进程，零上下文累积 |
+| Token | 越晚任务越贵 | 每次固定 ~400 tokens 空转 | 空闲零 token（纯 Python 判定） |
+| 持久化 | durable=true 写磁盘 | session-only，重启手动启动 | 常驻 Agent / 计划任务，自动恢复 |
+| 管理 | 13 个独立 CronCreate | 1 个 task_schedule.json | 同一 task_schedule.json（单一事实源） |
+| 执行者 | Claude | Claude | **Agent 进程 / dsh headless** |
 
 ### 7.5 关键纪律
 
 - **自动化不替代人类判断**：MANUAL_REVIEW BUG 必须人工确认；策略发现绿灯候选需要人工确认后才转化；REQ CLOSED 需要用户最终确认
-- **REQ 闭环铁律**：自动化发现的问题 → REQ 文档 → superpowers 实施 → 测试验证 → CLOSED，每一步都有对应的自动化任务驱动，不允许 REQ 创建后无人认领
+- **REQ 闭环铁律**：自动化发现的问题 → REQ 文档 → dev-workflow 实施 → 测试验证 → CLOSED，每一步都有对应的自动化任务驱动，不允许 REQ 创建后无人认领
 - **数据铁律不变**：自动化prompts中涉及A股数据的，必须走 `a-stock-data` skill
 - **Generator-Evaluator 分离不变**：自动复盘仍然严格执行"早盘预测 vs 复盘评估"的对抗审查
 - **失败透明**：所有自动化任务写入执行日志（`automation/logs/`），失败不静默
@@ -257,7 +252,7 @@ SessionStart hook 会在启动时提醒此命令。
 - **创建需求**：在 `steering/open/` 下按 `REQ_TEMPLATE.md` 模板创建 `REQ-{NNN}.md`，并在 `REQ_INDEX.md` 中登记
 - **自动集成**：巡检/修复/发现任务执行时自动读取 `steering/open/` 中待处理需求，纳入工作范围
 - **状态管理**：OPEN → IN_PROGRESS (自动化任务自动推进) → IMPLEMENTED (代码已写) → CLOSED (测试通过+用户确认)；ADOPTED/REJECTED 为特殊终态
-- **开发流程（强制）**：REQ 实施**必须走 superpowers 流程** — brainstorming → writing-plans → TDD → executing-plans → code-review。禁止跳过 TDD（无测试不得推进到 CLOSED），禁止跳过 brainstorming（不假思索的实现=返工）。涉及 A 股数据的仍走 `a-stock-data` skill
+- **开发流程（强制）**：REQ 实施**必须走 dev-workflow 流程** — brainstorming → writing-plans → TDD → executing-plans → code-review。禁止跳过 TDD（无测试不得推进到 CLOSED），禁止跳过 brainstorming（不假思索的实现=返工）。涉及 A 股数据的仍走 `a-stock-data` skill
 
 每日复盘项目同样有独立的 steering 目录：`my_doc/每日复盘/harness/automation/steering/`，规则同上。
 
@@ -265,7 +260,7 @@ SessionStart hook 会在启动时提醒此命令。
 | 环节 | 自动化任务 | 说明 |
 |------|-----------|------|
 | 发现问题→REQ | `auto_evening_review` / `auto_experience_health` | 发现系统性改善机会时创建 REQ |
-| REQ 实施 | `auto_req_implement` (每日 12:57) | 扫描 OPEN REQ → superpowers 5步 → IMPLEMENTED |
+| REQ 实施 | `auto_req_implement` (每日 12:57) | 扫描 OPEN REQ → dev-workflow 5步 → IMPLEMENTED |
 | 效果验证 | `auto_evening_review` 第十三步 | IMPLEMENTED → 测试+复盘确认 → CLOSED |
 | 健康监控 | `auto_experience_health` 第五(B)步 | 僵死/滞留/卡住检测 + 闭环率统计 |
 

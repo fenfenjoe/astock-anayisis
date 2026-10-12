@@ -1,6 +1,6 @@
 # ETF 策略优化需求索引
 
-> 最后更新: 2026-09-15
+> 最后更新: 2026-10-10
 
 ## 状态汇总
 
@@ -9,7 +9,7 @@
 | OPEN | 2 |
 | IN_PROGRESS | 0 |
 | IMPLEMENTED | 1 |
-| CLOSED | 0 |
+| CLOSED | 1 |
 | ADOPTED | 0 |
 | REJECTED | 0 |
 
@@ -20,6 +20,18 @@
 | REQ-001 | 数据刷新流程防护 — 收盘后强制补全当日 bar + 非活跃/持仓标的定期刷新 | P1 | 数据质量 | OPEN | 2026-09-03 |
 | REQ-002 | 用户待办回复页面 — 落地为聊天页「📌 提示与待办」（提示不需回复；待办回复后按类型回调执行；聊天 tab 未读小红点）| P3 | 社交平台/经验闭环 | IMPLEMENTED | 2026-09-08 |
 | REQ-003 | 转化「多品种ETF动量轮动+EPO优化」策略 — 动量×R²选Top-3 + EPO权重优化层（KB无先例，非模板化）| P1 | 策略发现 | OPEN | 2026-09-15 |
+| REQ-004 | 实时行情多源容错 — 腾讯主源 + 东财备源 + 本地缓存三层降级 | P1 | 数据质量 | CLOSED | 2026-10-10 |
+
+> REQ-004 实施记录（2026-10-10）：
+> 新增 `backtest/tencent_client.py`（实时报价 tencent_quote + 日K tencent_daily_kline + 分钟K
+> tencent_mkline，复用 a-stock-data 的 tencent_quote 实现）+ `backtest/quote_source.py`
+> （SourceHealth 健康状态机 + MultiSourceQuote 多源切换 + 交叉校验 cross_validate）。
+> `backtest/data.py get_kline()` 升级为多源容错：东财 → 腾讯 → 本地 parquet → 报错，
+> 签名不变（daily_signal/run_backtest/dashboard 全链路无感）。
+> 真实网络验证：东财 push2his 失败时自动切腾讯日K 成功。
+> 测试：29 个 REQ-004 范围测试全绿（tencent_client 7 + quote_source 13 + data 多源容错 8 + 回归），
+> 全量 776 passed（5 个既有失败为 S21 测试 fixture 未同步，Q1 遗留，与 REQ-004 无关）。
+> 涉及金融计算/信号逻辑：无（纯数据层），无需 MANUAL_REVIEW。
 
 > REQ-002 实施记录（2026-09-09）：
 > 形态从"独立回复页面"改为**融入聊天页**（用户确认）：聊天主区上方独立面板展示提示/待办，

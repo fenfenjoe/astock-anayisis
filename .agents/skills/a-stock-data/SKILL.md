@@ -114,6 +114,33 @@ ETF期权层 (V3.3 新增)
 
 **凡是行情 / K线 / 实时价 / 市值 / 财务三表能从 mootdx 或腾讯拿到的，一律走它们**——TCP 协议和腾讯接口实测不封 IP，可放心高频调用。
 
+### 备用源：火山专业数据集 DataPro（日频补充，2026-09-24 接入）
+
+> **定位**：DataPro 是**日频补充源**，不是实时主源。当主源（mootdx/腾讯）取数失败、
+> 或需要**深度财务指标/技术形态**（多口径 ROE、盈利预测、连涨天数、MACD/BOLL）时使用。
+
+| 数据 | DataPro 能拿 | a-stock-data 主源 |
+|------|-------------|-------------------|
+| 实时价/分钟级 | ❌ 无 | ✅ mootdx/腾讯 |
+| 日K（滚动~3周） | ✅ 开高低收/量/额/换手率/涨跌幅 | ✅ mootdx |
+| 深度财务（多口径ROE/盈利预测） | ✅ 20+字段+文字评价 | ⚠️ 简易财务 |
+| 技术形态（连涨天数/MA/MACD/BOLL） | ✅ | ⚠️ 需自行计算 |
+
+**调用方式**（复用 `lib/datapro_client.py`，需要 `AGENT_PLAN_KEY` 环境变量）：
+```python
+import sys; sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.datapro_client import datapro_search_http
+items = datapro_search_http('002594 ROE 盈利水平')   # 失败/无Key → None
+```
+
+**降级触发**：
+1. mootdx/腾讯行情取数失败（HTTP 000/空/TCP 超时）→ 若需日频数据，尝试 DataPro 日K
+2. 需要深度财务指标（多口径 ROE/盈利预测/业绩评价）→ 直接用 DataPro
+3. DataPro 本身失败 → 返回 None，不阻塞（保持原主源方案）
+
+> 获取 key：`arkcli profile apikey get --profile agent-plan_cn-beijing_personal`
+> （本地读取，无需 SSO；设环境变量 `AGENT_PLAN_KEY` 后即可调用）
+
 ### 东财只用于它「独有、别处拿不到」的数据
 
 下列数据**只有东财有**，通达信/腾讯/新浪都没有，必须用东财（但要限流）：

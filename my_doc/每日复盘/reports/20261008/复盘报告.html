@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>收盘复盘报告 · 2026-10-08</title>
+<style>
+.rp-report {
+  --rp-bg:      #0e1117;
+  --rp-surface: #161b22;
+  --rp-border:  #2a3140;
+  --rp-text:    #edf2f7;
+  --rp-text-2:  #a8b3c4;
+  --rp-text-3:  #6b7686;
+  --rp-blue:    #5ea2f7;
+  --rp-cyan:    #6fd3e8;
+  --rp-green:   #4cd98b;
+  --rp-red:     #f2655c;
+  --rp-amber:   #f2b544;
+  --rp-purple:  #b48ae0;
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  font-size: 14px; line-height: 1.6; color: var(--rp-text);
+  max-width: 1000px; margin: 0 auto; padding: 20px;
+  background: var(--rp-bg);
+}
+.rp-hero { padding: 18px 20px; border: 1px solid var(--rp-border); border-radius: 12px; background: linear-gradient(135deg, #161b22, #1a2230); margin-bottom: 16px; }
+.rp-hero-title { font-size: 22px; font-weight: 800; color: var(--rp-blue); }
+.rp-hero-meta { font-size: 13px; color: var(--rp-text-2); margin-top: 4px; }
+.rp-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 14px 0 22px; }
+.rp-kpi-card { background: var(--rp-surface); border: 1px solid var(--rp-border); border-left: 4px solid var(--rp-blue); border-radius: 10px; padding: 12px 14px; }
+.rp-kpi-card[data-tone="up"]   { border-left-color: var(--rp-green); }
+.rp-kpi-card[data-tone="down"] { border-left-color: var(--rp-red); }
+.rp-kpi-card[data-tone="warn"] { border-left-color: var(--rp-amber); }
+.rp-kpi-label { font-size: 12px; color: var(--rp-text-3); letter-spacing: 1px; }
+.rp-kpi-value { font-size: 18px; font-weight: 700; margin: 4px 0 2px; }
+.rp-kpi-sub   { font-size: 12px; color: var(--rp-text-2); }
+.rp-section-title { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; margin: 26px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--rp-border); }
+.rp-section-num { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: var(--rp-blue); color: #0e1117; font-size: 13px; font-weight: 800; }
+.rp-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.rp-badge.up   { background: rgba(76, 217, 139, .15); color: var(--rp-green); border: 1px solid rgba(76,217,139,.4); }
+.rp-badge.warn { background: rgba(242, 181, 68, .15); color: var(--rp-amber); border: 1px solid rgba(242,181,68,.4); }
+.rp-badge.down { background: rgba(242, 101, 92, .15); color: var(--rp-red);   border: 1px solid rgba(242,101,92,.4); }
+.rp-badge.info { background: rgba(94, 162, 247, .15); color: var(--rp-blue); border: 1px solid rgba(94,162,247,.4); }
+.rp-callout { border: 1px solid var(--rp-border); border-left: 5px solid var(--rp-blue); background: var(--rp-surface); border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+.rp-callout[data-tone="green"] { border-left-color: var(--rp-green); }
+.rp-callout[data-tone="red"]   { border-left-color: var(--rp-red); }
+.rp-callout[data-tone="amber"] { border-left-color: var(--rp-amber); }
+.rp-callout[data-tone="purple"]{ border-left-color: var(--rp-purple); }
+.rp-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+.rp-table th { background: var(--rp-surface); color: var(--rp-text-2); text-align: left; padding: 8px 10px; border: 1px solid var(--rp-border); font-weight: 600; }
+.rp-table td { padding: 8px 10px; border: 1px solid var(--rp-border); }
+.rp-table tr:hover td { background: rgba(94,162,247,.06); }
+.rp-row-up td:first-child { border-left: 3px solid var(--rp-green); }
+.rp-row-warn td:first-child { border-left: 3px solid var(--rp-amber); }
+.rp-row-down td:first-child { border-left: 3px solid var(--rp-red); }
+.rp-risks { list-style: none; padding: 0; margin: 10px 0; }
+.rp-risks li { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--rp-border); font-size: 13px; }
+.rp-risks li::before { content: "●"; color: var(--rp-red); font-size: 10px; margin-top: 5px; }
+.rp-risks li[data-tone="amber"]::before { color: var(--rp-amber); }
+.rp-risks li[data-tone="blue"]::before { color: var(--rp-blue); }
+.up-text { color: var(--rp-green); font-weight: 600; }
+.down-text { color: var(--rp-red); font-weight: 600; }
+.warn-text { color: var(--rp-amber); font-weight: 600; }
+.rp-foot { margin-top: 26px; padding: 14px 16px; border-top: 1px solid var(--rp-border); font-size: 12px; color: var(--rp-text-3); }
+</style>
+</head>
+<body>
+<div class="rp-report">
+  <header class="rp-hero">
+    <div class="rp-hero-title">🌆 收盘复盘报告</div>
+    <div class="rp-hero-meta">数据时点：2026-10-08 15:00 收盘 ｜ 交易日：周四 ｜ 配套：早盘报告.md / 每日信号.md</div>
+  </header>
+
+  <section class="rp-kpi">
+    <div class="rp-kpi-card" data-tone="down">
+      <div class="rp-kpi-label">大盘方向</div>
+      <div class="rp-kpi-value">系统性普跌</div>
+      <div class="rp-kpi-sub">上证 -0.79% 跌破3800 · 科创50 -4.82%</div>
+    </div>
+    <div class="rp-kpi-card" data-tone="warn">
+      <div class="rp-kpi-label">市场情绪</div>
+      <div class="rp-kpi-value">涨停43 / 炸板率42.7%</div>
+      <div class="rp-kpi-sub">跌停13 · 晋级率19.6% · 赚钱效应差</div>
+    </div>
+    <div class="rp-kpi-card" data-tone="warn">
+      <div class="rp-kpi-label">P0 执行率</div>
+      <div class="rp-kpi-value warn-text">1/2 = 50%</div>
+      <div class="rp-kpi-sub">连续7日&lt;100% · P1告警 · 通信错过问责</div>
+    </div>
+    <div class="rp-kpi-card" data-tone="up">
+      <div class="rp-kpi-label">信号质量</div>
+      <div class="rp-kpi-value">方向准确 83.3%</div>
+      <div class="rp-kpi-sub">期望价值 +16.97元 · 已执行P&L +101.8元</div>
+    </div>
+  </section>
+
+  <div class="rp-section-title"><span class="rp-section-num">01</span> 一、我的持仓</div>
+  <div class="rp-callout" data-tone="green"><b>今日操作：</b>黄金ETF 卖出 1,000 份 @8.508（执行 SIG-01，从 2,600 → 1,600 份）。无新增/清仓标的。可用现金约 32,657 元。</div>
+  <table class="rp-table">
+    <thead><tr><th>股票名称</th><th>代码</th><th>持仓(份)</th><th>成本价</th><th>今日操作</th></tr></thead>
+    <tbody>
+      <tr><td>宁波银行</td><td>002142</td><td>400</td><td>33.563</td><td>无操作</td></tr>
+      <tr><td>航空航天ETF</td><td>159227</td><td>1,400</td><td>2.731⚠️</td><td>无操作</td></tr>
+      <tr><td>电网设备ETF</td><td>159326</td><td>7,900</td><td>1.973</td><td>无操作</td></tr>
+      <tr><td>创新药ETF</td><td>159992</td><td>9,400</td><td>0.866</td><td>无操作</td></tr>
+      <tr><td>通信ETF</td><td>515880</td><td>7,500</td><td>0.712</td><td>无操作</td></tr>
+      <tr><td>黄金ETF</td><td>518880</td><td>1,600</td><td>9.056</td><td><span class="warn-text">卖出1,000份@8.508</span></td></tr>
+      <tr><td>工商银行</td><td>601398</td><td>1,500</td><td>7.783</td><td>无操作</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rp-section-title"><span class="rp-section-num">02</span> 二、大市表现复盘</div>
+  <div class="rp-callout" data-tone="red"><b>核心结论：</b>系统性普跌日延续扩大，科创50 -4.82% 领跌，上证跌破 3800 关口。美联储纪要放鹰（AI 成加息新变量）+ 日韩大跌 + 黄金破位 + 高油价多重利空共振，节后首日"开门红"预期彻底证伪，科技高拥挤度板块集中出清。</div>
+  <table class="rp-table">
+    <thead><tr><th>指数</th><th>收盘</th><th>涨跌幅</th><th>开盘</th><th>最高</th><th>最低</th></tr></thead>
+    <tbody>
+      <tr class="rp-row-down"><td>上证指数</td><td>3811.90</td><td class="down-text">-0.79%</td><td>3838.98</td><td>3864.12</td><td>3795.37</td></tr>
+      <tr class="rp-row-down"><td>深证成指</td><td>12620.90</td><td class="down-text">-2.07%</td><td>12896.45</td><td>12984.95</td><td>12540.73</td></tr>
+      <tr class="rp-row-down"><td>创业板指</td><td>3036.66</td><td class="down-text">-3.15%</td><td>3140.46</td><td>3168.40</td><td>3012.03</td></tr>
+      <tr class="rp-row-down"><td>科创50</td><td>1456.32</td><td class="down-text">-4.82%</td><td>1512.79</td><td>1521.46</td><td>1446.43</td></tr>
+      <tr class="rp-row-down"><td>沪深300</td><td>4310.28</td><td class="down-text">-1.09%</td><td>4354.93</td><td>4383.57</td><td>4289.79</td></tr>
+    </tbody>
+  </table>
+  <ul class="rp-risks">
+    <li data-tone="red">广度恶化：涨停43 / 跌停13 / 炸板32（炸板率 42.7%，全天恶化）</li>
+    <li data-tone="amber">领跌：通信 -5.11% · 半导体 -4.29% · 新能源 -4.97% · 机器人 -3.87% · 创新药 -3.78%</li>
+    <li data-tone="blue">领涨：电池涨停潮 8 只（固态电池）+4.37% · 银行防御（宁波/工行红盘）</li>
+  </ul>
+
+  <div class="rp-section-title"><span class="rp-section-num">03</span> 1b. 全市场异动扫描（行业/题材版）</div>
+  <div class="rp-callout" data-tone="amber"><b>⚠️ 数据降级：</b>行业/题材板块数据降级（push2/push2delay 不可达 BUG-017），基于行业 ETF 代理 + 同花顺热点推断，为代理口径。</div>
+  <table class="rp-table">
+    <thead><tr><th>方向</th><th>板块</th><th>涨跌幅</th><th>振幅</th><th>根因类型</th><th>与持仓关联</th></tr></thead>
+    <tbody>
+      <tr class="rp-row-down"><td>🔵</td><td>通信</td><td class="down-text">-5.11%</td><td>7.47%</td><td>题材退潮/拥挤度消化</td><td>直接持仓（P0错过）</td></tr>
+      <tr class="rp-row-down"><td>🔵</td><td>半导体</td><td class="down-text">-4.29%</td><td>6.17%</td><td>映射失效/外部冲击</td><td>关注列表（SIG-03证伪）</td></tr>
+      <tr class="rp-row-down"><td>🔵</td><td>新能源/芯片</td><td class="down-text">-4.97%/-4.05%</td><td>5.8%</td><td>情绪/技术面</td><td>无直接持仓</td></tr>
+      <tr class="rp-row-up"><td>🔴</td><td>电力设备</td><td class="up-text">+1.84%</td><td>2.03%</td><td>政策催化/资金行为</td><td>关联电网设备逻辑</td></tr>
+      <tr class="rp-row-up"><td>🔴</td><td>煤炭/红利/银行</td><td class="up-text">+1.83%/+1.43%/+0.70%</td><td>1.5-2.4%</td><td>避险/资金行为</td><td>银行直接持仓受益</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rp-section-title"><span class="rp-section-num">04</span> 三、持仓复盘</div>
+  <table class="rp-table">
+    <thead><tr><th>标的</th><th>代码</th><th>涨跌幅</th><th>开盘缺口</th><th>日内波动</th><th>建议</th><th>要点</th></tr></thead>
+    <tbody>
+      <tr class="rp-row-up"><td>宁波银行</td><td>002142</td><td class="up-text">+0.71%</td><td>-0.08%</td><td>+0.79%</td><td><span class="rp-badge warn">持有</span></td><td>打新底仓，防御有效</td></tr>
+      <tr class="rp-row-warn"><td>航空航天ETF</td><td>159227</td><td class="down-text">-0.82%</td><td>-0.10%</td><td>-0.72%</td><td><span class="rp-badge warn">持有</span></td><td>军工低位整理，无催化</td></tr>
+      <tr class="rp-row-warn"><td>电网设备ETF</td><td>159326</td><td class="down-text">-0.39%</td><td>0.00%</td><td>-0.39%</td><td><span class="rp-badge warn">持有</span></td><td>相对抗跌，跌破1.533评估</td></tr>
+      <tr class="rp-row-down"><td>创新药ETF</td><td>159992</td><td class="down-text">-3.78%</td><td>-0.23%</td><td>-3.55%</td><td><span class="rp-badge warn">持有</span></td><td>跌破证伪线，观察0.83前低</td></tr>
+      <tr class="rp-row-down"><td>通信ETF</td><td>515880</td><td class="down-text">-5.11%</td><td>-0.32%</td><td>-4.79%</td><td><span class="rp-badge down">持有待处理</span></td><td>P0错过 -16.57% 深套</td></tr>
+      <tr class="rp-row-down"><td>黄金ETF</td><td>518880</td><td class="down-text">-1.84%</td><td>-1.70%</td><td>-0.14%</td><td><span class="rp-badge down">持有已减仓</span></td><td>破位延续，剩余1600份关注</td></tr>
+      <tr class="rp-row-up"><td>工商银行</td><td>601398</td><td class="up-text">+0.36%</td><td>-0.24%</td><td>+0.60%</td><td><span class="rp-badge warn">持有</span></td><td>打新底仓，防御有效</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rp-section-title"><span class="rp-section-num">05</span> 3b. 做T建议复盘</div>
+  <div class="rp-callout" data-tone="green"><b>结论：</b>今日为系统性普跌日，早盘"不做T + 开盘30分钟不操作"纪律严格执行，未做任何方向性 T 操作正确。创新药反T备选未触发（低开），正确放弃。</div>
+  <table class="rp-table">
+    <thead><tr><th>标的</th><th>建议方向</th><th>预估胜率</th><th>是否触发</th><th>是否执行</th><th>实际结果</th><th>预估准确?</th></tr></thead>
+    <tbody>
+      <tr class="rp-row-up"><td>创新药ETF</td><td>反T备选</td><td>45%</td><td>未触发（低开）</td><td>否</td><td>全天 -3.78% 单边下跌</td><td>✅</td></tr>
+      <tr class="rp-row-up"><td>其余6只</td><td>不做T</td><td>—</td><td>—</td><td>—</td><td>—</td><td>✅（普跌日纪律正确）</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rp-section-title"><span class="rp-section-num">06</span> 2c. 信号执行复盘</div>
+  <div class="rp-callout" data-tone="red"><b>P0 执行率 50%（1/2）：</b>SIG-01 黄金已执行（A）✅；SIG-02 通信 14:45 截止未执行 → 未执行（错过）零容忍问责。连续 7 日 &lt;100% 触发 P1 告警。</div>
+  <table class="rp-table">
+    <thead><tr><th>信号ID</th><th>决策</th><th>执行</th><th>状态</th><th>复盘反思</th></tr></thead>
+    <tbody>
+      <tr class="rp-row-up"><td>SIG-01 黄金P0</td><td>A</td><td>A</td><td><span class="rp-badge up">已执行</span></td><td>竞价破位立即执行，10:38减仓1000份</td></tr>
+      <tr class="rp-row-down"><td>SIG-02 通信P0</td><td>A</td><td>F</td><td><span class="rp-badge down">未执行（错过）</span></td><td>决策正确执行失败，14:45截止未执行</td></tr>
+      <tr class="rp-row-up"><td>SIG-03 半导体P1</td><td>B</td><td>—</td><td><span class="rp-badge info">已过期</span></td><td>双确认正确拒绝，躲过-4.29%</td></tr>
+      <tr class="rp-row-up"><td>SIG-04 创新药P1</td><td>B</td><td>—</td><td><span class="rp-badge info">已过期</span></td><td>跌破证伪线正确拒绝</td></tr>
+      <tr class="rp-row-up"><td>SIG-05 机器人P1</td><td>B</td><td>—</td><td><span class="rp-badge info">已过期</span></td><td>跌破证伪线正确拒绝，躲过-3.87%</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rp-section-title"><span class="rp-section-num">07</span> 信号质量仪表盘（云库计算）</div>
+  <table class="rp-table">
+    <thead><tr><th>维度</th><th>指标</th><th>数值</th><th>阈值</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr class="rp-row-up"><td>触达</td><td>P1触发率</td><td>45.8%</td><td>≥40%</td><td>✅</td></tr>
+      <tr class="rp-row-warn"><td>结果</td><td>目标达成率</td><td>33.3%</td><td>≥50%</td><td>⚠️</td></tr>
+      <tr class="rp-row-up"><td>结果</td><td>平均达标天数</td><td>1.0天</td><td>1-2天</td><td>✅</td></tr>
+      <tr class="rp-row-warn"><td>结果</td><td>平均盈亏比</td><td>0.56</td><td>≥1.5</td><td>⚠️</td></tr>
+      <tr class="rp-row-warn"><td>结果</td><td>单笔最大亏损</td><td>-82.5元</td><td>风控线内</td><td>⚠️</td></tr>
+      <tr class="rp-row-up"><td>方向</td><td>方向准确率</td><td>83.3%</td><td>≥60%</td><td>✅</td></tr>
+      <tr class="rp-row-warn"><td>校准</td><td>预期vs实际偏差</td><td>45.8pp</td><td>±20pp</td><td>⚠️</td></tr>
+      <tr class="rp-row-up"><td>价值</td><td>信号期望价值</td><td>+16.97元</td><td>为正</td><td>✅</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rp-section-title"><span class="rp-section-num">08</span> 2d. 信号收益追踪</div>
+  <div class="rp-callout" data-tone="amber"><b>本日结算（假期后补结算）：</b>SIG-20260921-04 通信ETF miss（入场0.712→0.701，-82.5元）；SIG-20260921-06-盘中 创新药ETF miss（入场0.866→0.870，+37.6元）。累计已执行 P&amp;L +101.8元，模拟 P&amp;L -207.0元，累计避免损失 21.35元。</div>
+
+  <div class="rp-section-title"><span class="rp-section-num">09</span> 三、早盘预判复盘（Generator-Evaluator）</div>
+  <div class="rp-callout" data-tone="red"><b>预判方向准确率 0/3 完全命中：</b>高开预判（55%）完全证伪——实际系统性普跌。最大判断失误：美联储纪要放鹰（AI 成加息新变量）超出早盘预判框架；"开门红"惯性思维 + 偏弱情景概率仅 20% 分配过低。</div>
+  <table class="rp-table">
+    <thead><tr><th>预判</th><th>概率</th><th>实际</th><th>准确?</th><th>根因</th></tr></thead>
+    <tbody>
+      <tr class="rp-row-down"><td>基准：平开~高开震荡</td><td>55%</td><td>低开单边下行 -0.79%</td><td>❌</td><td>纪要放鹰超出框架</td></tr>
+      <tr class="rp-row-down"><td>偏强：放量普涨</td><td>25%</td><td>未出现</td><td>❌</td><td>存储主线被利空打破</td></tr>
+      <tr class="rp-row-warn"><td>偏弱：日韩拖累低走</td><td>20%</td><td>走偏弱路径更弱</td><td>⚠️</td><td>幅度远超预期</td></tr>
+    </tbody>
+  </table>
+  <ul class="rp-risks">
+    <li data-tone="red">早盘需更重视隔夜外盘负面（日韩大跌）+ 利率变量（纪要偏鹰）共振，勿被"开门红"叙事主导</li>
+    <li data-tone="amber">系统性普跌日特征（广度/炸板率/科技出清）应纳入早盘情景推演</li>
+    <li data-tone="blue">板块扫描校准：系统性利空日板块综合分应整体 -0.5 折扣（今日偏高）</li>
+  </ul>
+
+  <div class="rp-section-title"><span class="rp-section-num">10</span> 五、核心风险与次日关注（10/09）</div>
+  <div class="rp-callout" data-tone="amber"><b>核心变量：</b>通信 P0 补处理（错过后的执行 vs 放弃，决定 P0 执行率能否止跌）· 超跌修复四条件 · 布伦特油价破 104 · 美股 Q3 财报季 · 涨停情绪修复 · 银行防御持续性。</div>
+  <ul class="rp-risks">
+    <li data-tone="red">通信 ETF 深套 -16.57%，P0 错过未执行，10/09 需补处理</li>
+    <li data-tone="red">科创50 两日 -13%，反弹失败型（高位快速回落）20 日后可能再跌——止损纪律优先</li>
+    <li data-tone="amber">高油价（布伦特 104+）通胀/利率上行压制成长分母端</li>
+    <li data-tone="amber">黄金破位延续（剩余 1,600 份），水贝实物扫货 vs 破位背离待观察</li>
+    <li data-tone="amber">创新药跌破证伪线，持仓 9,400 份观察 0.83 前低</li>
+  </ul>
+
+  <div class="rp-foot">
+    数据来源: 腾讯财经（指数/持仓/ETF 收盘、行业ETF批量行情）、东财 push2ex（涨停/炸板/跌停池）、东财 7x24（全球资讯）、同花顺热点（题材）、mootdx（K线，TCP 超时降级腾讯日K）、信号云库（signal_tracking/signal_quality）<br>
+    数据标注: ⚠️ 行业/题材板块数据降级（BUG-017，行业ETF代理+同花顺热点）；北向断供（第24交易日）；主力资金流不可达（push2his 替代）；航空航天/电网成本未复权（BUG-021）；两融 T+1 未更新<br>
+    运行提示: ⚠️ 数据源降级 push2/push2his（BUG-017）；P0 执行率连续 7 日 &lt;100% 触发 P1 告警；SIG-02 通信 P0 未执行（错过）问责待处理
+  </div>
+</div>
+</body>
+</html>

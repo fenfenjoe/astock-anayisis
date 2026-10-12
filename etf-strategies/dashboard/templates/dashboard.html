@@ -7,7 +7,7 @@
 <!-- 字体：移除 Google Fonts 外链（国内不可达/阻塞渲染），改用本地字体栈（见 dashboard.css --font-* 变量） -->
 <link rel="stylesheet" href="/static/css/dashboard.css">
 <link rel="stylesheet" href="/static/css/agent.css">
-<link rel="stylesheet" href="/static/css/pet.css">
+<link rel="stylesheet" href="/static/css/pet.css?v=20261010">
 <!-- echarts / marked 本地化（原 CDN 外链在国内不稳定 → 慢加载/误报失败） -->
 <script src="/static/vendor/echarts.min.js"></script>
 <script src="/static/vendor/marked.min.js"></script>
@@ -539,30 +539,40 @@
 
   <!-- 聊天 -->
   <div class="agent-pane" id="agent-pane-chat">
-    <!-- 📌 提示与待办（REQ-002）：小满主动发；提示不需回复，待办回复后回调执行 -->
-    <section class="agent-notices" id="agent-notices" hidden>
-      <div class="agent-notices-head">
-        <h3 class="em-title">📌 提示与待办</h3>
-        <div class="agent-notices-actions">
-          <button class="btn btn-sm" onclick="Agent.noticesReadAll()" title="全部标记已读">全部已读</button>
-        </div>
-      </div>
-      <div class="agent-notices-list" id="agent-notices-list"><p class="muted">加载中...</p></div>
-      <div class="agent-notices-pager" id="agent-notices-pager"></div>
-    </section>
     <div class="agent-chat-layout">
       <aside class="agent-sessions">
-        <div class="agent-sessions-head">
+        <!-- 📌 侧边栏双 Tab（会话 / 提示与待办） -->
+        <div class="agent-sidebar-tabs" role="tablist" aria-label="侧边栏切换">
+          <button class="agent-sidebar-tab active" data-sbtab="sessions" role="tab"
+                  aria-selected="true" onclick="Agent.switchSidebarTab('sessions')">💬 会话</button>
+          <button class="agent-sidebar-tab" data-sbtab="notices" role="tab"
+                  aria-selected="false" onclick="Agent.switchSidebarTab('notices')">📌 提示与待办<span class="agent-tab-badge agent-sidebar-badge" id="agent-notices-badge" hidden></span></button>
+        </div>
+        <!-- 会话列表 -->
+        <div class="agent-sessions-head" id="agent-sessions-head">
           <h3 class="em-title">会话</h3>
           <button class="btn btn-sm" onclick="Agent.newSession()">＋ 新会话</button>
         </div>
         <div id="agent-session-list" class="agent-session-list"><p class="muted">加载中...</p></div>
+        <!-- 提示与待办标题列表 -->
+        <div id="agent-notice-title-list" class="agent-notice-title-list" hidden>
+          <div id="agent-notice-titles" class="agent-notice-titles"><p class="muted">加载中...</p></div>
+          <div class="agent-notices-pager" id="agent-notices-pager"></div>
+        </div>
       </aside>
       <section class="agent-chat-main">
         <div id="agent-messages" class="agent-messages">
           <p class="muted">你好呀，我是小满～ 选一个会话开始聊，或者问我怎么看今天的财经大事。</p>
         </div>
-        <div class="agent-input-row">
+        <!-- 提示与待办详情（右侧主区，选中标题后展示） -->
+        <div id="agent-notice-detail" class="agent-notice-detail" hidden>
+          <div class="agent-notice-detail-head">
+            <h3 class="em-title">📌 提示与待办</h3>
+            <button class="btn btn-sm" onclick="Agent.noticesReadAll()" title="全部标记已读">全部已读</button>
+          </div>
+          <div id="agent-notice-detail-body" class="agent-notice-detail-body"></div>
+        </div>
+        <div class="agent-input-row" id="agent-input-row">
           <textarea id="agent-input" rows="2"
             placeholder="和小满聊聊… 例如：你怎么看今天的 MLF 操作？"
             onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();Agent.send();}"></textarea>
@@ -597,11 +607,10 @@
     <button type="button" class="xm-pet-mode" data-mode="slack" title="切到摸鱼状态">摸鱼</button>
   </div>
   <div class="xm-pet-bar">
-    <button class="xm-pet-btn" id="xm-pet-btn-min" title="收起为小圆点" aria-label="收起小满">—</button>
-    <button class="xm-pet-btn" id="xm-pet-btn-hide" title="隐藏（小圆点可召回）" aria-label="隐藏小满">×</button>
+    <button type="button" class="xm-pet-btn" id="xm-pet-btn-min" title="收起小满（再次点击恢复）" aria-label="收起小满">收起</button>
   </div>
 </div>
-<!-- 最小化/隐藏后的小圆点（召回入口） -->
+<!-- 小圆点：仅移动端窄屏自动收起时作为召回入口（桌面"收起"仅缩小不隐藏，不走小圆点） -->
 <button class="xm-pet-mini" id="xm-pet-mini" hidden title="召唤小满" aria-label="召唤小满">🌾</button>
 
 </div><!-- /#app-main -->
@@ -612,6 +621,6 @@
 <script src="/static/js/daily.js"></script>
 <script src="/static/js/tickets.js"></script>
 <script src="/static/js/agent.js"></script>
-<script src="/static/js/pet.js"></script>
+<script src="/static/js/pet.js?v=20261010a"></script>
 </body>
 </html>

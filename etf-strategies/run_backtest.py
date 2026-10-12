@@ -25,6 +25,8 @@ from backtest.strategies.rsrs_momentum import TrendFilterMomentum
 from backtest.strategies.canary_defense import CanaryDefense, CanaryDefenseDaily
 from backtest.strategies.rsrs_reversal_momentum import RsrsReversalMomentum
 from backtest.strategies.low_correlation_rotation import LowCorrelationRotation
+from backtest.strategies.etf_timing_rotation import EtfTimingRotation
+from backtest.strategies.wufu_momentum_rotation import WufuMomentumRotation
 from backtest.reporting import plot_equity_curves, plot_drawdowns, render_markdown_report
 
 # 回测窗口：END 动态取当前日期（BUG-011 修复，原硬编码 2026-07-01 静默缺失 2 个月行情），
@@ -65,6 +67,8 @@ def main():
         ("S17_金丝雀防御动量_日频",     CanaryDefenseDaily(mom_lookback=25, top_n=2)),
         ("S18_RSRS增强反转动量",      RsrsReversalMomentum()),
         ("S19_低相关ETF轮动",         LowCorrelationRotation()),
+        ("S20_四基轮动RSRS择时",      EtfTimingRotation()),
+        ("S21_五福动量轮动",           WufuMomentumRotation()),
     ]
 
     # 逐策略加载各自资产（资产上市时间不同，各自对齐避免截断）

@@ -24,6 +24,7 @@ from backtest.strategies.rsrs_momentum import TrendFilterMomentum
 from backtest.strategies.canary_defense import CanaryDefense, CanaryDefenseDaily
 from backtest.strategies.rsrs_reversal_momentum import RsrsReversalMomentum
 from backtest.strategies.low_correlation_rotation import LowCorrelationRotation
+from backtest.strategies.etf_timing_rotation import EtfTimingRotation
 
 # 策略注册表 — 新增策略在这里加一行即可
 STRATEGIES = [
@@ -46,6 +47,7 @@ STRATEGIES = [
     CanaryDefenseDaily,
     RsrsReversalMomentum,
     LowCorrelationRotation,
+    EtfTimingRotation,
 ]
 
 # 策略类别 → 颜色映射（rich 支持的颜色名）
@@ -82,6 +84,8 @@ STRAT_CATEGORY = {
     "S17_金丝雀防御动量_日频":     "动量 / 风险预警",
     "S18_RSRS增强反转动量":        "动量 / 反转",
     "S19_低相关ETF轮动":           "动量 / 低相关",
+    "S20_四基轮动RSRS择时":        "动量轮动 / RSRS择时",
+    "S21_五福动量轮动":             "动量轮动 / 加权回归 / 走弱期防御",
 }
 
 # 已回测的标杆指标（来自最近一期全量回测）
@@ -105,6 +109,8 @@ STRAT_BENCHMARKS = {
     "S17_金丝雀防御动量_日频":     {"年化": "—",     "夏普": "—",   "回撤": "—"},
     "S18_RSRS增强反转动量":        {"年化": "34.75%", "夏普": "1.16", "回撤": "-25.50%"},
     "S19_低相关ETF轮动":           {"年化": "21.84%", "夏普": "0.87", "回撤": "-32.01%"},
+    "S20_四基轮动RSRS择时":        {"年化": "18.75%", "夏普": "0.91", "回撤": "-21.30%"},
+    "S21_五福动量轮动":             {"年化": "—",     "夏普": "—",   "回撤": "—"},
 }
 
 

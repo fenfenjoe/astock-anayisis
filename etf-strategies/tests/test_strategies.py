@@ -20,6 +20,8 @@ from backtest.strategies.low_correlation_rotation import LowCorrelationRotation
 from backtest.strategies.adaptive_momentum import AdaptiveMomentum
 from backtest.strategies.rsrs_momentum import TrendFilterMomentum
 from backtest.strategies.canary_defense import CanaryDefense, CanaryDefenseDaily
+from backtest.strategies.etf_timing_rotation import EtfTimingRotation
+from backtest.strategies.wufu_momentum_rotation import WufuMomentumRotation
 
 
 def _prices(up_a=True, n=300):
@@ -819,3 +821,209 @@ def test_all_strategies_weights_sum_to_one():
         valid = w.iloc[60:] if len(w) > 60 else w
         rowsums = valid.sum(axis=1)
         assert ((rowsums - 1.0).abs() < 1e-6).all(), f"{S.name} 权重不和为1"
+
+
+# ── S20 四基轮动+RSRS择时 ──
+
+def _prices_s20(n=300):
+    """S20 用价格：4只ETF池 + 510300(择时) + 511880(现金)。
+
+    513100 涨最快（应选为轮动仓 top1），510300 慢涨。
+    """
+    dates = pd.date_range("2024-01-01", periods=n, freq="B")
+    return pd.DataFrame({
+        "518880": [100 * (1.0005 ** i) for i in range(n)],   # 微涨
+        "513100": [100 * (1.002 ** i) for i in range(n)],    # 快涨（轮动仓应选）
+        "159915": [100 * (1.001 ** i) for i in range(n)],    # 慢涨
+        "510180": [100 * (1.0008 ** i) for i in range(n)],   # 慢涨
+        "510300": [100 * (1.001 ** i) for i in range(n)],    # 择时标的慢涨
+        "511880": [100.0] * n,                                # 现金平
+    }, index=dates)
+
+
+def _mock_ohlc(monkeypatch, slope=1.0, n=300):
+    """mock _load_ohlc 返回固定 high/low（斜率 slope 的对数序列），保证确定性。
+
+    slope>1：high/low 上行 → RSRS 斜率 > 买入阈值 → 择时仓全仓
+    slope≈1：横盘 → RSRS 斜率 ≈1 → 中间区（半仓）
+    """
+    dates = pd.date_range("2024-01-01", periods=n, freq="B")
+    high = pd.Series([100 * (slope ** i) * 1.01 for i in range(n)], index=dates)
+    low = pd.Series([100 * (slope ** i) * 0.99 for i in range(n)], index=dates)
+
+    def fake_load_ohlc(self, code, dates_idx):
+        return high, low
+
+    monkeypatch.setattr(EtfTimingRotation, "_load_ohlc", fake_load_ohlc)
+
+
+def test_s20_weights_sum_to_one(monkeypatch):
+    """S20 warmup 后每行权重和≈1（轮动仓60% + 择时仓40%）。"""
+    _mock_ohlc(monkeypatch, slope=1.002)
+    p = _prices_s20()
+    s = EtfTimingRotation()
+    w = s.generate(p)
+    valid = w.iloc[30:]
+    rowsums = valid.sum(axis=1)
+    assert ((rowsums - 1.0).abs() < 1e-6).all(), f"S20 权重不和为1: {rowsums.unique()}"
+
+
+def test_s20_has_cash_and_timing_columns():
+    """S20 应有现金列 511880 和择时列 510300。"""
+    p = _prices_s20()
+    s = EtfTimingRotation()
+    w = s.generate(p)
+    assert "511880" in w.columns
+    assert "510300" in w.columns
+
+
+def test_s20_rotation_picks_fastest(monkeypatch):
+    """轮动仓应选涨最快的 513100（60%），择时仓上行时全仓 510300（40%）。"""
+    _mock_ohlc(monkeypatch, slope=1.002)
+    p = _prices_s20()
+    s = EtfTimingRotation()
+    w = s.generate(p)
+    last = w.iloc[-1]
+    assert last["513100"] == 0.6, f"轮动仓应持513100 60%，实际: {last.to_dict()}"
+    assert last["510300"] == 0.4, f"择时仓应持510300 40%，实际: {last.to_dict()}"
+
+
+def test_s20_warmup_holds_cash(monkeypatch):
+    """warmup 期内全仓现金（动量窗口不足）。"""
+    _mock_ohlc(monkeypatch, slope=1.002)
+    p = _prices_s20()
+    s = EtfTimingRotation()
+    w = s.generate(p)
+    warmup_row = w.iloc[10]  # warmup = max(20, 15) = 20 之前
+    assert warmup_row["511880"] == 1.0
+    etf_weights = warmup_row[[c for c in s.assets if c != "511880"]]
+    assert (etf_weights == 0.0).all()
+
+
+def test_s20_timing_trim_half_when_flat(monkeypatch):
+    """RSRS 横盘（斜率≈1）→ 择时仓半仓（40%×0.5=20%），轮动仓仍 60%。"""
+    _mock_ohlc(monkeypatch, slope=1.0)
+    p = _prices_s20()
+    s = EtfTimingRotation()
+    w = s.generate(p)
+    last = w.iloc[-1]
+    # 横盘 RSRS ≈1 → 中间区 → 择时仓 20% + 现金 20%
+    assert abs(last["510300"] - 0.2) < 1e-6, f"横盘择时应半仓20%，实际: {last['510300']}"
+    assert last["513100"] == 0.6
+    assert abs(last["511880"] - 0.2) < 1e-6
+
+
+def test_s20_timing_trim_heavy_when_down(monkeypatch):
+    """RSRS 下行（斜率<0.8）→ 择时仓减半到 20%。"""
+    _mock_ohlc(monkeypatch, slope=0.98)
+    p = _prices_s20()
+    s = EtfTimingRotation()
+    w = s.generate(p)
+    last = w.iloc[-1]
+    assert abs(last["510300"] - 0.2) < 1e-6, f"下行择时应减半20%，实际: {last['510300']}"
+
+
+def test_s20_rebalance_hold_between(monkeypatch):
+    """每3天调仓：调仓日更新权重，中间 2 天结转上次权重（持有不变）。"""
+    _mock_ohlc(monkeypatch, slope=1.002)
+    p = _prices_s20()
+    s = EtfTimingRotation(rebalance_days=3)
+    w = s.generate(p)
+    # warmup 后取一段：非调仓日应与前一日权重完全一致
+    i = 80  # warmup=20 之后，远离起始
+    # 找一个确定是"中间持有"的天：i+1 或 i+2 必有一个非调仓日
+    assert (w.iloc[i + 1] == w.iloc[i]).all() or (w.iloc[i + 2] == w.iloc[i + 1]).all(), \
+        "3天调仓节奏内应有连续持有天（权重结转）"
+    # 且调仓日权重非零（轮动+择时双仓满载）
+    assert (w.iloc[100].sum()) > 0.99
+
+
+def test_s20_diagnostics(monkeypatch):
+    """S20 get_diagnostics 返回动量分解 + RSRS 信号 + 持仓。"""
+    _mock_ohlc(monkeypatch, slope=1.002)
+    p = _prices_s20()
+    s = EtfTimingRotation()
+    diag = s.get_diagnostics(p)
+    assert "scores" in diag
+    assert "score_details" in diag
+    assert "holdings" in diag
+    assert "parameters" in diag
+    assert "RSRS窗口(天)" in diag["parameters"]
+    assert "rsrs_signal" in diag["score_details"]
+
+
+# ── S21 五福动量轮动 ──
+
+def _prices_wufu(n=160):
+    """3 资产上行 + 1 平：模拟五福池（快涨/慢涨/现金）。"""
+    dates = pd.date_range("2024-01-01", periods=n, freq="B")
+    return pd.DataFrame({
+        "513100": [100 * (1.003 ** i) for i in range(n)],   # 快涨（应被选中）
+        "159915": [100 * (1.001 ** i) for i in range(n)],   # 慢涨
+        "510300": [100 * (1.0015 ** i) for i in range(n)],  # 中涨
+        "511880": [100.0] * n,                              # 货币ETF平
+    }, index=dates)
+
+
+def test_wufu_picks_fastest():
+    """513100 涨最快 → 应进入持仓。"""
+    p = _prices_wufu()
+    s = WufuMomentumRotation(global_pool=["513100", "159915", "510300"],
+                             china_pool=[], holdings_num=2)
+    w = s.generate(p)
+    valid = w.iloc[60:]  # skip warmup
+    last = valid.iloc[-1]
+    assert last["513100"] > 0, "涨最快的资产应被持有"
+
+
+def test_wufu_weights_sum_to_one():
+    p = _prices_wufu()
+    s = WufuMomentumRotation(global_pool=["513100", "159915", "510300"],
+                             china_pool=[], holdings_num=2)
+    w = s.generate(p)
+    rowsums = w.iloc[60:].sum(axis=1)
+    assert ((rowsums - 1.0).abs() < 1e-6).all(), "每行权重和应=1"
+
+
+def test_wufu_defensive_when_no_candidate():
+    """全部资产下跌/横盘 → 无候选通过 → 防御ETF(511880)。"""
+    dates = pd.date_range("2024-01-01", periods=120, freq="B")
+    p = pd.DataFrame({
+        "513100": [100 * (0.998 ** i) for i in range(120)],
+        "159915": [100 * (0.999 ** i) for i in range(120)],
+        "511880": [100.0] * 120,
+    }, index=dates)
+    s = WufuMomentumRotation(global_pool=["513100", "159915"],
+                             china_pool=[], holdings_num=1)
+    w = s.generate(p)
+    last = w.iloc[-1]
+    assert last["511880"] > 0.99, "无候选时退守货币ETF"
+
+
+def test_wufu_diagnostics():
+    p = _prices_wufu()
+    s = WufuMomentumRotation(global_pool=["513100", "159915", "510300"],
+                             china_pool=[], holdings_num=2)
+    diag = s.get_diagnostics(p)
+    assert "scores" in diag
+    assert "holdings" in diag
+    assert "parameters" in diag
+    assert "动量回看(天)" in diag["parameters"]
+
+
+def test_wufu_weak_period_uses_global_pool():
+    """走弱期（指数代理ETF跌破MA）→ 仅全球池候选（china_pool 不参与）。"""
+    dates = pd.date_range("2024-01-01", periods=120, freq="B")
+    # 指数代理ETF（510300=沪深300）持续下跌 → 走弱期
+    p = pd.DataFrame({
+        "510300": [100 * (0.997 ** i) for i in range(120)],   # 下跌 → 走弱
+        "513100": [100 * (1.002 ** i) for i in range(120)],   # 全球池上涨
+        "159915": [100 * (1.002 ** i) for i in range(120)],   # china池上涨（弱期应被排除）
+        "511880": [100.0] * 120,
+    }, index=dates)
+    s = WufuMomentumRotation(global_pool=["513100"],
+                             china_pool=["159915"], holdings_num=1)
+    w = s.generate(p)
+    last = w.iloc[-1]
+    # 走弱期：159915(china)不应被持有，只可能持有 513100(全球) 或 511880(防御)
+    assert last["159915"] == 0, "走弱期 china 池不应被选"

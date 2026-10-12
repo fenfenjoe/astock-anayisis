@@ -23,11 +23,45 @@
 
 按以下顺序使用 WebSearch 搜索策略。每个平台搜 1-2 个关键词即可，避免过量调用。
 
-### 2.1 聚宽社区 (joinquant.com)
-```
-search: "ETF 轮动 策略 年化 joinquant"
-search: "ETF 动量 择时 joinquant"
-```
+### 2.1 聚宽社区 (joinquant.com) — 优先直爬社区论坛
+
+聚宽社区论坛（`https://www.joinquant.com/view/community/list?listType=1`）聚集大量
+量化策略分享帖。**优先直接抓取论坛帖子**（比 WebSearch 命中率高得多），流程：
+
+1. 运行抓取脚本（读取小满「爱逛的地方」里聚宽的登录 Cookie）：
+   ```bash
+   python etf-strategies/automation/scripts/fetch_joinquant_forum.py --pages 3 --limit 20
+   ```
+   - 脚本输出 YAML：`joinquant_posts:` 下列出 ETF/指数相关的候选帖子
+     （title / url / like_count / content_preview），已按社区热度（点赞数）排序。
+   - 帖子详情页 URL 格式：`https://www.joinquant.com/view/community/detail/{id}`，
+     需要时可再访问详情页补全策略逻辑/回测指标。
+
+2. **若脚本提示「聚宽未登录」（exit code 3）**：
+   - 在扫描报告「搜索执行日志」记录：`聚宽：未登录，社区直爬跳过（已提示用户登录）`
+   - 生成一条待办提醒用户在「爱逛的地方」登录聚宽（参照微博/小红书流程）：
+     ```bash
+     python -c "
+     import sqlite3, json
+     from pathlib import Path
+     db = Path('etf-strategies/agent/data/agent.db')
+     if db.exists():
+         conn = sqlite3.connect(str(db))
+         conn.execute(\"INSERT INTO agent_notices(kind,status,title,content,todo_type,todo_data,source) VALUES('todo','open',?,?,?,?,?)\",
+             ('请在本机登录聚宽后刷新',
+              '「聚宽」暂时逛不了啦～ 请在本机浏览器登录聚宽（joinquant.com），然后回到「爱逛的地方」点一下刷新，我就能自动去取 Cookie 抓策略啦！',
+              'cookie_provide', json.dumps({'platform_id':'joinquant'}), 'agent'))
+         conn.commit(); conn.close()
+         print('todo created')
+     "
+     ```
+   - 同时用 WebSearch 兜底搜索聚宽策略（见下方关键词），不因未登录而放弃该平台。
+
+3. 聚宽 WebSearch 兜底关键词（登录不可用或需交叉验证时）：
+   ```
+   search: "ETF 轮动 策略 年化 joinquant"
+   search: "ETF 动量 择时 joinquant"
+   ```
 
 ### 2.2 BigQuant
 ```
@@ -149,6 +183,7 @@ code:
 
 ## 搜索执行日志
 - 各平台搜索成功/失败状态
+- 聚宽：社区直爬状态（已登录抓取 N 帖 / 未登录跳过并提示登录）+ WebSearch 兜底状态
 - API限流/访问限制备注
 ```
 

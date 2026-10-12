@@ -19,7 +19,8 @@ from agent import config, db as agent_db
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = config.REPO_ROOT
-TASK_DEFS_FILE = REPO_ROOT / ".claude" / "scripts" / "task_schedule.json"
+# 2026-09-21：调度基础设施从 .claude/scripts/ 迁至 scripts/（Claude Code 清理）
+TASK_DEFS_FILE = REPO_ROOT / "scripts" / "task_schedule.json"
 SCHEDULE_PATH = TASK_DEFS_FILE
 CLAUDE_TIMEOUT_SECONDS = 3600
 OUTPUT_TAIL_CHARS = 8000
@@ -256,11 +257,22 @@ def _is_running(task_id: str) -> bool:
 
 
 def current_task() -> dict | None:
+    """当前正在执行的任务（供 /api/agent/status 与桌宠展示）。
+
+    BUG-FIX(2026-09-21)：_running_tasks 条目在执行期含 proc（subprocess.Popen，
+    供 stop_task 终止子进程）。若原样返回，FastAPI 序列化时遍历 Popen 内部
+    _thread.lock → 500。此处只返回可序列化的白名单字段。
+    """
     with _running_lock:
         active = list(_running_tasks.values())
     if not active:
         return None
-    return min(active, key=lambda r: r["started_at"])
+    best = min(active, key=lambda r: r["started_at"])
+    return {
+        "task_id": best.get("task_id"),
+        "name": best.get("name"),
+        "started_at": best.get("started_at"),
+    }
 
 
 def _extract_tokens_from_output(output: str) -> int | None:
@@ -579,7 +591,7 @@ def _mark_run_stopped(task_id: str) -> None:
         row = agent_db._cd_select_one(
             "scheduler_runs", columns="id",
             filters=[("task_id", "eq", task_id), ("status", "eq", "running")],
-            order="id.desc",
+            order="run_time.desc",
         )
         if row:
             agent_db._cd_update(

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>早盘报告 · 2026-10-08</title>
+<style>
+.rp-report {
+  --rp-bg: #0e1117; --rp-surface: #161b22; --rp-border: #2a3140;
+  --rp-text: #edf2f7; --rp-text-2: #a8b3c4; --rp-text-3: #6b7686;
+  --rp-blue: #5ea2f7; --rp-cyan: #6fd3e8; --rp-green: #4cd98b;
+  --rp-red: #f2655c; --rp-amber: #f2b544; --rp-purple: #b48ae0;
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  font-size: 14px; line-height: 1.6; color: var(--rp-text);
+  max-width: 1000px; margin: 0 auto; padding: 20px; background: var(--rp-bg);
+}
+.rp-hero { border-bottom: 1px solid var(--rp-border); padding-bottom: 14px; margin-bottom: 8px; }
+.rp-hero-title { font-size: 24px; font-weight: 800; }
+.rp-hero-meta { font-size: 12px; color: var(--rp-text-3); margin-top: 4px; }
+.rp-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 14px 0 22px; }
+.rp-kpi-card { background: var(--rp-surface); border: 1px solid var(--rp-border); border-left: 4px solid var(--rp-blue); border-radius: 10px; padding: 12px 14px; }
+.rp-kpi-card[data-tone="up"] { border-left-color: var(--rp-green); }
+.rp-kpi-card[data-tone="down"] { border-left-color: var(--rp-red); }
+.rp-kpi-card[data-tone="warn"] { border-left-color: var(--rp-amber); }
+.rp-kpi-label { font-size: 12px; color: var(--rp-text-3); letter-spacing: 1px; }
+.rp-kpi-value { font-size: 18px; font-weight: 700; margin: 4px 0 2px; }
+.rp-kpi-sub { font-size: 12px; color: var(--rp-text-2); }
+.rp-section-title { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; margin: 26px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--rp-border); }
+.rp-section-num { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: var(--rp-blue); color: #0e1117; font-size: 13px; font-weight: 800; }
+.rp-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.rp-badge.up { background: rgba(76,217,139,.15); color: var(--rp-green); border: 1px solid rgba(76,217,139,.4); }
+.rp-badge.warn { background: rgba(242,181,68,.15); color: var(--rp-amber); border: 1px solid rgba(242,181,68,.4); }
+.rp-badge.down { background: rgba(242,101,92,.15); color: var(--rp-red); border: 1px solid rgba(242,101,92,.4); }
+.rp-badge.info { background: rgba(94,162,247,.15); color: var(--rp-blue); border: 1px solid rgba(94,162,247,.4); }
+.rp-callout { border: 1px solid var(--rp-border); border-left: 5px solid var(--rp-blue); background: var(--rp-surface); border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+.rp-callout[data-tone="green"] { border-left-color: var(--rp-green); }
+.rp-callout[data-tone="red"] { border-left-color: var(--rp-red); }
+.rp-callout[data-tone="amber"] { border-left-color: var(--rp-amber); }
+.rp-callout[data-tone="purple"] { border-left-color: var(--rp-purple); }
+.rp-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+.rp-table th { background: var(--rp-surface); color: var(--rp-text-2); text-align: left; padding: 8px 10px; border: 1px solid var(--rp-border); font-weight: 600; }
+.rp-table td { padding: 8px 10px; border: 1px solid var(--rp-border); }
+.rp-table tr:hover td { background: rgba(94,162,247,.06); }
+.rp-row-up td:first-child { border-left: 3px solid var(--rp-green); }
+.rp-row-warn td:first-child { border-left: 3px solid var(--rp-amber); }
+.rp-row-down td:first-child { border-left: 3px solid var(--rp-red); }
+.rp-timeline { margin: 10px 0 10px 4px; }
+.rp-tl-item { display: flex; gap: 12px; padding: 6px 0; position: relative; }
+.rp-tl-time { flex: 0 0 52px; text-align: right; font-family: 'Cascadia Code', monospace; font-size: 12px; color: var(--rp-cyan); }
+.rp-tl-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--rp-blue); margin-top: 4px; flex: none; }
+.rp-tl-body { flex: 1; font-size: 13px; }
+.rp-risks { list-style: none; padding: 0; margin: 10px 0; }
+.rp-risks li { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--rp-border); font-size: 13px; }
+.rp-risks li::before { content: "●"; color: var(--rp-red); font-size: 10px; margin-top: 5px; }
+.rp-risks li[data-tone="amber"]::before { color: var(--rp-amber); }
+.rp-risks li[data-tone="neutral"]::before { color: var(--rp-text-3); }
+.rp-footnote { font-size: 12px; color: var(--rp-text-3); border-top: 1px solid var(--rp-border); margin-top: 30px; padding-top: 12px; }
+.pos { color: var(--rp-green); font-weight: 600; }
+.neg { color: var(--rp-red); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="rp-report">
+
+<header class="rp-hero">
+  <div class="rp-hero-title">🌅 早盘分析报告</div>
+  <div class="rp-hero-meta">数据时点：2026-10-08 09:30 CST ｜ 交易日：周四 ｜ 配套信号文件：reports/20261008/每日信号.md</div>
+</header>
+
+<section class="rp-kpi">
+  <div class="rp-kpi-card" data-tone="warn">
+    <div class="rp-kpi-label">大盘方向</div>
+    <div class="rp-kpi-value">平开~小幅高开震荡</div>
+    <div class="rp-kpi-sub">基准 55% ｜ A50 夜盘 +0.12%（今开 -0.19%）· 日韩 -1%+</div>
+  </div>
+  <div class="rp-kpi-card" data-tone="down">
+    <div class="rp-kpi-label">核心矛盾</div>
+    <div class="rp-kpi-value">资金回流 vs 风险压制</div>
+    <div class="rp-kpi-sub">央行万亿流动性 + 存储催化 vs 日韩大跌 + 黄金破位</div>
+  </div>
+  <div class="rp-kpi-card" data-tone="down">
+    <div class="rp-kpi-label">黄金 P0</div>
+    <div class="rp-kpi-value">竞价 8.486 已破位</div>
+    <div class="rp-kpi-sub">COMEX 4136.7（-1.20%）· 原 4330 恢复线失效</div>
+  </div>
+  <div class="rp-kpi-card" data-tone="up">
+    <div class="rp-kpi-label">信号数</div>
+    <div class="rp-kpi-value">P0×2 · P1×3</div>
+    <div class="rp-kpi-sub">今日 5 条待执行（云库已入库 5/5）</div>
+  </div>
+</section>
+
+<main>
+
+<div class="rp-section-title"><span class="rp-section-num">01</span> 前次预测回顾</div>
+<div class="rp-callout" data-tone="amber"><b>准确率：</b>1/5 完全准确（20%）。核心教训：外盘映射失效规则有效（半导体建仓必须双确认）；黄金 P0 恢复线体系失效（COMEX 4370→4136 深破位），必须按新价位重构；普涨后调整周期比预期长，防节后高开低走重演。</div>
+<table class="rp-table">
+<thead><tr><th>预判</th><th>实际（09/22→09/30）</th><th>准确?</th><th>根因</th></tr></thead>
+<tbody>
+<tr class="rp-row-warn"><td>大盘：基准 50% 高开震荡分化</td><td>09/22 平收，节前 5 日显著调整（上证 3952→3842 <span class="neg">-2.8%</span>、科创50 <span class="neg">-8.1%</span>）</td><td>⚠️</td><td>普涨烈度衰减→高位分歧→节前去杠杆（两融 -390 亿）</td></tr>
+<tr class="rp-row-warn"><td>半导体映射 + 医药链晋级</td><td>映射连续失效，涨停潮收缩，高低切换启动</td><td>⚠️</td><td>外盘映射失效规则成立；政策线退潮</td></tr>
+<tr class="rp-row-up"><td>半导体 SIG-05 建仓</td><td>触发后回落跌破 1.06 → 过期未执行</td><td>✅</td><td>触发后回落判过期正确，未建仓躲过损失</td></tr>
+<tr class="rp-row-down"><td>黄金 P0（8.85/4330）</td><td>09/30 收 8.633 破 8.85，COMEX 4136 破 4330 → <b>最终触发</b></td><td>❌</td><td>美元走强+纪要偏鹰，原恢复线失效，假期无交易窗口</td></tr>
+<tr class="rp-row-warn"><td>宁波/工行持有，电网守位</td><td>宁波 <span class="pos">+5.56%</span>、工行 <span class="pos">+6.39%</span> 有效；电网跌破 1.60</td><td>⚠️</td><td>防御持仓有效，电网守位线失效需重设</td></tr>
+</tbody>
+</table>
+
+<div class="rp-section-title"><span class="rp-section-num">02</span> 海外市场传导</div>
+<div class="rp-callout" data-tone="amber"><b>隔夜外盘：</b>美股三大指数全线收跌（道指 <span class="neg">-0.66%</span> / 标普 <span class="neg">-0.22%</span> / 纳指 <span class="neg">-0.22%</span>），假期整体偏强；美联储纪要偏鹰，DXY 102.24；日韩早盘大跌（-1%+）；A50 夜盘 +0.12%（今开 -0.19%）；黄金深度破位 COMEX 4136.7（<span class="neg">-1.20%</span>）；WTI 88.28（<span class="neg">-1.3%</span>）。</div>
+<table class="rp-table">
+<thead><tr><th>情景</th><th>概率</th><th>描述</th></tr></thead>
+<tbody>
+<tr class="rp-row-warn"><td>基准</td><td>55%</td><td>平开~小幅高开震荡（-0.5%~+0.3%），高低切换延续</td></tr>
+<tr class="rp-row-up"><td>偏强</td><td>25%</td><td>央行万亿流动性 + 存储/AI硬件放量，高开高走（+0.3%~+0.8%）</td></tr>
+<tr class="rp-row-down"><td>偏弱</td><td>20%</td><td>日韩大跌 + 黄金破位压制，低走收绿（-0.8%~-0.2%）</td></tr>
+</tbody>
+</table>
+
+<div class="rp-section-title"><span class="rp-section-num">03</span> 宏观研判</div>
+<div class="rp-callout" data-tone="amber"><b>今日方向：</b>平开~小幅高开震荡（基准 55%）。核心矛盾：节后资金回流预期（央行 12000 亿买断式逆回购 + 海外偏强 + 存储催化）vs 日韩大跌 + 黄金破位 + 节前深跌技术位压制。</div>
+<table class="rp-table">
+<thead><tr><th>多方</th><th>空方</th></tr></thead>
+<tbody>
+<tr><td>央行 12000 亿买断式逆回购落地</td><td>日经/韩综指早盘大跌（-1%+）</td></tr>
+<tr><td>纳指100 假期创新高、弱非农股涨债滞</td><td>黄金深破位（COMEX 4136 < 4330），美元 DXY 102.24</td></tr>
+<tr><td>存储涨价：三星 Q3 利润 +8 倍 / MLCC 大单 / 利基存储涨价</td><td>美联储纪要偏鹰（年底或再加息），美债高位</td></tr>
+<tr><td>华泰/中金看多节后修复窗口/开门红</td><td>节前科技深跌（科创50 -8%），技术位破位需修复</td></tr>
+<tr><td>央行连续 23 个月增持黄金</td><td>两融假期前 -390.52 亿（去杠杆）</td></tr>
+<tr><td>三季报窗口：华海 Q3 +170%、68 家分红 ~170 亿</td><td>高油价（布伦特 100+）压制分母端</td></tr>
+</tbody>
+</table>
+<p><b>风险关注：</b>黄金破位加速（P0 已触发）· 节后首日高开低走重演 · 存储"买预期卖事实" · 美联储 10/27-28 议息前波动。<br><b>关键变量：</b>① 存储/AI硬件竞价放量续攻 ② 央行流动性落地后风险偏好 ③ 黄金 P0 执行 ④ 日韩大跌传导 ⑤ 高低切换资金流向。</p>
+
+<div class="rp-section-title"><span class="rp-section-num">04</span> 资金面与情绪</div>
+<div class="rp-callout" data-tone="red"><b>情绪评级：中性偏弱。</b>涨停 52 / 炸板 18.8% / 跌停 9（09/30 最后交易日）；两融 -390 亿去杠杆；北向断供 ≥21 日；push2 资金流不可达（以涨停结构+两融+题材替代）。</div>
+<table class="rp-table">
+<thead><tr><th>维度</th><th>数据</th><th>解读</th></tr></thead>
+<tbody>
+<tr><td>涨停情绪</td><td>涨停 52 / 炸板 18.8% / 跌停 9，最高 7 板（新华传媒）</td><td>中性偏弱，节后首日涨停数是否修复是关键</td></tr>
+<tr><td>融资融券</td><td>两市融资余额 <span class="neg">-390.52 亿</span></td><td>假期去杠杆，节后回流幅度待观察</td></tr>
+<tr><td>题材热度</td><td>业绩增长 7 / 固态电池 4 / 重组 2 / 创新药 2（09/30）</td><td>假期新增：存储涨价 / AI硬件 / 机器人催化</td></tr>
+<tr><td>北向资金</td><td>断供 ≥21 交易日（BUG-017）</td><td>以盘面广度/涨停情绪替代</td></tr>
+</tbody>
+</table>
+
+<div class="rp-section-title"><span class="rp-section-num">05</span> 板块机会扫描（非持仓）</div>
+<div class="rp-callout" data-tone="amber"><b>无 🟢 建仓。</b>最高分存储/半导体（3.3）因技术位置 2 分（科创50 -8% 破位）未达门槛——<b>准建仓：差技术位置</b>，放量收复 0.965 + 半导体涨停≥3 后升级。环境归因：节前科技深跌 + 日韩大跌 + 黄金破位，高低切换期不追高。</div>
+<table class="rp-table">
+<thead><tr><th>板块</th><th>关联ETF</th><th>外盘</th><th>催化</th><th>资金</th><th>技术</th><th>情绪</th><th>时机</th><th>综合</th><th>建议</th><th>核心逻辑</th></tr></thead>
+<tbody>
+<tr class="rp-row-warn"><td>存储/半导体</td><td>512480</td><td>3</td><td>5</td><td>3</td><td>2</td><td>3</td><td>3</td><td><b>3.3</b></td><td><span class="rp-badge warn">🟡 关注</span></td><td>存储涨价确定性高，技术位破位需修复；准建仓：差技术位置</td></tr>
+<tr class="rp-row-warn"><td>机器人</td><td>159770</td><td>3</td><td>4</td><td>2</td><td>3</td><td>3</td><td>3</td><td><b>3.2</b></td><td><span class="rp-badge warn">🟡 关注</span></td><td>优必选+一汽大众落地 + AI玩具热销</td></tr>
+<tr class="rp-row-warn"><td>创新药/CXO</td><td>159992</td><td>2</td><td>4</td><td>3</td><td>3</td><td>3</td><td>3</td><td><b>3.1</b></td><td><span class="rp-badge warn">🟡 关注</span></td><td>华海 Q3+170% / CXO景气 / 双券商推荐</td></tr>
+<tr class="rp-row-warn"><td>地产链</td><td>512200</td><td>1</td><td>4</td><td>3</td><td>3</td><td>2</td><td>3</td><td><b>2.8</b></td><td><span class="rp-badge warn">🟡 观察</span></td><td>深圳楼市回暖 + 首套房贷贴息，竞价走弱待确认</td></tr>
+<tr class="rp-row-warn"><td>有色/化工</td><td>512400</td><td>3</td><td>3</td><td>2</td><td>2</td><td>2</td><td>2</td><td><b>2.5</b></td><td><span class="rp-badge warn">🟡 观察</span></td><td>周期改善逻辑，高油价压制 + 技术位走弱</td></tr>
+<tr class="rp-row-down"><td>电网设备</td><td>159326</td><td>2</td><td>3</td><td>2</td><td>2</td><td>2</td><td>2</td><td><b>2.4</b></td><td><span class="rp-badge warn">🟡 观察</span></td><td>中金电力瓶颈推荐，技术位破位</td></tr>
+</tbody>
+</table>
+<p><b>关注列表（观察雷达，含量化升级条件）：</b>机器人 159770：站上 0.945 + 板块涨幅≥2% 且涨停≥3 → 盘中追加；地产链 512200：站上 1.30 + 量比≥1.5 + 地产涨停≥3；有色 512400：站上 1.62 + 铜/铝联动；存储/半导体 512480：放量收复 0.965 + 量比≥1.5 + 涨停≥3 → 升级建仓（SIG-03）。</p>
+
+<div class="rp-section-title"><span class="rp-section-num">06</span> 持仓映射与操作判断</div>
+<div class="rp-callout" data-tone="red"><b>核心操作：</b>黄金 P0 竞价已破位（8.486 < 8.55），开盘确认后立即减仓 600 份；通信 P0 减仓评估（跌破 0.60）；创新药为持仓中最强逻辑（华海 Q3+170% 双推荐），观察加仓；宁波/工行防御持有。</div>
+<table class="rp-table">
+<thead><tr><th>标的</th><th>代码</th><th>外盘</th><th>催化</th><th>资金</th><th>技术</th><th>情绪</th><th>时机</th><th>综合</th><th>预判开盘</th><th>持仓建议</th></tr></thead>
+<tbody>
+<tr class="rp-row-warn"><td>宁波银行</td><td>002142</td><td>3</td><td>2</td><td>2</td><td>4</td><td>3</td><td>3</td><td><b>2.9</b></td><td>平开</td><td><span class="rp-badge warn">🟡 持有</span></td></tr>
+<tr class="rp-row-warn"><td>航空航天ETF</td><td>159227</td><td>3</td><td>2</td><td>2</td><td>2</td><td>2</td><td>2</td><td><b>2.2</b></td><td>平开/微跌</td><td><span class="rp-badge warn">🟡 持有</span></td></tr>
+<tr class="rp-row-warn"><td>电网设备ETF</td><td>159326</td><td>2</td><td>3</td><td>2</td><td>2</td><td>2</td><td>2</td><td><b>2.2</b></td><td>平开</td><td><span class="rp-badge warn">🟡 持有</span></td></tr>
+<tr class="rp-row-warn"><td>创新药ETF</td><td>159992</td><td>2</td><td>4</td><td>3</td><td>3</td><td>3</td><td>3</td><td><b>3.0</b></td><td>平开/微涨</td><td><span class="rp-badge warn">🟡 持有</span></td></tr>
+<tr class="rp-row-warn"><td>通信ETF</td><td>515880</td><td>3</td><td>2</td><td>2</td><td>2</td><td>2</td><td>2</td><td><b>2.2</b></td><td>平开</td><td><span class="rp-badge warn">🟡 持有（P0 减仓评估）</span></td></tr>
+<tr class="rp-row-down"><td>黄金ETF</td><td>518880</td><td>2</td><td>3</td><td>2</td><td>2</td><td>1</td><td>2</td><td><b>2.1</b></td><td>低开</td><td><span class="rp-badge down">🔴 持有（P0 减仓触发）</span></td></tr>
+<tr class="rp-row-warn"><td>工商银行</td><td>601398</td><td>3</td><td>2</td><td>3</td><td>4</td><td>3</td><td>3</td><td><b>2.9</b></td><td>平开</td><td><span class="rp-badge warn">🟡 持有</span></td></tr>
+</tbody>
+</table>
+<p><b>逐只要点：</b>① 宁波银行 35.43 站稳 MA5/10/20 多头，打新底仓不做T；② 航空航天 0.977 破位但 20日低 0.964 有支撑；③ 电网 1.551 跌破原 1.60 守位线，重设防线 1.533 前低；④ 创新药 0.872 站稳 MA20，最强持仓逻辑，观察加仓 SIG-04；⑤ 通信 0.626 深跌破所有均线，拥挤度消化未完，P0 减仓评估 SIG-02；⑥ <b>黄金竞价 8.486 已破 8.55 P0 线</b>，开盘确认后执行减仓 SIG-01；⑦ 工行 8.28 新高附近站稳，防御持有。</p>
+<p><b>做T纪律（当日适用）：</b><span class="rp-badge info">开盘30分钟不操作（铁律）</span> <span class="rp-badge info">存储当日不做正T（买预期卖事实）</span> <span class="rp-badge info">破位日不做正T（黄金/通信/电网）</span> <span class="rp-badge warn">普跌日放弃所有T</span> <span class="rp-badge warn">平开+单边暴跌放弃T计划</span></p>
+
+<div class="rp-section-title"><span class="rp-section-num">07</span> 核心关注时间表</div>
+<div class="rp-timeline">
+  <div class="rp-tl-item"><span class="rp-tl-time">09:15-25</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>竞价结束 + 开盘价</b><div>高/平/低开方向 + 存储半导体竞价强度 + 黄金 8.486 破位确认</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">09:30-35</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>开盘方向确认</b><div>日韩传导 vs 央行流动性对冲；黄金 P0 立即执行确认</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">09:35-10:00</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>开盘30分钟（不做T铁律）</b><div>A股资金博弈接管方向；存储/半导体是否放量续攻</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">10:00-10:30</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>半导体双确认 + 创新药评估</b><div>512480 站上 0.965 + 量比≥1.5 + 涨停≥3；159992 放量破 0.878</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">11:00</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>上午总结 + 涨停情绪</b><div>涨停数 vs 09/30 的 52 家，判断情绪修复强度</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">13:00</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>下午开盘 + 高低切换</b><div>创新药/地产/银行 vs 通信/半导体资金流向</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">14:00-14:45</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>黄金破位观察 + P0 截止</b><div>P0 减仓执行截止（14:45）</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">14:30</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>尾盘方向 + 隔夜风险</b><div>收盘前调整窗口 + 存储主线收尾确认</div></div></div>
+</div>
+
+<div class="rp-section-title"><span class="rp-section-num">08</span> 风险提示</div>
+<ul class="rp-risks">
+  <li data-tone="red"><b>黄金破位加速</b>：COMEX 若破 4050（现 4136），黄金ETF 加速下行；竞价 8.486 已破 8.55，P0 减仓必须执行（-4.67% 浮亏防扩大）</li>
+  <li data-tone="red"><b>节后首日高开低走</b>：节前调整后修复预期可能证伪（09/22 教训），勿追高，等 30 分钟方向确认</li>
+  <li data-tone="amber"><b>日韩大跌传导</b>：日经/KOSPI -1%+ 若持续，A股开盘后 60 分钟卖压可能延续</li>
+  <li data-tone="amber"><b>存储"买预期卖事实"</b>：三星 +8 倍已被假期定价，半导体当日不做正T；跌破 0.950 则 SIG-03 作废</li>
+  <li data-tone="amber"><b>通信深跌延续</b>：0.626 破所有均线，跌破 0.60（SIG-02 P0）执行减仓评估</li>
+  <li data-tone="amber"><b>美联储议息前波动</b>：10 月维持利率概率 79.5% 但纪要偏鹰，美债高位压制成长</li>
+  <li data-tone="neutral"><b>两融回流不及预期</b>：假期前 -390 亿，节后若继续收缩 → 增量资金不足</li>
+  <li data-tone="neutral"><b>高油价传导</b>：布伦特 100+ → 通胀粘性 → 利率高位 → 分母端压制</li>
+  <li data-tone="neutral"><b>数据源降级</b>：push2 资金流/北向不可达，资金面判断存在盲区</li>
+  <li data-tone="neutral"><b>持仓成本失真（BUG-021）</b>：159227/159326 成本未复权，浮盈失真不以此决策</li>
+</ul>
+
+</main>
+
+<div class="rp-footnote">
+<b>数据来源：</b>腾讯财经（指数/持仓/板块ETF竞价、日K计算MA）、东财 push2ex（涨停/炸板/跌停池 09/30）、同花顺热点（09/30 题材）、东财 7x24（全球资讯）、新浪国际期货（COMEX/WTI）、火山豆包搜索（美股收盘/宏观/事件日历），详见 a-stock-data skill<br>
+<b>数据标注：</b>⚠️ 数据源降级：push2/push2his 资金流不可达（BUG-017 类，以涨停结构+两融+题材替代）；北向断供 ≥21 交易日（BUG-017）；行业板块排名 push2/push2delay 均不可达（以板块ETF竞价+研报+7x24替代）；涨停池为 09/30 收盘数据；海外美股/宏观/事件日历来自火山豆包搜索（web_search 余额不足降级）。⚠️ 异常数据：159227/159326 成本未复权（BUG-021）<br>
+<b>运行提示：</b>⚠️ staging 过期已重建（基于 09/22 复盘，1.3d action=rebuild）；staging 持仓校验 BUG-020 误报（解析器把做T表/扫描表当持仓，config/持仓.md 为权威已确认）；黄金 P0 体系按新价位重构（原 8.85/4330 恢复线失效，COMEX 4136 深破位）
+</div>
+
+</div>
+</body>
+</html>

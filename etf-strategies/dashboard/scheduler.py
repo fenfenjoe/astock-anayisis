@@ -1,8 +1,7 @@
-"""每日复盘 + ETF 自动化调度器 — 线程引擎 + 双引擎运行器（dsh/claude）+ 报告/持仓/交易导入器.
+"""每日复盘 + ETF 自动化调度器 — 线程引擎 + DSH 运行器 + 报告/持仓/交易导入器.
 
 范围规则：接管 prompt_file 以 "my_doc/每日复盘/" 或 "etf-strategies/automation/" 开头的任务
-（每日复盘 16 个 + ETF 自动化 5 个：bug_auto_fix / bug_inspect_data / bug_inspect_code /
-bug_inspect_logic / strategy_scan_weekly，2026-08-27 用户决策全部随 Web 启停）。
+（每日复盘 11 个 + ETF 自动化 7 个，2026-08-27 用户决策全部随 Web 启停）。
 
 架构：
 - 引擎 = threading.Thread(daemon=True)，每 20s tick 一次；随 Web 进程启动/停止
@@ -10,7 +9,7 @@ bug_inspect_logic / strategy_scan_weekly，2026-08-27 用户决策全部随 Web 
 - auto 触发：时间窗口 + 交易日门控 + window_key 幂等（语义复用 task_scheduler.py）
 - manual 触发：POST /api/scheduler/run/{task_id}，绕过时间/交易日门控，
   window_key 用 manual:{task_id}:{iso}，永不与 auto 冲突
-- 双引擎运行器：dsh headless（主，本地）/ claude -p（辅，Docker/兜底），
+- 执行引擎：DSH headless（2026-09-21 起唯一引擎，claude 兜底已移除），
   见 DASHBOARD_SCHEDULER_ENGINE 与 resolve_engine()
 - 无论退出码都跑导入器（agent 可能部分完成也写了文件）
 """
@@ -34,14 +33,15 @@ if str(_ETF_DIR) not in sys.path:
     sys.path.insert(0, str(_ETF_DIR))
 
 # 仓库根：默认向上三级推导（本地），Docker 里用 DASHBOARD_REPO_ROOT 指向挂载点。
-# 调度器读 prompt / 交易日历 / 持仓，claude 子进程也以 REPO_ROOT 为工作目录读写报告。
+# 调度器读 prompt / 交易日历 / 持仓，dsh 子进程也以 REPO_ROOT 为工作目录读写报告。
 _env_repo_root = os.environ.get("DASHBOARD_REPO_ROOT")
 REPO_ROOT = (
     Path(_env_repo_root).resolve()
     if _env_repo_root
     else Path(__file__).resolve().parent.parent.parent
 )
-SCHEDULE_PATH = REPO_ROOT / ".claude" / "scripts" / "task_schedule.json"
+# 2026-09-21：调度基础设施从 .claude/scripts/ 迁至 scripts/（Claude Code 清理）
+SCHEDULE_PATH = REPO_ROOT / "scripts" / "task_schedule.json"
 REPORTS_DIR = REPO_ROOT / "my_doc" / "每日复盘" / "reports"
 HOLDINGS_MD = REPO_ROOT / "my_doc" / "每日复盘" / "harness" / "config" / "持仓.md"
 TRADES_MD = REPO_ROOT / "my_doc" / "每日复盘" / "每日调仓.md"
@@ -56,7 +56,7 @@ TRADING_CALENDAR_PATH = (
 )
 
 TICK_SECONDS = 20
-CLAUDE_TIMEOUT_SECONDS = 3600  # dsh/claude 最长 1 小时
+DSH_TIMEOUT_SECONDS = 3600  # dsh headless 最长 1 小时
 OUTPUT_TAIL_CHARS = 8000  # scheduler_runs.output 只存尾部
 # 引擎接管范围：每日复盘 + ETF 自动化（2026-08-27 用户决策：全部随 Web 启停）
 SCOPE_PREFIXES = ("my_doc/每日复盘/", "etf-strategies/automation/")
@@ -271,7 +271,12 @@ def import_reports_from_disk(force: bool = False) -> dict:
         return {"imported": 0, "error": "reports 目录不存在"}
 
     def _scan_file(f: Path, report_date: str, fallback_type: str = "") -> None:
-        """单文件：mtime 未变则跳过；变化/新增则导入并记录。"""
+        """单文件：mtime 未变则跳过；变化/新增则导入并记录。
+
+        2026-10 回退（用户反馈 HTML 报告难看，恢复 markdown 渲染）：
+        早盘/复盘报告**优先入库 .md**（Dashboard 展示 markdown 版）；.html 仅在无 .md
+        兄弟文件时作为兜底入库（兼容历史仅 HTML 的日子）。
+        """
         nonlocal imported, scanned
         scanned += 1
         rel = f.relative_to(REPORTS_DIR).as_posix()
@@ -282,6 +287,14 @@ def import_reports_from_disk(force: bool = False) -> dict:
         if not force and state.get(rel) == mtime:
             return
         report_type = _report_type_from_name(f.name, fallback=fallback_type)
+        # Markdown 优先：早盘/复盘报告若 .md 兄弟文件存在，.html 版本不入库（仅记 mtime）
+        if (
+            report_type in _HTML_REPORT_TYPES
+            and f.suffix.lower() == ".html"
+            and f.with_suffix(".md").exists()
+        ):
+            changed[rel] = mtime
+            return
         if report_date and report_type:
             db.report_upsert(
                 report_date,
@@ -296,18 +309,22 @@ def import_reports_from_disk(force: bool = False) -> dict:
         if not sub.is_dir():
             continue
         if sub.name == "weekly":
-            for f in sorted(sub.glob("*.md")):
+            for f in sorted(sub.glob("*.md")) + sorted(sub.glob("*.html")):
                 _scan_file(f, _weekly_date(f.name) or "", fallback_type="周报")
             continue
         if not sub.name.isdigit() or len(sub.name) != 8:
             continue
-        for f in sorted(sub.glob("*.md")):
+        for f in sorted(sub.glob("*.md")) + sorted(sub.glob("*.html")):
             _scan_file(f, sub.name)
 
     if changed:
         state.update(changed)
         db.meta_set("reports_scan_state", json.dumps(state, ensure_ascii=False))
     return {"imported": imported, "scanned": scanned, "source": "local"}
+
+
+# ── Markdown 优先的报告类型（2026-10 回退：Dashboard 恢复 markdown 渲染，.html 仅兜底）──
+_HTML_REPORT_TYPES = frozenset({"早盘报告", "复盘报告", "进化周报"})
 
 
 def _report_type_from_name(filename: str, fallback: str = "") -> str | None:
@@ -317,6 +334,7 @@ def _report_type_from_name(filename: str, fallback: str = "") -> str | None:
     if "填充版" in stem or "影子" in stem:
         return None
     for known in (
+        "进化周报",  # P2 自进化周报（必须放"周报"前，避免被前缀吞）
         "复盘报告",
         "早盘报告",
         "早盘机会",
@@ -378,7 +396,7 @@ def import_trades_from_md() -> bool:
 
 
 # ───────────────────────────────────────────────────────────────────
-# 执行引擎：dsh headless（主）/ claude -p（辅），可切换
+# 执行引擎：DSH headless（2026-09-21 起唯一引擎，claude 兜底已移除）
 # ───────────────────────────────────────────────────────────────────
 
 
@@ -392,13 +410,11 @@ def _prompt_text(task: dict, now: datetime) -> str:
     return text.replace("{today}", now.strftime("%Y%m%d"))
 
 
-# 2026-08-27 迁移决策：以 dsh 执行为主（本地 DeepSeek Harness headless，
-# 方舟 ARK token 已耗尽），claude -p 为辅（Docker 部署/兜底）。
+# 2026-09-21 决策：执行引擎仅 dsh（DeepSeek Harness headless），移除 claude -p 兜底。
 # 切换方式（优先级：调用方 > DB meta > 环境变量 > auto 探测）：
-#   DASHBOARD_SCHEDULER_ENGINE=auto|dsh|claude（默认 auto：
-#     本地探测到 dsh CLI → dsh，否则 claude）
+#   DASHBOARD_SCHEDULER_ENGINE=auto|dsh（默认 auto；claude 值已废弃，归一到 dsh）
 _env_engine = os.environ.get("DASHBOARD_SCHEDULER_ENGINE", "auto").strip().lower()
-DEFAULT_ENGINE = _env_engine if _env_engine in ("dsh", "claude", "auto") else "auto"
+DEFAULT_ENGINE = _env_engine if _env_engine in ("dsh", "auto") else "auto"
 
 
 def _find_dsh() -> tuple[Path, Path] | None:
@@ -438,25 +454,28 @@ def _find_dsh() -> tuple[Path, Path] | None:
 
 
 def _engine_from_meta() -> str | None:
-    """DB meta 覆盖（UI/API 可切换）；无 → None。"""
+    """DB meta 覆盖（UI/API 可切换）；无 → None。仅支持 dsh（2026-09-21 移除 claude）。"""
     try:
         from dashboard import db
 
         v = db.meta_get("scheduler_engine")
-        if v and v.lower() in ("dsh", "claude"):
-            return v.lower()
+        if v and v.lower() == "dsh":
+            return "dsh"
     except Exception:
         pass
     return None
 
 
 def resolve_engine(preferred: str | None = None) -> str:
-    """解析实际执行引擎：preferred > meta > env(DEFAULT_ENGINE) > auto 探测。"""
+    """解析实际执行引擎：preferred > meta > env(DEFAULT_ENGINE) > auto 探测。
+
+    2026-09-21 起仅 dsh（移除 claude 兜底引擎）。任何非 dsh 输入统一归一到 dsh。
+    """
     for cand in (preferred, _engine_from_meta(), DEFAULT_ENGINE):
-        if cand and cand.lower() in ("dsh", "claude"):
-            return cand.lower()
-    # auto：dsh 可用则 dsh，否则 claude
-    return "dsh" if _find_dsh() is not None else "claude"
+        if cand and cand.lower() == "dsh":
+            return "dsh"
+    # auto：一律 dsh（本机未装 dsh 时执行阶段报错提示安装）
+    return "dsh"
 
 
 def _dsh_directive(task: dict) -> str:
@@ -467,71 +486,9 @@ def _dsh_directive(task: dict) -> str:
     else:
         suffix = (
             " 任务完成后（无论成功与否），运行："
-            f"python .claude/scripts/task_scheduler.py --complete {task['task_id']}"
+            f"python scripts/task_scheduler.py --complete {task['task_id']}"
         )
     return f"执行 {prompt_file} 的全部内容。{suffix}"
-
-
-def _exec_claude(task: dict, started: datetime) -> tuple[str, str]:
-    """claude -p 执行 prompt → (status, output)。"""
-    claude_bin = shutil.which("claude")
-    if not claude_bin:
-        return (
-            "failed",
-            "未找到 claude 可执行文件。请安装 Claude Code 或设置 DASHBOARD_SCHEDULER_ENGINE=dsh。",
-        )
-    try:
-        prompt = _prompt_text(task, started)
-    except FileNotFoundError as e:
-        return "failed", str(e)
-
-    # 输出重定向到临时文件而非管道：claude -p 会派生子会话进程继承管道写端，
-    # 在 Windows 上 subprocess.run(capture_output=True) 会因等不到管道 EOF 挂死
-    # （父进程已退出但孙进程仍持有管道句柄）。文件重定向则按进程退出即返回，不阻塞。
-    out_path = err_path = None
-    try:
-        fd_out, out_path = tempfile.mkstemp(prefix="claude_run_out_", suffix=".txt")
-        fd_err, err_path = tempfile.mkstemp(prefix="claude_run_err_", suffix=".txt")
-        try:
-            with (
-                os.fdopen(fd_out, "w", encoding="utf-8") as fo,
-                os.fdopen(fd_err, "w", encoding="utf-8") as fe,
-            ):
-                # 非交互 -p 默认自动拒绝需要授权的工具（Write/Bash）。早盘/盘中/
-                # 复盘 prompt 依赖 Bash 跑 python 取数（a-stock-data）+ Write 写报告，
-                # 必须放行全部权限才能完整跑通。本调度器只跑仓库内受控 prompt，
-                # 且用户已于 2026-08-14 明确确认 --dangerously-skip-permissions。
-                proc = subprocess.run(
-                    [
-                        claude_bin,
-                        "-p",
-                        "--output-format",
-                        "text",
-                        "--dangerously-skip-permissions",
-                    ],
-                    input=prompt,
-                    cwd=str(REPO_ROOT),
-                    stdout=fo,
-                    stderr=fe,
-                    text=True,
-                    encoding="utf-8",
-                    timeout=CLAUDE_TIMEOUT_SECONDS,
-                )
-            status = "success" if proc.returncode == 0 else "failed"
-        except subprocess.TimeoutExpired:
-            status = "timeout"
-            return status, f"claude -p 超时（>{CLAUDE_TIMEOUT_SECONDS}s），已终止。"
-        except Exception as e:
-            status = "failed"
-            return status, f"运行异常: {e}"
-        return status, _read_run_output(out_path, err_path)
-    finally:
-        for p in (out_path, err_path):
-            if p:
-                try:
-                    os.unlink(p)
-                except OSError:
-                    pass
 
 
 def _is_rate_limited(text: str | None) -> bool:
@@ -575,7 +532,7 @@ def _run_dsh_once(cmd: list[str]) -> tuple[str, str]:
                     stderr=fe,
                     text=True,
                     encoding="utf-8",
-                    timeout=CLAUDE_TIMEOUT_SECONDS,
+                    timeout=DSH_TIMEOUT_SECONDS,
                     creationflags=flags,
                     startupinfo=startupinfo,
                 )
@@ -583,7 +540,7 @@ def _run_dsh_once(cmd: list[str]) -> tuple[str, str]:
         except subprocess.TimeoutExpired:
             return (
                 "timeout",
-                f"dsh headless 超时（>{CLAUDE_TIMEOUT_SECONDS}s），已终止。",
+                f"dsh headless 超时（>{DSH_TIMEOUT_SECONDS}s），已终止。",
             )
         except Exception as e:
             return "failed", f"运行异常: {e}"
@@ -612,7 +569,7 @@ def _exec_dsh(task: dict) -> tuple[str, str]:
     if found is None:
         return "failed", (
             "未找到 dsh CLI（node + @deepseek-ai/dsh/lib/bin.js）。"
-            "请安装 DSH，或设置 DASHBOARD_SCHEDULER_ENGINE=claude 用兜底引擎。"
+            "请安装 DSH（npm i -g @deepseek-ai/dsh）后重试。"
         )
     node_exe, dsh_bin = found
     directive = _dsh_directive(task)
@@ -735,11 +692,8 @@ def _run_prompt(task: dict, run_id: int) -> None:
         )
         return
 
-    # ── Agent 不可达 → 本地兜底执行 ──
-    if engine == "dsh":
-        status, out = _exec_dsh(task)
-    else:
-        status, out = _exec_claude(task, started)
+    # ── Agent 不可达 → 本地兜底执行（DSH headless）──
+    status, out = _exec_dsh(task)
 
     try:
         import_reports_from_disk()

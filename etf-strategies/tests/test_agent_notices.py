@@ -50,9 +50,12 @@ class TestCookieTodoGenerator:
         assert n["todo_type"] == "cookie_provide"
         assert n["todo_data"]["platform_id"] == "weibo"
         assert n["status"] == "open"
-        # 提示用户具体取哪个 key（微博 → SUB）
+        # 新文案（2026-10）：引导本机登录 + 回到「爱逛的地方」刷新（小满自动取 Cookie）
         assert "SUB" in n["content"]
-        assert "完整 Cookie" in n["content"]
+        assert "爱逛的地方" in n["content"]
+        assert "刷新" in n["content"]
+        assert "登录" in n["content"]
+        assert "完整 Cookie" not in n["content"]  # 不再要求手动复制 Cookie 串
 
     def test_create_xhs_includes_web_session_key(self):
         nid = notices_mod.create_cookie_todo("xhs")
@@ -71,15 +74,16 @@ class TestCookieTodoGenerator:
         assert notices_mod.create_cookie_todo("weibo") is None
 
     def test_create_when_cookie_expired(self):
-        """Cookie 失效（reason='失效'）→ 生成"重新提供"待办（2026-09-16）。"""
+        """Cookie 失效（reason='失效'）→ 生成待办（新文案：过期 → 本机登录 + 刷新）。"""
         agent_db.platform_cookie_set("weibo", "SUB=expired")
         nid = notices_mod.create_cookie_todo("weibo", reason="失效")
         assert nid is not None
         n = agent_db.notice_get(nid)
         assert n["todo_type"] == "cookie_provide"
         assert n["todo_data"]["platform_id"] == "weibo"
-        assert "失效" in n["content"]
-        assert "重新" in n["content"]
+        assert "爱逛的地方" in n["content"]
+        assert "刷新" in n["content"]
+        assert "登录" in n["content"]
 
     def test_expired_todo_dedup_when_open_exists(self):
         """失效待办去重：已有 open 同平台待办 → 不重复生成。"""
@@ -103,11 +107,11 @@ class TestCookieTodoGenerator:
         assert notices_mod.create_cookie_todo("nope") is None
 
     def test_ensure_cookie_todos(self):
-        """启动批量生成：weibo/xhs/zhihu/xueqiu 均无 Cookie → 生成 4 条；重复调用幂等。"""
+        """启动批量生成：weibo/xhs/zhihu/xueqiu/joinquant 均无 Cookie → 生成 5 条；重复调用幂等。"""
         created = notices_mod.ensure_cookie_todos()
         ids = [agent_db.notice_get(i)["todo_data"]["platform_id"] for i in created]
-        assert len(created) == 4  # weibo + xhs + zhihu + xueqiu
-        assert set(ids) == {"weibo", "xhs", "zhihu", "xueqiu"}
+        assert len(created) == 5  # weibo + xhs + zhihu + xueqiu + joinquant
+        assert set(ids) == {"weibo", "xhs", "zhihu", "xueqiu", "joinquant"}
         created2 = notices_mod.ensure_cookie_todos()
         assert created2 == []  # 已存在，不重复
         # 提供 Cookie 后再启动 → 仅缺失平台重新生成
@@ -121,6 +125,7 @@ class TestCookieTodoGenerator:
         assert "xhs" in ids3
         assert "zhihu" in ids3
         assert "xueqiu" in ids3
+        assert "joinquant" in ids3
 
     def test_ensure_cookie_todos_expired_detected(self, monkeypatch):
         """Cookie 存在但 reachability 缓存判不可达（失效）→ 生成"失效"待办（2026-09-16）。
@@ -145,7 +150,8 @@ class TestCookieTodoGenerator:
         weibo_note = agent_db.notice_get(
             [i for i in created if agent_db.notice_get(i)["todo_data"]["platform_id"] == "weibo"][0]
         )
-        assert "失效" in weibo_note["content"]
+        assert "爱逛的地方" in weibo_note["content"]
+        assert "刷新" in weibo_note["content"]
 
     def test_create_zhihu_todo_includes_keys(self):
         """知乎 Cookie 待办：提示关键 key（z_c0/d_c0），与微博/小红书一致的询问机制。"""
@@ -155,7 +161,7 @@ class TestCookieTodoGenerator:
         assert n["todo_data"]["platform_id"] == "zhihu"
         assert "z_c0" in n["content"]
         assert "d_c0" in n["content"]
-        assert "完整 Cookie" in n["content"]
+        assert "爱逛的地方" in n["content"]
 
     def test_create_xueqiu_todo_includes_keys(self):
         nid = notices_mod.create_cookie_todo("xueqiu")
@@ -163,6 +169,17 @@ class TestCookieTodoGenerator:
         n = agent_db.notice_get(nid)
         assert n["todo_data"]["platform_id"] == "xueqiu"
         assert "xq_a_token" in n["content"]
+
+    def test_create_joinquant_todo_includes_keys(self):
+        """聚宽 Cookie 待办：提示关键 key（token/uid），与微博/小红书同机制（2026-10 新增）。"""
+        nid = notices_mod.create_cookie_todo("joinquant")
+        assert nid is not None
+        n = agent_db.notice_get(nid)
+        assert n["todo_data"]["platform_id"] == "joinquant"
+        assert "token" in n["content"]
+        assert "uid" in n["content"]
+        assert "爱逛的地方" in n["content"]
+        assert "刷新" in n["content"]
 
 
 class TestReviewDoneNotice:

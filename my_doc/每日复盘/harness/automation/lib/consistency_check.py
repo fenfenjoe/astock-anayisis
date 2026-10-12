@@ -35,7 +35,7 @@ CHECK_TARGETS = [
     ('自动化早盘', 'my_doc/每日复盘/harness/automation/prompts/auto_morning_analysis.md', 'definer'),
     ('自动化盘中', 'my_doc/每日复盘/harness/automation/prompts/auto_intraday_check.md', 'consumer'),
     ('自动化复盘', 'my_doc/每日复盘/harness/automation/prompts/auto_evening_review.md', 'consumer'),
-    ('编排层SKILL', '.claude/skills/daily-review-harness/SKILL.md', 'consumer'),
+    ('编排层SKILL', '.dsh/skills/daily-review-harness/SKILL.md', 'consumer'),
 ]
 
 

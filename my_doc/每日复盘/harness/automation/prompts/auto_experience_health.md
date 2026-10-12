@@ -458,3 +458,44 @@ else:
 - OpenViking → 本地 覆盖导出（仅当双向校验一致且本地缺失时才评估，需先备份 .bak）
 
 如果建议操作涉及架构性改动（如经验库重组、新领域体系设计），**创建 REQ 文档**到 `my_doc/每日复盘/harness/automation/steering/open/REQ-{NNN}.md`，按 `steering/REQ_TEMPLATE.md` 模板（模板已内置 superpowers 开发流程：brainstorming→writing-plans→TDD→executing-plans→code-review），并在 `steering/REQ_INDEX.md` 中登记。
+
+---
+
+## 第八步：REQ 工作流沉淀（自进化 · 走通的工作流 → 可复用 skill）
+
+> 用户理解的自进化方向："将走通的工作流程总结成 skill/workflow，下次遇到类似任务少走弯路"。
+> 本步把 **CLOSED REQ** 自动沉淀为可复用 skill（与火山 Agent Evolve 的"会话→skill"同构，本地实现）。
+
+```bash
+python -X utf8 -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from lib.workflow_harvest import parse_req, build_harvest, write_skill
+
+closed_dir = Path('my_doc/每日复盘/harness/automation/steering/closed')
+skills_dir = Path('my_doc/每日复盘/harness/skills')
+skills_dir.mkdir(parents=True, exist_ok=True)
+written, skipped = [], []
+for f in sorted(closed_dir.glob('REQ-*.md')):
+    req = parse_req(f.read_text(encoding='utf-8'))
+    h = build_harvest(req)
+    if h.get('is_closed'):
+        out = write_skill(h, skills_dir)
+        (written if out else skipped).append(f.name)
+print('已沉淀 skill:', written)
+print('跳过:', skipped)
+"
+```
+
+### 8.1 执行要点
+
+1. **只沉淀 CLOSED REQ**（走通的工作流才有沉淀价值；OPEN/IN_PROGRESS 跳过）
+2. **每次全量重扫**（幂等覆盖）：`harness/skills/{REQ-ID}.md` 以最新 REQ 为准
+3. **沉淀产物**：任务签名 + 流程时间线 + 关键命令（P&L公式/路径/模式）+ 陷阱 + 验收标准
+4. **消费方式**：后续同类任务（如再遇"信号追踪/P&L/持久化"需求）先检索 `harness/skills/`，
+   直接引用已有 skill 的流程与关键点，避免重复踩坑
+5. **不替代** harness/experience（投资规律）与 OpenViking（证据链）——三者互补：
+   - experience = 知识规律（Situation/Approach/Reflect）
+   - workflow_harvest skill = 任务工作流（怎么做）
+   - OpenViking = 证据链（置信度贝叶斯更新）

@@ -9,6 +9,7 @@
 """
 
 import json
+import math
 import re
 import sys
 import threading
@@ -87,6 +88,21 @@ class SignalEntryPayload(BaseModel):
     signal_id: str
     entry_price: float
     entry_time: str = ""
+
+
+class SignalExecutePayload(BaseModel):
+    """一键执行信号：录入对应交易 + 信号状态置为已执行（写云库 status/entry_*）。
+
+    signal_id 必填；trade_date 默认今天；price/quantity 可覆盖信号自带值
+    （信号 trade_price/shares 缺失时由前端引导用户补填后传入）。
+    remark 追加到交易备注（默认"执行信号 {signal_id}"）。
+    """
+
+    signal_id: str
+    trade_date: str = ""
+    price: float | None = None
+    quantity: float | None = None
+    remark: str = ""
 
 
 # 并发保护：价格刷新 / 东财刷新 / 交易录入 各自串行，避免并发写坏估值快照与账本文件
@@ -692,6 +708,76 @@ def get_signal_triggers(
         return {"items": []}
 
 
+@router.get("/signal-trigger-records")
+def get_signal_trigger_records(
+    signal_id: str | None = Query(None),
+    date: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """信号触发记录明细（signal_trigger_records 表，2026-09-21 新增）。
+
+    盘中分析生成的触发记录明细落库，通过 signal_id 与信号关联。
+    「每日信号」页点击某条信号时，前端展开此接口返回的记录表格。
+    支持按 signal_id / 触发日期 过滤，按日期+时间倒序。
+    返回 {items}；items 为云表行（signal_id/trigger_date/trigger_time/priority/
+    ticker/name/action_type/condition/status/suggest/result）。
+    """
+    try:
+        import cloud_db
+        if not cloud_db.enabled():
+            return {"items": []}
+        filters = []
+        if signal_id:
+            filters.append(("signal_id", "eq", signal_id))
+        if date:
+            filters.append(("trigger_date", "eq", _iso(date)))
+        rows = cloud_db.select(
+            "signal_trigger_records",
+            filters=filters,
+            order="trigger_date.desc,trigger_time.desc",
+            limit=limit,
+        )
+        return {"items": rows}
+    except Exception:
+        return {"items": []}
+
+
+@router.get("/signal-check-records")
+def get_signal_check_records(
+    signal_id: str | None = Query(None),
+    date: str | None = Query(None),
+    limit: int = Query(200, ge=1, le=500),
+):
+    """盘中检查记录（signal_check_records 表，2026-09-24 新增）。
+
+    盘中检查（09:40/10:00/10:30/11:00/13:30/14:00/14:30）对每条信号的每次检查结果落库：
+    一行 = 一条信号 × 一个检查点（含现价/交易价/触发判定/状态流转/检查摘要）。
+    「今日信号」页点击某条信号**行**时，前端展开此接口返回的记录表格
+    （与 signal-trigger-records 的区别：触发记录只记"已触发"事件，本表记每次检查的完整结果）。
+    支持按 signal_id / 检查日期 过滤，按日期+时间倒序。
+    返回 {items}；items 为云表行（signal_id/check_date/check_time/check_point/
+    ticker/name/price/trade_price/condition_met/status_before/status_after/note）。
+    """
+    try:
+        import cloud_db
+        if not cloud_db.enabled():
+            return {"items": []}
+        filters = []
+        if signal_id:
+            filters.append(("signal_id", "eq", signal_id))
+        if date:
+            filters.append(("check_date", "eq", _iso(date)))
+        rows = cloud_db.select(
+            "signal_check_records",
+            filters=filters,
+            order="check_date.desc,check_time.desc",
+            limit=limit,
+        )
+        return {"items": rows}
+    except Exception:
+        return {"items": []}
+
+
 def _signal_view(r: dict, triggers: bool = False) -> dict:
     """云表行 → 前端展示视图。
 
@@ -763,6 +849,94 @@ def post_signal_entry(payload: SignalEntryPayload):
         "entry_price": payload.entry_price,
         "entry_time": entry_time,
     })
+
+
+@router.post("/signal-execute")
+def post_signal_execute(payload: SignalExecutePayload):
+    """一键执行信号：录入对应交易（买入/卖出）→ 自动重算持仓/资产 + 信号状态置为已执行。
+
+    流程：
+    1. 取信号（云库优先）→ 校验存在、状态为 open/triggered、trade_type 为 buy/sell；
+    2. 组装交易（side=买入/卖出；code=ticker；quantity=shares 或覆盖值；price=trade_price 或覆盖值）；
+    3. 复用交易录入链路（portfolio.append_trade + _sync_ledger_to_db，含持仓/可用现金重算）；
+    4. 更新信号 status=executed + entry_price + entry_time。
+
+    已执行/已结算/已过期的信号拒绝重复执行（409）；非 buy/sell 信号（如持有观察）返回 400。
+    """
+    # 1. 取信号
+    sigs = _load_tracking_signals()
+    sig = next((s for s in sigs if s.get("signal_id") == payload.signal_id), None)
+    if not sig:
+        raise HTTPException(404, f"未找到信号 {payload.signal_id}")
+
+    status = (sig.get("status") or "").strip()
+    if status in ("executed", "settled", "partial_executed"):
+        raise HTTPException(409, f"信号 {payload.signal_id} 当前状态为 {status}，不可重复执行")
+    trade_type = (sig.get("trade_type") or "").strip()
+    if trade_type not in ("buy", "sell"):
+        raise HTTPException(400, f"信号 {payload.signal_id} 操作类型 {trade_type!r} 不支持一键执行（仅 buy/sell）")
+
+    # 2. 组装交易
+    code = str(sig.get("ticker") or sig.get("code") or "").strip()
+    name = str(sig.get("name") or code or "").strip()
+    if not (code.isdigit() and len(code) == 6):
+        raise HTTPException(400, f"信号 {payload.signal_id} 缺少 6 位标的代码（ticker={code!r}）")
+
+    price = payload.price if payload.price is not None else (
+        sig.get("trade_price") if sig.get("trade_price") is not None else sig.get("entry_price")
+    )
+    quantity = payload.quantity if payload.quantity is not None else sig.get("shares")
+    if price is None or not isinstance(price, (int, float)) or not math.isfinite(float(price)) or float(price) <= 0:
+        raise HTTPException(400, f"信号 {payload.signal_id} 缺少有效交易价，请填写成交价")
+    if quantity is None or not isinstance(quantity, (int, float)) or not math.isfinite(float(quantity)) or float(quantity) <= 0:
+        raise HTTPException(400, f"信号 {payload.signal_id} 缺少有效数量（shares），请填写成交数量")
+
+    trade_date = (payload.trade_date or "").strip() or datetime.now().strftime("%Y-%m-%d")
+    base_remark = f"执行信号 {payload.signal_id}"
+    remark = f"{base_remark}" + (f"；{payload.remark.strip()}" if (payload.remark or "").strip() else "")
+
+    trade = {
+        "trade_date": trade_date,
+        "name": name,
+        "code": code,
+        "quantity": float(quantity),
+        "price": float(price),
+        "side": "买入" if trade_type == "buy" else "卖出",
+        "remark": remark,
+        "fee": 0,
+    }
+
+    # 3. 录入交易 + 同步 DB（复用持仓/资产/现金重算）
+    with _trade_lock:
+        try:
+            state = portfolio.append_trade(trade)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        except OSError as e:
+            raise HTTPException(500, f"写账本文件失败: {e}")
+        _sync_ledger_to_db(state)
+
+    # 4. 信号状态置为已执行 + 记录成交价/时间
+    entry_time = datetime.now().strftime("%H:%M")
+    _update_signal_field(payload.signal_id, {
+        "status": "executed",
+        "entry_price": float(price),
+        "entry_time": entry_time,
+    })
+
+    return {
+        "ok": True,
+        "signal_id": payload.signal_id,
+        "status": "executed",
+        "entry_price": float(price),
+        "entry_time": entry_time,
+        "trade": trade,
+        "message": (
+            f"信号 {payload.signal_id} 已执行：{trade['side']} {name}({code}) "
+            f"{portfolio._fmt_qty(int(quantity))} 份 @ {price}"
+        ),
+        **_build_portfolio_response(),
+    }
 
 
 def _load_tracking_signals() -> list[dict]:
@@ -1086,12 +1260,12 @@ def get_scheduler_status():
 
 @router.get("/scheduler/engine")
 def get_scheduler_engine():
-    """当前执行引擎（dsh=主 / claude=辅）与可选项。"""
+    """当前执行引擎（2026-09-21 起仅 dsh，claude 兜底已移除）。"""
     from dashboard import scheduler as sched_mod
 
     return {
         "engine": sched_mod.resolve_engine(),
-        "available": ["dsh", "claude"],
+        "available": ["dsh"],
         "default": sched_mod.DEFAULT_ENGINE,
         "dsh_installed": sched_mod._find_dsh() is not None,
     }
@@ -1099,14 +1273,14 @@ def get_scheduler_engine():
 
 @router.put("/scheduler/engine")
 def put_scheduler_engine(payload: dict):
-    """切换执行引擎：dsh | claude（持久化到 meta，下次运行生效）。"""
+    """执行引擎固定为 dsh（历史 claude 值已废弃，保留端点兼容）。"""
     from dashboard import scheduler as sched_mod
 
     engine = str((payload or {}).get("engine", "")).strip().lower()
-    if engine not in ("dsh", "claude"):
-        raise HTTPException(400, "engine 必须是 dsh 或 claude")
-    if engine == "dsh" and sched_mod._find_dsh() is None:
-        raise HTTPException(400, "本机未安装 dsh CLI，无法切换到 dsh")
+    if engine != "dsh":
+        raise HTTPException(400, "仅支持引擎 dsh（claude 兜底已移除）")
+    if sched_mod._find_dsh() is None:
+        raise HTTPException(400, "本机未安装 dsh CLI，无法使用 dsh 引擎")
     db.meta_set("scheduler_engine", engine)
     return {"ok": True, "engine": engine}
 

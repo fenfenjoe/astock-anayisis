@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>早盘报告 · 2026-09-23</title>
+<style>
+.rp-report {
+  --rp-bg:      #0e1117;
+  --rp-surface: #161b22;
+  --rp-border:  #2a3140;
+  --rp-text:    #edf2f7;
+  --rp-text-2:  #a8b3c4;
+  --rp-text-3:  #6b7686;
+  --rp-blue:    #5ea2f7;
+  --rp-cyan:    #6fd3e8;
+  --rp-green:   #4cd98b;
+  --rp-red:     #f2655c;
+  --rp-amber:   #f2b544;
+  --rp-purple:  #b48ae0;
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  font-size: 14px; line-height: 1.6; color: var(--rp-text);
+  max-width: 1000px; margin: 0 auto; padding: 20px;
+  background: var(--rp-bg);
+}
+.rp-report * { box-sizing: border-box; }
+.rp-hero { border-bottom: 1px solid var(--rp-border); padding-bottom: 16px; margin-bottom: 6px; }
+.rp-hero-title { font-size: 24px; font-weight: 800; }
+.rp-hero-meta { font-size: 12px; color: var(--rp-text-2); margin-top: 4px; }
+.rp-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 14px 0 22px; }
+.rp-kpi-card { background: var(--rp-surface); border: 1px solid var(--rp-border); border-left: 4px solid var(--rp-blue); border-radius: 10px; padding: 12px 14px; }
+.rp-kpi-card[data-tone="up"]   { border-left-color: var(--rp-green); }
+.rp-kpi-card[data-tone="down"] { border-left-color: var(--rp-red); }
+.rp-kpi-card[data-tone="warn"] { border-left-color: var(--rp-amber); }
+.rp-kpi-label { font-size: 12px; color: var(--rp-text-3); letter-spacing: 1px; }
+.rp-kpi-value { font-size: 18px; font-weight: 700; margin: 4px 0 2px; }
+.rp-kpi-sub   { font-size: 12px; color: var(--rp-text-2); }
+.rp-section-title { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; margin: 26px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--rp-border); }
+.rp-section-num { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: var(--rp-blue); color: #0e1117; font-size: 13px; font-weight: 800; flex: none; }
+.rp-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.rp-badge.up   { background: rgba(76, 217, 139, .15); color: var(--rp-green); border: 1px solid rgba(76,217,139,.4); }
+.rp-badge.warn { background: rgba(242, 181, 68, .15); color: var(--rp-amber); border: 1px solid rgba(242,181,68,.4); }
+.rp-badge.down { background: rgba(242, 101, 92, .15); color: var(--rp-red);   border: 1px solid rgba(242,101,92,.4); }
+.rp-badge.info { background: rgba(94, 162, 247, .15); color: var(--rp-blue); border: 1px solid rgba(94,162,247,.4); }
+.rp-badge.purple{ background: rgba(180,138,224,.15); color: var(--rp-purple); border: 1px solid rgba(180,138,224,.4); }
+.rp-callout { border: 1px solid var(--rp-border); border-left: 5px solid var(--rp-blue); background: var(--rp-surface); border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+.rp-callout[data-tone="green"] { border-left-color: var(--rp-green); }
+.rp-callout[data-tone="red"]   { border-left-color: var(--rp-red); }
+.rp-callout[data-tone="amber"] { border-left-color: var(--rp-amber); }
+.rp-callout[data-tone="purple"]{ border-left-color: var(--rp-purple); }
+.rp-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+.rp-table th { background: var(--rp-surface); color: var(--rp-text-2); text-align: left; padding: 8px 10px; border: 1px solid var(--rp-border); font-weight: 600; }
+.rp-table td { padding: 8px 10px; border: 1px solid var(--rp-border); vertical-align: top; }
+.rp-table tr:hover td { background: rgba(94,162,247,.06); }
+.rp-row-up td:first-child { border-left: 3px solid var(--rp-green); }
+.rp-row-warn td:first-child { border-left: 3px solid var(--rp-amber); }
+.rp-row-down td:first-child { border-left: 3px solid var(--rp-red); }
+.rp-score-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+.rp-score-name { flex: 0 0 120px; font-size: 13px; color: var(--rp-text-2); }
+.rp-score-name i { color: var(--rp-text-3); font-style: normal; font-size: 11px; }
+.rp-score-track { flex: 1; height: 8px; border-radius: 999px; background: var(--rp-border); overflow: hidden; }
+.rp-score-fill  { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--rp-blue), var(--rp-cyan)); }
+.rp-score-num   { flex: 0 0 36px; text-align: right; font-weight: 700; font-family: 'Cascadia Code', 'JetBrains Mono', monospace; }
+.rp-timeline { margin: 10px 0 10px 4px; }
+.rp-tl-item { display: flex; gap: 12px; padding: 6px 0; position: relative; }
+.rp-tl-time { flex: 0 0 52px; text-align: right; font-family: 'Cascadia Code', monospace; font-size: 12px; color: var(--rp-cyan); }
+.rp-tl-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--rp-blue); margin-top: 4px; flex: none; }
+.rp-tl-body { flex: 1; font-size: 13px; }
+.rp-tl-body b { color: var(--rp-text); }
+.rp-risks { list-style: none; padding: 0; margin: 10px 0; }
+.rp-risks li { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--rp-border); font-size: 13px; }
+.rp-risks li::before { content: "●"; color: var(--rp-red); font-size: 10px; margin-top: 5px; flex: none; }
+.rp-risks li[data-tone="amber"]::before { color: var(--rp-amber); }
+.rp-risks li[data-tone="info"]::before { color: var(--rp-blue); }
+.rp-note { font-size: 12px; color: var(--rp-text-3); margin: 8px 0; }
+.rp-tag { display:inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; background: var(--rp-surface); border: 1px solid var(--rp-border); color: var(--rp-text-2); margin: 2px 2px 2px 0; }
+.up-txt { color: var(--rp-green); } .down-txt { color: var(--rp-red); } .warn-txt { color: var(--rp-amber); }
+</style>
+</head>
+<body>
+<div class="rp-report">
+
+<header class="rp-hero">
+  <div class="rp-hero-title">🌅 早盘分析报告</div>
+  <div class="rp-hero-meta">数据时点：2026-09-23 09:30 CST（盘前竞价参考） ｜ 交易日：周三 ｜ 配套信号：reports/20260923/每日信号.md</div>
+</header>
+
+<section class="rp-kpi">
+  <div class="rp-kpi-card" data-tone="warn">
+    <div class="rp-kpi-label">大盘方向</div>
+    <div class="rp-kpi-value">平开~小幅高开震荡</div>
+    <div class="rp-kpi-sub">A50 +0.28% · KOSPI +1.94% · 日股休市</div>
+  </div>
+  <div class="rp-kpi-card" data-tone="warn">
+    <div class="rp-kpi-label">核心矛盾</div>
+    <div class="rp-kpi-value">高位分歧延续</div>
+    <div class="rp-kpi-sub">涨停 103→63 收缩 · 传媒晋级 vs 退潮</div>
+  </div>
+  <div class="rp-kpi-card" data-tone="up">
+    <div class="rp-kpi-label">信号数</div>
+    <div class="rp-kpi-value">P0×2 · P1×3</div>
+    <div class="rp-kpi-sub">今日 5 条待执行 · 云库已入库</div>
+  </div>
+  <div class="rp-kpi-card" data-tone="down">
+    <div class="rp-kpi-label">前次准确率</div>
+    <div class="rp-kpi-value">40%（2/5）</div>
+    <div class="rp-kpi-sub">教训：外盘映射失效后板块轮动难测</div>
+  </div>
+</section>
+
+<!-- 一、前次预测回顾 -->
+<div class="rp-section-title"><span class="rp-section-num">01</span> 前次预测回顾</div>
+<div class="rp-callout" data-tone="amber"><b>结论：</b>准确率 2/5（40%），2 项部分准确。核心教训：外盘映射失效后板块轮动方向难测，指数窄幅震荡判断优于板块方向预测；扫描池须补"政策线 + AI 应用/AI Agent"维度（传媒遗漏第 2 次复现框架盲区）。</div>
+<table class="rp-table">
+  <thead><tr><th>预判</th><th>实际</th><th>准确?</th><th>根因</th></tr></thead>
+  <tbody>
+    <tr><td>大盘：基准 50% 高开震荡分化（+0.2%~+0.8%）</td><td>上证 +0.06% 高开低走平收</td><td><span class="rp-badge up">✅</span></td><td>普涨次日烈度衰减 + 高位分歧兑现</td></tr>
+    <tr><td>板块：半导体（费半+4.29%）+ 医药晋级</td><td>半导体触发后回落，医药收缩，传媒/AI Agent 接力</td><td><span class="rp-badge down">❌</span></td><td>外盘映射连续 2 日失效；传媒遗漏（重大）</td></tr>
+    <tr><td>半导体 SIG-05：站上 1.06 建仓观察</td><td>10:10 触发 1.073 后回落跌破 1.06 过期</td><td><span class="rp-badge warn">⚠️</span></td><td>算力硬件午后走软，触发后回落判过期正确</td></tr>
+    <tr><td>黄金 P0：跌破 8.85 + COMEX 破 4330 减仓</td><td>收 8.859 未破，显式放弃维持</td><td><span class="rp-badge warn">⚠️</span></td><td>期金 -1% 但未破恢复线（#16 待裁定）</td></tr>
+    <tr><td>持仓：宁波/工行持有，电网守位</td><td>全线微调，电网 1.679&gt;1.60 守位成功</td><td><span class="rp-badge up">✅</span></td><td>高位分歧日持有延续，守位线有效</td></tr>
+  </tbody>
+</table>
+
+<!-- 二、海外市场传导 -->
+<div class="rp-section-title"><span class="rp-section-num">02</span> 海外市场传导</div>
+<div class="rp-callout" data-tone="warn"><b>结论：</b>方向中性偏微正——纳指 +0.45% 微涨、KOSPI +1.94%、A50 +0.28% 支撑，但道指 -0.36% + 美债倒挂担忧压制；基准情景平开~小幅高开震荡（55%）。</div>
+<table class="rp-table">
+  <thead><tr><th>指标</th><th>数值</th><th>信号</th></tr></thead>
+  <tbody>
+    <tr><td>道指（09/22 收盘）</td><td>51863.69 <span class="down-txt">-0.36%</span></td><td>中性偏空</td></tr>
+    <tr><td>纳指（09/22 收盘）</td><td>27244.28 <span class="up-txt">+0.45%</span></td><td>科技微正</td></tr>
+    <tr><td>标普500（09/22 收盘）</td><td>7764.64 0.00%</td><td>中性</td></tr>
+    <tr><td>韩国 KOSPI（09/23 开盘）</td><td><span class="up-txt">+1.94%</span>（LG+微软 AI 合作）</td><td>偏正</td></tr>
+    <tr><td>日本日经 225</td><td>今日休市</td><td>无边际信号</td></tr>
+    <tr><td>富时 A50 期货</td><td><span class="up-txt">+0.28%</span> 盘初</td><td>微正</td></tr>
+    <tr><td>纽约黄金 GC</td><td>4376.4 <span class="down-txt">-0.18%</span>（昨结 4384.43）</td><td>高位承压</td></tr>
+    <tr><td>WTI 原油</td><td>90.5 <span class="down-txt">-1%</span>（7x24）</td><td>回落</td></tr>
+    <tr><td>伦铜 CAD</td><td>14748.5 <span class="down-txt">-0.11%</span></td><td>中性</td></tr>
+    <tr><td>美债收益率曲线</td><td>倒挂担忧（华尔街担心衰退信号）</td><td>风险偏好承压</td></tr>
+    <tr><td>两市融资余额</td><td><span class="up-txt">+34.22 亿</span>（09/22）</td><td>增量资金延续</td></tr>
+  </tbody>
+</table>
+<div class="rp-note"><b>三种情景概率：</b><span class="rp-badge info">基准 55%</span> 平开~小幅高开震荡分化（-0.3%~+0.5%）｜ <span class="rp-badge up">偏强 25%</span> 传媒晋级+半导体修复，高开高走（+0.5%~+1.0%）｜ <span class="rp-badge down">偏弱 20%</span> 高位分歧兑现加速，低走收绿（-0.5%~-0.1%）</div>
+
+<!-- 三、宏观研判 -->
+<div class="rp-section-title"><span class="rp-section-num">03</span> 宏观研判</div>
+<div class="rp-callout" data-tone="warn"><b>今日方向：</b>平开~小幅高开震荡分化概率大（基准 55%）。高位分歧延续 + 外盘映射失效 + 传媒晋级待验证，指数窄幅震荡为主。</div>
+<table class="rp-table">
+  <thead><tr><th style="color:var(--rp-green)">多方</th><th style="color:var(--rp-red)">空方</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>A50 +0.28% · KOSPI +1.94%（LG+微软 AI）<br>两融 +34.22 亿延续<br>传媒/AI Agent 新主线（华媒控股 2 板）<br>纳指 +0.45% · 量子概念夜盘齐升（IONQ +11%）<br>云栖大会进行中 + 覆铜板涨价 10%</td>
+      <td>高位分歧：涨停 103→63 收缩，炸板率 22.2%<br>美债收益率曲线倒挂担忧<br>外盘映射连续 2 日失效（费半传导第 3 次待验证）<br>道指 -0.36% · 纽约黄金 -0.18%<br>医药链涨停潮收缩（化学制药 9→3）</td>
+    </tr>
+  </tbody>
+</table>
+<div class="rp-note"><b>关键变量：</b>① 传媒/AI Agent 题材第 2 日晋级验证（华媒控股续板 + 涨停≥3）；② 半导体映射第 3 次验证（竞价+放量双确认）；③ 黄金 8.85 恢复线（GC 4330 锚定）；④ 09/22-25 外交窗口；⑤ T+3 结算（SIG-20260921-04 通信 0.712 / SIG-20260921-06-盘中 创新药 0.866）。</div>
+
+<!-- 四、资金面与情绪 -->
+<div class="rp-section-title"><span class="rp-section-num">04</span> 资金面与情绪</div>
+<div class="rp-callout" data-tone="amber"><b>情绪总结：</b>中性偏谨慎——涨停 63 家较前日 103 家明显收缩（退潮确认），炸板率 22.2% 偏高（高位分歧）；家居/出版/广告营销为涨停主力（题材轮动）；两融 +34.22 亿增量支撑；传媒/AI Agent 为新主线候选，今日晋级验证。⚠️ 北向断供（≥21 交易日）以盘面替代。</div>
+<table class="rp-table">
+  <thead><tr><th>维度</th><th>数据</th><th>解读</th></tr></thead>
+  <tbody>
+    <tr><td>涨停情绪（09/22）</td><td>涨停 63 / 炸板 18（<span class="warn-txt">22.2%</span>）/ 跌停 3，最高 6 板（华瓷股份）</td><td>退潮确认，高位分歧</td></tr>
+    <tr><td>连板梯队</td><td>1板×39 / 2板×17 / 3板×4 / 4板×1 / 5板×1 / 6板×1</td><td>高度尚可但收缩</td></tr>
+    <tr><td>涨停行业分布</td><td>家居用品 5 / 出版 4 / 广告营销 3 / 化学制药 3 / 元件 3</td><td>家居/出版/广告营销轮动</td></tr>
+    <tr><td>融资融券（09/22）</td><td>两市融资余额 <span class="up-txt">+34.22 亿</span></td><td>增量资金延续</td></tr>
+    <tr><td>题材热度（09/23）</td><td>"华"字辈 10 / 创新药 4 / 业绩增长 4 / AI应用 4 / 机器人 2 / PCB 2</td><td>传媒/AI 延续 + 机器人/PCB 新催化</td></tr>
+    <tr><td>北向资金</td><td>⚠️ 断供（BUG-017）</td><td>以盘面广度替代</td></tr>
+  </tbody>
+</table>
+
+<!-- 五、板块机会扫描 -->
+<div class="rp-section-title"><span class="rp-section-num">05</span> 板块机会扫描（非持仓）</div>
+<div class="rp-callout" data-tone="amber"><b>结论：</b>无 🟢 建仓板块。最高分传媒/AI Agent 3.5（差在外盘映射 + 资金面确认），市场处于高位分歧兑现日 + 外盘映射失效期，不宜新开建仓。传媒/半导体以观察升级条件锚定，待竞价方向 + 量能确认。</div>
+<table class="rp-table">
+  <thead><tr><th>板块</th><th>ETF</th><th>外盘</th><th>消息</th><th>资金</th><th>技术</th><th>情绪</th><th>时机</th><th>综合</th><th>胜率</th><th>建议</th><th>核心逻辑</th></tr></thead>
+  <tbody>
+    <tr class="rp-row-warn"><td>传媒/AI Agent</td><td>159805</td><td>3</td><td>4</td><td>3</td><td>3</td><td>4</td><td>4</td><td><b>3.5</b></td><td>40%</td><td><span class="rp-badge warn">🟡 关注</span></td><td>题材第 2 日晋级验证，昨日遗漏修复；华媒控股 2 板领涨</td></tr>
+    <tr class="rp-row-warn"><td>云计算/AI算力</td><td>159890</td><td>4</td><td>4</td><td>3</td><td>3</td><td>3</td><td>3</td><td><b>3.3</b></td><td>40%</td><td><span class="rp-badge warn">🟡 关注</span></td><td>云栖大会催化 + 算力硬件走软后修复观察</td></tr>
+    <tr class="rp-row-warn"><td>半导体/AI算力</td><td>512480</td><td>3</td><td>3</td><td>3</td><td>3</td><td>3</td><td>3</td><td><b>3.0</b></td><td>35%</td><td><span class="rp-badge warn">🟡 关注</span></td><td>外盘映射连续 2 日失败，需双确认（SIG-05）</td></tr>
+    <tr class="rp-row-down"><td>人形机器人</td><td>159770</td><td>2</td><td>4</td><td>2</td><td>3</td><td>3</td><td>3</td><td><b>2.9</b></td><td>30%</td><td><span class="rp-badge down">🔴 观察</span></td><td>题材首日特征，需涨停潮确认</td></tr>
+    <tr class="rp-row-down"><td>地产链</td><td>512200/159707</td><td>2</td><td>3</td><td>3</td><td>3</td><td>3</td><td>3</td><td><b>2.9</b></td><td>30%</td><td><span class="rp-badge down">🔴 观察</span></td><td>第 3 日退潮风险，荣丰控股跌停警示</td></tr>
+    <tr class="rp-row-down"><td>券商</td><td>512880</td><td>3</td><td>2</td><td>2</td><td>3</td><td>2</td><td>2</td><td><b>2.5</b></td><td>25%</td><td><span class="rp-badge down">🔴 回避</span></td><td>无增量催化，高位分歧日非进攻板块</td></tr>
+    <tr class="rp-row-down"><td>黄金</td><td>518880</td><td>2</td><td>2</td><td>1</td><td>2</td><td>2</td><td>2</td><td><b>1.9</b></td><td>15%</td><td><span class="rp-badge down">🔴 回避</span></td><td>期金回落 + 主力 -5.13 亿流出（持仓已有，P0）</td></tr>
+  </tbody>
+</table>
+<div class="rp-note">评分口径：每维 1-5 分，入场时机权重 1.5x，综合=加权平均（满分 5.0）。建仓建议：🟢≥3.8 且入场时机≥4 ｜ 🟡3.0-3.7 ｜ 🔴&lt;3.0</div>
+<div class="rp-callout" data-tone="info"><b>关注列表（观察雷达，非信号，含量化升级条件）：</b>
+<div style="margin-top:8px"><span class="rp-tag">传媒 159805</span>站上 1.18 + 量比≥1.5 + 传媒涨停≥3 → SIG-20260923-04-盘中</div>
+<div style="margin-top:4px"><span class="rp-tag">半导体 512480</span>站上 1.06 + 量比≥1.5 + 半导体涨停≥3 + 主力转流入 → SIG-20260923-05-盘中</div>
+<div style="margin-top:4px"><span class="rp-tag">人形机器人</span>机器人概念涨停≥5 + ETF 放量 → 盘中评估追加</div>
+<div style="margin-top:4px"><span class="rp-tag">云计算 159890</span>站上 1.75 + 放量 + 算力涨停≥3 → 盘中评估追加</div></div>
+
+<!-- 六、持仓映射与操作判断 -->
+<div class="rp-section-title"><span class="rp-section-num">06</span> 持仓映射与操作判断</div>
+
+<h3 style="font-size:15px;margin:14px 0 8px">6.1 持仓板块七维评分</h3>
+<table class="rp-table">
+  <thead><tr><th>标的</th><th>代码</th><th>外盘</th><th>消息</th><th>资金</th><th>技术</th><th>情绪</th><th>时机</th><th>综合</th><th>预判开盘</th><th>建议</th></tr></thead>
+  <tbody>
+    <tr class="rp-row-warn"><td>宁波银行</td><td>002142</td><td>3</td><td>2</td><td>2</td><td>3</td><td>2</td><td>3</td><td><b>2.5</b></td><td>平开</td><td><span class="rp-badge warn">🟡 持有</span></td></tr>
+    <tr class="rp-row-warn"><td>航空航天ETF</td><td>159227</td><td>2</td><td>2</td><td>2</td><td>3</td><td>2</td><td>2</td><td><b>2.2</b></td><td>平开</td><td><span class="rp-badge warn">🟡 持有</span></td></tr>
+    <tr class="rp-row-warn"><td>电网设备ETF</td><td>159326</td><td>3</td><td>2</td><td>3</td><td>3</td><td>3</td><td>3</td><td><b>2.8</b></td><td>平开</td><td><span class="rp-badge warn">🟡 持有（守位）</span></td></tr>
+    <tr class="rp-row-warn"><td>创新药ETF</td><td>159992</td><td>2</td><td>2</td><td>2</td><td>3</td><td>2</td><td>2</td><td><b>2.3</b></td><td>平开/微跌</td><td><span class="rp-badge warn">🟡 持有（退潮观察）</span></td></tr>
+    <tr class="rp-row-warn"><td>通信ETF</td><td>515880</td><td>3</td><td>3</td><td>2</td><td>2</td><td>2</td><td>2</td><td><b>2.4</b></td><td>平开/微跌</td><td><span class="rp-badge warn">🟡 持有（反T观察）</span></td></tr>
+    <tr class="rp-row-down"><td>黄金ETF</td><td>518880</td><td>2</td><td>2</td><td>1</td><td>2</td><td>2</td><td>2</td><td><b>1.9</b></td><td>低开~平开</td><td><span class="rp-badge down">🔴 P0 待裁定</span></td></tr>
+    <tr class="rp-row-warn"><td>工商银行</td><td>601398</td><td>3</td><td>2</td><td>3</td><td>3</td><td>3</td><td>3</td><td><b>2.8</b></td><td>平开</td><td><span class="rp-badge warn">🟡 持有</span></td></tr>
+  </tbody>
+</table>
+
+<h3 style="font-size:15px;margin:14px 0 8px">6.2 逐只持仓分析与做T建议</h3>
+
+<div class="rp-callout" data-tone="info"><b>宁波银行（002142）</b> 昨收 34.72（+0.52%）· 成本 33.563 · 浮盈 +3.45% · MA5 34.632/MA10 35.011 · 近20高 36.03<br><span class="rp-badge purple">做T：不建议</span> 打新底仓，科技强势日银行被动。持有；破 34.0 减仓评估；科技回落+银行量比&gt;1 可评估正T。</div>
+<div class="rp-callout" data-tone="info"><b>航空航天ETF（159227）</b> 昨收 1.034（-0.77%）· 成本 2.731⚠️（BUG-021 未复权）· MA5 1.028/MA10 1.035 · 近20高 1.073<br><span class="rp-badge purple">做T：不建议</span> 无独立信号。持有；放量破 1.073 可评估；跌破 0.98 减仓评估。</div>
+<div class="rp-callout" data-tone="info"><b>电网设备ETF（159326）</b> 昨收 1.679（-0.65%）· 成本 1.973⚠️（疑似未复权）· MA5 1.664 · 近20高 1.714<br><span class="rp-badge purple">做T：不建议</span> 守位观察。持有（SIG-02 守位线 1.60）；跌破 1.60 减仓 2,600 份；放量破 1.714 可评估正T/加仓。</div>
+<div class="rp-callout" data-tone="info"><b>创新药ETF（159992）</b> 昨收 0.867（-0.23%）· 成本 0.866 · 浮盈 +0.12% · MA5 0.845 · 证伪线 0.846<br><span class="rp-badge purple">做T：不建议</span> 涨停潮收缩退潮观察期（化学制药 9→3）。持有观察；站稳 0.87+涨停潮≥5 加仓评估；跌破 0.846 减仓评估。T+3 今日结算（entry 0.866）。</div>
+<div class="rp-callout" data-tone="amber"><b>通信ETF（515880）</b> 昨收 0.707（-0.70%）· 成本 0.712 · 浮盈 -0.70% · MA5 0.699 · 近20高 0.728 · 证伪线 0.69<br><span class="rp-badge purple">做T：双向备选（反T为主）</span> 新仓第 3 日"买预期卖事实"回落窗口。触发：高开 ≥昨收+1.5%（0.717 上方）+ 30 分钟未续创新高 → 反T 锁利（SIG-03，开盘偏离设计修正绝对价位过严）；放量站稳 0.72 续创新高 → 信号作废。跌破 0.69 减仓评估。T+3 今日结算（entry 0.712）。</div>
+<div class="rp-callout" data-tone="red"><b>黄金ETF（518880）</b> 昨收 8.859（-0.80%）· 成本 9.056 · 浮盈 -2.18% · MA5 8.912/MA10 8.933/MA20 9.063（全面跌破）· 近20低 8.787<br><span class="rp-badge down">做T：不建议（P0 优先）</span> 🔴 P0 处置待裁定（#16）。<b>跌破 8.85 + COMEX 破 4330 → 减仓 900 份</b>；站回 9.00+ 显式放弃。期金回落 + 主力 -5.13 亿流出，今日 P0 触发概率上升。</div>
+<div class="rp-callout" data-tone="info"><b>工商银行（601398）</b> 昨收 8.12（+0.12%）· 成本 7.783 · 浮盈 +4.33% · MA5 8.110/MA20 8.064 · 近20高 8.29<br><span class="rp-badge purple">做T：不建议</span> 防御底仓。持有；破 8.00 减仓评估；放量破 8.29 持有观察。</div>
+
+<h3 style="font-size:15px;margin:14px 0 8px">6.3 做T纪律规则（当日适用）</h3>
+<ul class="rp-risks">
+  <li data-tone="info"><b>[x] 开盘30分钟不操作（铁律）</b>：9:30-10:00 情绪释放窗口。适用——高位分歧延续日竞价波动大。</li>
+  <li data-tone="info"><b>[ ] 外盘熔断日T仓位减量至1/3</b>：不适用——美股无熔断，KOSPI +1.94% 正信号。</li>
+  <li data-tone="info"><b>[x] "买预期卖事实"后2-3日不做正T</b>：适用——通信第 3 日回落窗口（SIG-03 反T 为主），创新药同理。</li>
+  <li data-tone="info"><b>[x] 系统性普跌日不做T</b>：不适用——非普跌日；若盘中转普跌（广度&lt;20%）立即放弃所有T。</li>
+  <li data-tone="info"><b>[x] 平开+单边暴跌=放弃T计划</b>：防御适用——开盘 30 分钟单边下跌则放弃所有 T。</li>
+  <li data-tone="info"><b>[x] 涨停潮次日地产/题材ETF高开默认反T方向</b>：适用——地产第 3 日退潮风险（荣丰控股跌停警示）。</li>
+  <li data-tone="info"><b>[x] 单日暴涨次日烈度衰减，不追高</b>：适用——涨停 103→63 连续收缩。</li>
+  <li data-tone="info"><b>[x] 主线强势日反T胜率下降</b>：部分适用——传媒若涨停≥5，通信反T 需标的自身弱势确认。</li>
+</ul>
+
+<!-- 七、核心关注时间表 -->
+<div class="rp-section-title"><span class="rp-section-num">07</span> 核心关注时间表</div>
+<div class="rp-timeline">
+  <div class="rp-tl-item"><span class="rp-tl-time">09:15</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>集合竞价结束</b><div>传媒竞价强度（晋级验证）；黄金低开幅度（8.85 逼近）；通信高开幅度</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">09:25</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>开盘价公布</b><div>上证 vs 3952.13；半导体竞价（映射第 3 次验证）；传媒是否高开</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">09:35</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>开盘5分钟方向确认</b><div>传媒涨停家数（≥3 晋级）；半导体量比（≥1.5）；通信是否冲高回落</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">09:45</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>传媒/半导体方向确认</b><div>传媒站 1.18？半导体站 1.06+放量？通信反T 窗口</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">10:00</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>做T窗口激活</b><div>黄金 8.85 恢复线；高位分歧是否兑现加速</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">10:30</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>方向确认窗口结束</b><div>SIG-03 通信反T / SIG-04 传媒建仓 / SIG-05 半导体建仓触发验证</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">11:00</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>上午方向总结</b><div>广度/涨停家数 vs 63 家；传媒晋级 vs 退潮确认</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">13:00</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>下午开盘</b><div>午后方向确认；传媒涨停潮延续性</div></div></div>
+  <div class="rp-tl-item"><span class="rp-tl-time">14:30</span><span class="rp-tl-dot"></span><div class="rp-tl-body"><b>尾盘方向</b><div>黄金 P0 最终窗口（14:45 截止）；尾盘不新建仓；T+3 结算收盘价</div></div></div>
+</div>
+
+<!-- 八、风险提示 -->
+<div class="rp-section-title"><span class="rp-section-num">08</span> 风险提示</div>
+<ul class="rp-risks">
+  <li data-tone="red"><b>高位分歧兑现加速</b>：涨停 103→63 连续 2 日收缩，若今日 &lt;50 家或跌停放大 → 情绪退潮确认，不做T不追高。</li>
+  <li data-tone="red"><b>黄金 P0 触发</b>：期金回落 + 主力 -5.13 亿流出 + 昨收 8.859 逼近 8.85（低 8.854 已触及）——跌破 8.85 + COMEX 破 4330 → 必须减仓 900 份（14:45 截止）。</li>
+  <li data-tone="amber"><b>半导体映射第 3 次失败</b>：费半连续 2 日强映射均失败，竞价高开但 30 分钟未放量续攻 → SIG-05 作废不追高。</li>
+  <li data-tone="amber"><b>传媒/AI Agent 晋级失败</b>：华媒控股断板 + 传媒涨停 &lt;3 → 题材退潮，SIG-04 作废。</li>
+  <li data-tone="amber"><b>通信"买预期卖事实"回落</b>：主力 -2.63 亿流出，跌破 0.69 证伪线减仓评估；SIG-03 按开盘偏离触发。</li>
+  <li data-tone="amber"><b>美债收益率曲线倒挂担忧</b>：若发酵 → 全球风险偏好承压，压制 A 股高开幅度。</li>
+  <li data-tone="amber"><b>北向数据断供</b>（≥21 交易日）：北向一票否决无法实时验证，以盘面广度替代。</li>
+  <li data-tone="amber"><b>医药链退潮确认</b>：化学制药 9→3 收缩，创新药 0.846 证伪线；SIG-20260921-06 今日 T+3 结算。</li>
+  <li data-tone="info"><b>外交窗口不确定性</b>：9/22-25 习近平访美安排公布窗口，稀土/外交主题或异动。</li>
+  <li data-tone="info"><b>日本休市致边际信号缺失</b>：今日无日经 225，亚太方向仅靠 KOSPI + A50，信号源单一。</li>
+</ul>
+
+<div class="rp-note" style="margin-top:22px;border-top:1px solid var(--rp-border);padding-top:12px">
+数据来源: 腾讯财经（行情/海外指数）、东财 push2ex（涨停池）、东财 datacenter（两融）、同花顺（题材热点）、新浪期货（黄金/原油/伦铜）、东财 7x24（全球资讯）；详见 a-stock-data skill<br>
+海外数据: 腾讯财经海外指数 + 新浪国际期货 + 东财 7x24（A50/KOSPI/原油/美债）<br>
+运行提示: ⚠️ 数据源降级：push2 不可达（BUG-017 第21+交易日），板块排名走腾讯自算+同花顺替代；北向 hsgt 断供，以盘面替代；web_search 余额不足，事件日历以 7x24 补齐；⚠️ 159227/159326 成本未复权（BUG-021），浮盈失真不以此决策
+</div>
+
+</div>
+</body>
+</html>

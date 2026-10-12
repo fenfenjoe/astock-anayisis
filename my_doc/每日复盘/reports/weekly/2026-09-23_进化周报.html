@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>进化周报 · 2026-09-23</title>
+<style>
+.rp-report { --rp-bg:#0e1117; --rp-surface:#161b22; --rp-border:#2a3140; --rp-text:#edf2f7;
+  --rp-text-2:#a8b3c4; --rp-green:#4cd98b; --rp-red:#f2655c; --rp-amber:#f2b544;
+  font-family:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif; font-size:14px; line-height:1.6;
+  color:var(--rp-text); max-width:1000px; margin:0 auto; padding:20px; background:var(--rp-bg); }
+.rp-hero { border-bottom:1px solid var(--rp-border); padding-bottom:12px; margin-bottom:16px; }
+.rp-hero-title { font-size:22px; font-weight:700; }
+.rp-hero-meta { color:var(--rp-text-2); font-size:12px; margin-top:4px; }
+.rp-kpi { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+.rp-kpi-card { flex:1; min-width:140px; background:var(--rp-surface); border:1px solid var(--rp-border);
+  border-radius:8px; padding:12px 16px; }
+.rp-kpi-label { color:var(--rp-text-2); font-size:12px; }
+.rp-kpi-value { font-size:20px; font-weight:700; margin-top:2px; }
+.rp-section { margin-bottom:24px; }
+.rp-section h2 { font-size:16px; border-bottom:1px solid var(--rp-border); padding-bottom:6px; }
+.rp-table { width:100%; border-collapse:collapse; margin-top:8px; }
+.rp-table th, .rp-table td { border:1px solid var(--rp-border); padding:6px 10px; text-align:left; font-size:13px; }
+.rp-table th { background:var(--rp-surface); color:var(--rp-text-2); }
+.rp-tone-green { color:var(--rp-green); } .rp-tone-red { color:var(--rp-red); } .rp-tone-amber { color:var(--rp-amber); }
+.rp-badge { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; font-weight:600; }
+.rp-badge-red { background:rgba(242,101,92,.15); color:var(--rp-red); }
+.rp-callout { background:var(--rp-surface); border-left:3px solid var(--rp-amber); padding:10px 14px; margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="rp-report">
+  <header class="rp-hero">
+    <div class="rp-hero-title">🧬 进化周报</div>
+    <div class="rp-hero-meta">生成时间：2026-09-23 ｜ 自进化框架周度全景</div>
+  </header>
+  <section class="rp-kpi">
+    <div class="rp-kpi-card"><div class="rp-kpi-label">目标达标</div><div class="rp-kpi-value rp-tone-green">0/4</div></div>
+    <div class="rp-kpi-card"><div class="rp-kpi-label">最大缺口</div><div class="rp-kpi-value rp-tone-red">45.0</div></div>
+    <div class="rp-kpi-card"><div class="rp-kpi-label">REQ 总数</div><div class="rp-kpi-value">8</div></div>
+    <div class="rp-kpi-card"><div class="rp-kpi-label">负反馈 halt</div><div class="rp-kpi-value rp-tone-amber">0</div></div>
+  </section>
+  <main>
+  <section class="rp-section"><h2>二、目标达成进度</h2>
+  <table class="rp-table"><tr><th>目标</th><th>当前</th><th>目标值</th><th>缺口</th><th>状态</th></tr>
+  <tr><td>信号T+3命中率</td><td>0.0</td><td>45.0</td><td class="rp-tone-red">45.0</td><td class="rp-tone-red">shortfall</td></tr>
+  <tr><td>早盘信号触发率</td><td>0.0</td><td>40.0</td><td class="rp-tone-red">40.0</td><td class="rp-tone-red">shortfall</td></tr>
+  <tr><td>P0信号执行数</td><td>0.0</td><td>3.0</td><td class="rp-tone-red">3.0</td><td class="rp-tone-red">shortfall</td></tr>
+  <tr><td>报告质量总分</td><td>15.0</td><td>16.0</td><td class="rp-tone-amber">1.0</td><td class="rp-tone-amber">shortfall</td></tr>
+  </table></section>
+  <section class="rp-section"><h2>六、下周建议</h2>
+  <div class="rp-callout"><b>[req]</b> 目标 信号T+3命中率 缺口 45.0，建议创建定向 REQ</div>
+  <div class="rp-callout"><b>[req]</b> 目标 早盘信号触发率 缺口 40.0，建议创建定向 REQ</div>
+  </section>
+</main>
+</div>
+</body>
+</html>

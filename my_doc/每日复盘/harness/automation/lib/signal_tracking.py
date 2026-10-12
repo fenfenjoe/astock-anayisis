@@ -653,6 +653,59 @@ def parse_signal_rows_all(md_text: str, today: str = '') -> list[dict]:
     return records
 
 
+def parse_trigger_records_from_md(md_text: str, today: str = '') -> list[dict]:
+    """解析每日信号.md `## 信号触发记录` 节 → cloud_upsert_trigger_records 可用的记录列表。
+
+    2026-09-24 新增：早盘生成信号时预填每条信号的**第一条生成记录**（触发条件摘要=生成原因、
+    状态=已生成），盘中触发时追加"已触发"记录——本函数把该节整表解析为云表记录
+    （signal_trigger_records），供 auto_morning_analysis 第五步半与盘中检查 §5.2 落库。
+
+    返回记录键（与 signal_tracking_cloud.to_trigger_row 对齐）：
+      signal_id / trigger_date / trigger_time / priority / ticker / name /
+      action_type / condition（触发条件摘要=生成原因或触发摘要）/ status / suggest / result
+    标的列 '名称(代码)' → name + ticker 拆分；无 signal_id 的行（占位/空行）跳过。
+    today: 'YYYY-MM-DD'，缺省用 date.today()。
+    """
+    if not today:
+        today = date.today().isoformat()
+    header, rows = _parse_table_rows(md_text, '## 信号触发记录')
+    c_time = _col(header, '触发时间', '时间')
+    c_id = _col(header, '信号ID')
+    c_prio = _col(header, '优先级')
+    c_target = _col(header, '标的')
+    c_op = _col(header, '操作类型')
+    c_cond = _col(header, '触发条件摘要', '触发条件')
+    c_status = _col(header, '当前状态', '状态')
+    c_suggest = _col(header, '建议操作')
+    c_result = _col(header, '用户操作')
+
+    records = []
+    for row in rows:
+        def g(idx):
+            return row[idx] if 0 <= idx < len(row) else ''
+
+        signal_id = g(c_id).strip()
+        if not signal_id.startswith('SIG-'):
+            continue
+        target = g(c_target)
+        ticker = _extract_ticker(target)
+        rec = {
+            'signal_id': signal_id,
+            'trigger_date': today,
+            'trigger_time': g(c_time).strip() or None,
+            'priority': g(c_prio).strip() or 'P2',
+            'ticker': ticker or '',
+            'name': target.split('(')[0].strip() if '(' in target else target.strip(),
+            'action_type': g(c_op).strip(),
+            'condition': g(c_cond).strip(),
+            'status': g(c_status).strip(),
+            'suggest': g(c_suggest).strip(),
+            'result': g(c_result).strip() or None,
+        }
+        records.append(rec)
+    return records
+
+
 def _extract_trigger_prices(md_text: str) -> dict:
     """从 '## 盘中验证记录' 中提取每条信号首次出现时的当前价。
     返回 {signal_id: price}。匹配 '当前X.XXX' 或 '开盘X.XXX'。"""

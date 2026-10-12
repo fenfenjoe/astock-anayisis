@@ -319,6 +319,51 @@ CREATE TABLE IF NOT EXISTS signal_tracking (
 CREATE INDEX IF NOT EXISTS idx_signal_tracking_date ON signal_tracking(signal_date);
 CREATE INDEX IF NOT EXISTS idx_signal_tracking_status ON signal_tracking(status);
 
+-- ── I.2 信号触发记录（2026-09-21 新增：盘中触发记录明细落库，signal_id 关联 signal_tracking）──────
+CREATE TABLE IF NOT EXISTS signal_trigger_records (
+  id            BIGSERIAL PRIMARY KEY,
+  signal_id     TEXT NOT NULL,
+  trigger_date  TEXT,
+  trigger_time  TEXT,
+  priority      TEXT,
+  ticker        TEXT,
+  name          TEXT,
+  action_type   TEXT,
+  condition     TEXT,
+  status        TEXT,
+  suggest       TEXT,
+  result        TEXT,
+  created_at    TEXT,
+  updated_at    TEXT,
+  UNIQUE (signal_id, trigger_time)
+);
+
+CREATE INDEX IF NOT EXISTS idx_signal_trigger_records_signal ON signal_trigger_records(signal_id);
+CREATE INDEX IF NOT EXISTS idx_signal_trigger_records_date ON signal_trigger_records(trigger_date);
+
+-- ── I.3 盘中检查记录（2026-09-24 新增：每次盘中检查对每条信号的检查结果落库）──────
+CREATE TABLE IF NOT EXISTS signal_check_records (
+  id            BIGSERIAL PRIMARY KEY,
+  signal_id     TEXT NOT NULL,
+  check_date    TEXT,
+  check_time    TEXT,
+  check_point   TEXT,
+  ticker        TEXT,
+  name          TEXT,
+  price         REAL,
+  trade_price   REAL,
+  condition_met TEXT,
+  status_before TEXT,
+  status_after  TEXT,
+  note          TEXT,
+  created_at    TEXT,
+  updated_at    TEXT,
+  UNIQUE (signal_id, check_date, check_time)
+);
+
+CREATE INDEX IF NOT EXISTS idx_signal_check_records_signal ON signal_check_records(signal_id);
+CREATE INDEX IF NOT EXISTS idx_signal_check_records_date ON signal_check_records(check_date);
+
 -- ── J. 唯一约束（防双进程并发重复，云权威多进程架构关键保障）──────
 CREATE UNIQUE INDEX IF NOT EXISTS uq_daily_signals_strat_date_asset
   ON daily_signals(strategy_id, signal_date, asset_code);

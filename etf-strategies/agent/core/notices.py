@@ -41,23 +41,24 @@ def create_cookie_todo(platform_id, reason="无", db=None):
         ):
             return None  # 已有未处理的同平台待办（含失效待办，幂等）
     keys = platform.get("cookie_keys") or []
-    key_hint = f"关键 key：{', '.join(keys)}；" if keys else ""
+    name = platform["name"]
+    key_hint = f"（关键 key：{', '.join(keys)}）" if keys else ""
+    # 新文案（2026-10，用户确认）：引导用户在本机登录平台后，回到「爱逛的地方」刷新
+    # 由小满自动从浏览器档案取 Cookie —— 取代旧的"复制完整 Cookie 串回复给我"流程。
     if reason == "失效":
         content = (
-            f"检测到 {platform['name']} 的 Cookie 已失效（登录态过期或账号被风控），"
-            f"需要你重新在浏览器开发者工具 → 应用/存储 → Cookie 里复制 {platform['name']}"
-            f" 域名的 {key_hint}完整 Cookie 串（形如 `key1=value1; key2=value2`）回复给我，"
-            f"我才能继续逛～"
+            f"「{name}」不可访问啦～ 检测到 Cookie 可能过期了。麻烦你在本机浏览器登录一下 "
+            f"{name}，然后回到「爱逛的地方」点一下刷新，我就能自动去取 Cookie 继续逛啦！"
+            f"{key_hint}"
         )
     else:
         content = (
-            f"需要你在浏览器开发者工具 → 应用/存储 → Cookie 里，找到 {platform['name']}"
-            f" 域名的 {key_hint}然后把**完整 Cookie 串**（形如 `key1=value1; key2=value2`）复制回复给我，"
-            f"我就能去逛啦～"
+            f"「{name}」暂时逛不了啦～ 请在本机浏览器登录一下 {name}，然后回到「爱逛的地方」"
+            f"点一下刷新，我就能自动去取 Cookie 啦！{key_hint}"
         )
     return db.notice_create(
         "todo",
-        f"请提供{platform['name']}的 Cookie",
+        f"请在本机登录{name}后刷新",
         content,
         todo_type="cookie_provide",
         todo_data={"platform_id": platform_id},

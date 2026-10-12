@@ -251,7 +251,7 @@ def _fn_backtest():
 # ═══════════════════════════════════════════════════════════════
 
 MAIN_MENU = [
-    ("📋 列出所有策略       — 查看已维护的 16 个策略", _fn_list),
+    ("📋 列出所有策略       — 查看已维护的 20 个策略", _fn_list),
     ("📊 查看每日信号       — 查看策略今日买卖操作",  _fn_signal),
     ("📚 策略学习           — 查看策略原理/因子/择时", _fn_learn),
     ("📄 一年回测报告       — 生成HTML报告（含走势图）", _fn_report),
@@ -279,11 +279,11 @@ def _cmd_dispatch():
 
     p_learn = sub.add_parser("learn", help="查看策略详细介绍")
     p_learn.add_argument("strategy", nargs="?", default=None,
-                         help="策略编号 (S1~S19)，不填则列出可用策略")
+                         help="策略编号 (S1~S21)，不填则列出可用策略")
 
     p_rpt = sub.add_parser("report", help="生成策略一年回测HTML报告")
     p_rpt.add_argument("strategy", nargs="?", default=None,
-                       help="策略编号 (S1~S19)，不填则列出可用策略")
+                       help="策略编号 (S1~S21)，不填则列出可用策略")
 
     args = parser.parse_args()
 

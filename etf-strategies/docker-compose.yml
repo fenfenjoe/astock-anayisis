@@ -43,8 +43,8 @@ services:
       # 每日复盘调度器：仓库根挂载点 + auto 调度开关
       - DASHBOARD_REPO_ROOT=/repo
       - DASHBOARD_SCHEDULER_ENABLED=${DASHBOARD_SCHEDULER_ENABLED:-1}
-      # 执行引擎：auto（容器内已装 dsh → 默认走 dsh，无需 claude 凭据）。
-      # 仅当需要 claude -p 兜底（DASHBOARD_SCHEDULER_ENGINE=claude）时才填 ANTHROPIC_AUTH_TOKEN。
+      # 执行引擎：dsh headless（2026-09-21 起唯一引擎，claude 兜底已移除）。
+      # ANTHROPIC_* 为历史遗留配置，已不再用于调度执行。
       - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-}
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://ark.cn-beijing.volces.com/api/plan}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-deepseek-v4-flash-ga-260731}

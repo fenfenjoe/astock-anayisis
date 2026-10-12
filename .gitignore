@@ -79,6 +79,7 @@ etf-strategies/dashboard/data/cache.db
 scripts/config/cloud.json
 scripts/.snapshots/
 scripts/logs/cloud_sync.log
+scripts/logs/
 
 # _*.py ���˺Ϸ���ڣ�__main__.py �������
 !**/__main__.py

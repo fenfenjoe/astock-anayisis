@@ -1558,18 +1558,10 @@ else:
 >
 > 排序：当前持仓在前（按代码排序），已清仓标的在后（按代码排序）。
 
-### 第十二步-HTML：同步产出 `复盘报告.html`（2026-10 起强制）
+### 第十二步：报告定稿（2026-10 回退：仅 .md，Dashboard 以 markdown 渲染）
 
-在 `复盘报告.md` 定稿后，**必须**再产出一份同内容的 **`my_doc/每日复盘/reports/{today}/复盘报告.html`**，供 Dashboard「报告」页展示（Dashboard 展示 HTML 版；`.md` 保留供自动化解析）。
-
-**规则**：
-1. 严格遵循 `my_doc/每日复盘/harness/prompts/报告HTML样式指南.md`（Tech Noir 暗色设计系统，组件库复制即用）。
-2. 内容与 `.md` **完全一致**（同一数据/结论/评分），仅呈现形式升级：
-   - 顶部 KPI 卡片组（大盘涨跌/市场情绪/信号胜率/持仓盈亏等 3-4 张）
-   - 持仓评分/信号胜率 → `.rp-table` 彩色行 + `.rp-score-row` 评分条
-   - 做T复盘/信号结算 → `.rp-badge`；风险/经验 → `.rp-risks`/`.rp-callout`
-3. 完整 HTML 文档（`<!DOCTYPE html>` + 内嵌 `<style>`），自包含、零 JS、零外链、零事件属性。
-4. 每个模块**结论置顶**；连续纯文字段落 ≤3 行。
+> 📄 **输出说明（2026-10 回退）**：复盘报告仅产出 **`复盘报告.md`**（Dashboard 以 markdown 渲染，
+> 恢复 HTML 改造前的呈现方式）；不再产出 `.html` 版本。
 
 ---
 
@@ -1747,7 +1739,7 @@ er = state['tasks']['evening_review']
 er['status'] = 'completed'
 er['completed_at'] = datetime.now().isoformat()
 er['staging_generated'] = True
-er['outputs'] = ['复盘报告.md', '复盘报告.html', 'staging/今日-早盘分析.md', 'staging/今日-复盘分析.md', '每日信号.md(已回填评价)']
+er['outputs'] = ['复盘报告.md', 'staging/今日-早盘分析.md', 'staging/今日-复盘分析.md', '每日信号.md(已回填评价)']
 json.dump(state, open(path, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
 print('task_state evening_review → completed, staging_generated=true')
 "
@@ -1783,19 +1775,6 @@ if os.path.exists(report_path):
         errors.append(f'复盘报告存在但非今日生成 (mtime={mtime.strftime(\"%Y-%m-%d\")})')
 else:
     errors.append(f'复盘报告不存在: {report_path}')
-
-# 1b. 验证复盘报告 HTML 版（2026-10 起强制产出，供 Dashboard 展示）
-report_html_path = f'my_doc/每日复盘/reports/{today_ymd}/复盘报告.html'
-if os.path.exists(report_html_path):
-    with open(report_html_path, 'r', encoding='utf-8') as f:
-        html_content = f.read()
-    if '<!DOCTYPE html>' not in html_content.upper() or '<style>' not in html_content:
-        errors.append(f'复盘报告.html 不是完整 HTML 文档（缺 DOCTYPE 或 <style>）: {report_html_path}')
-    else:
-        mtime = datetime.fromtimestamp(os.path.getmtime(report_html_path))
-        print(f'✅ 复盘报告.html: {report_html_path} ({len(html_content)/1024:.1f}KB, {mtime.strftime(\"%H:%M\")})')
-else:
-    errors.append(f'复盘报告.html 不存在: {report_html_path}')
 
 # 2. 验证早盘分析 staging
 morning_staging = 'my_doc/每日复盘/harness/staging/今日-早盘分析.md'

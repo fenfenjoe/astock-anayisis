@@ -83,6 +83,19 @@ _ALL_COLUMNS = list(_COLUMN_MAP.values()) + _EXTRA_COLUMNS + ["created_at", "upd
 # 云表 → JSON 反向（signal_date → trigger_date）
 _INVERSE = {v: k for k, v in _COLUMN_MAP.items()}
 
+# 状态终态等级（2026-09-21 BUG-FIX）：等级越高越"终态"，越不可被盘中检查回退。
+# 背景：盘中检查 §5.3 用 parse_signal_rows_all 重新解析 markdown 后整体 upsert，
+# 会把用户已在 Dashboard 一键执行（云库 executed）的信号覆盖成 expired/triggered。
+# 等级：open(未触发) < triggered(已触发) < expired(已过期) < executed(已执行)=partial(部分执行) < settled(已结算)
+_STATUS_FINALITY = {
+    "open": 0,
+    "triggered": 1,
+    "expired": 2,
+    "executed": 3,
+    "partial_executed": 3,
+    "settled": 4,
+}
+
 # 枚举约束复用 lib/signal_tracking.py 的权威定义（docs/signal-enums.md 同口径），避免双份漂移
 from lib.signal_tracking import assert_valid_signal_record  # noqa: E402
 
@@ -159,15 +172,57 @@ def cloud_load_by_date(signal_date: str) -> list[dict]:
         return []
 
 
+def protect_terminal_status(records: list[dict], existing_status: dict) -> list[dict]:
+    """保护已执行/已结算信号的终态状态不被回退（纯函数，可测）。
+
+    existing_status: {signal_id: status} — 云库当前状态。
+    对每条记录：若云库既有状态终态等级 ≥ 新记录状态等级，则保留云库既有状态
+    （防止盘中检查把 executed/partial_executed/settled 降级成 expired/triggered/open）。
+    新信号（云库无既有状态）或升级流转（triggered→executed 等）不受影响。
+    返回新列表，不改入参。
+    """
+    out = []
+    for rec in records:
+        r = dict(rec)
+        sid = r.get("signal_id")
+        cur = existing_status.get(sid)
+        new = r.get("status")
+        if cur and new and _STATUS_FINALITY.get(cur, 0) >= _STATUS_FINALITY.get(new, 0):
+            r["status"] = cur
+        out.append(r)
+    return out
+
+
+def _protect_existing_terminal(records: list[dict]) -> list[dict]:
+    """查询云库既有状态，应用终态状态保护（查询失败不阻塞，按原记录 upsert）。"""
+    ids = [r.get("signal_id") for r in records if r.get("signal_id")]
+    if not ids:
+        return records
+    existing = {}
+    try:
+        rows = cloud_db.select(
+            "signal_tracking",
+            columns="signal_id,status",
+            filters=[("signal_id", "in", f"({','.join(ids)})")],
+        )
+        existing = {r.get("signal_id"): r.get("status") for r in rows if r.get("signal_id")}
+    except Exception:
+        return records
+    return protect_terminal_status(records, existing)
+
+
 def cloud_upsert_signals(records: list[dict]) -> int:
     """把信号记录 upsert 到云库（on_conflict=signal_id，幂等）。返回成功条数。
 
     写入前逐条做枚举/数值校验：非法值抛 ValueError，由调用方决定中断或跳过。
+    2026-09-21 BUG-FIX：upsert 前查询云库既有状态并应用终态保护，
+    防止盘中检查把已执行/已结算信号的状态覆盖回退。
     """
     if not records:
         return 0
     if not cloud_enabled():
         return 0
+    records = _protect_existing_terminal(records)
     rows = [to_row(r) for r in records]
     try:
         return cloud_db.upsert_many("signal_tracking", rows, on_conflict="signal_id")
@@ -176,13 +231,33 @@ def cloud_upsert_signals(records: list[dict]) -> int:
 
 
 def cloud_update_fields(signal_id: str, fields: dict) -> bool:
-    """更新单条信号的部分字段（如盘中触发价/复盘回填评价列）。含枚举/数值校验。"""
+    """更新单条信号的部分字段（如盘中触发价/复盘回填评价列）。含枚举/数值校验。
+
+    2026-09-21 BUG-FIX：若 fields 含 status，先查云库既有状态并应用终态保护，
+    防止已执行/已结算信号被降级回退（与 cloud_upsert_signals 同一规则）。
+    """
     if not cloud_enabled():
         return False
     _validate_row(fields)
     allowed = {c: v for c, v in fields.items() if c in _ALL_COLUMNS}
     if not allowed:
         return False
+    # 终态保护：status 变更需先取既有状态
+    if "status" in allowed:
+        try:
+            rows = cloud_db.select(
+                "signal_tracking",
+                columns="signal_id,status",
+                filters=[("signal_id", "eq", signal_id)],
+                limit=1,
+            )
+        except Exception:
+            rows = []
+        if rows:
+            cur = rows[0].get("status")
+            new = allowed["status"]
+            if cur and new and _STATUS_FINALITY.get(cur, 0) >= _STATUS_FINALITY.get(new, 0):
+                allowed["status"] = cur
     allowed["updated_at"] = date.today().isoformat()
     try:
         rows = cloud_db.update(
@@ -201,6 +276,150 @@ def local_load_signals() -> list[dict]:
         data = json.loads(LOCAL_TRACKING.read_text(encoding="utf-8"))
         return data.get("signals", [])
     except (json.JSONDecodeError, OSError):
+        return []
+
+
+# ── 信号触发记录（2026-09-21 新增：盘中触发记录明细落库）────────────
+# 表 signal_trigger_records：一行 = 一次信号触发事件，signal_id 关联 signal_tracking。
+# 由盘中检查 §5.2 写入，Dashboard「每日信号」页点击信号展开展示。
+
+_TRIGGER_RECORD_COLUMNS = [
+    "signal_id", "trigger_date", "trigger_time", "priority", "ticker", "name",
+    "action_type", "condition", "status", "suggest", "result",
+]
+
+
+def to_trigger_row(rec: dict) -> dict:
+    """触发记录 dict → 云表行（跳过 None 列，upsert 互补不覆盖）。"""
+    row = {}
+    for c in _TRIGGER_RECORD_COLUMNS:
+        val = rec.get(c)
+        if val is not None:
+            row[c] = val
+    if not row.get("signal_id") or not row.get("trigger_time"):
+        return {}
+    row.setdefault("created_at", date.today().isoformat())
+    row["updated_at"] = date.today().isoformat()
+    return row
+
+
+def cloud_upsert_trigger_records(records: list[dict]) -> int:
+    """把盘中生成的信号触发记录 upsert 到云库 signal_trigger_records 表。
+
+    幂等键：signal_id + trigger_time（同信号同触发时间只一条，同检查点重跑不重复）。
+    返回成功条数；云库不可用/异常返回 0（不抛错，调用方降级记录日志）。
+    """
+    if not records:
+        return 0
+    if not cloud_enabled():
+        return 0
+    rows = [to_trigger_row(r) for r in records]
+    rows = [r for r in rows if r]
+    if not rows:
+        return 0
+    try:
+        return cloud_db.upsert_many(
+            "signal_trigger_records", rows, on_conflict="signal_id,trigger_time"
+        )
+    except Exception:
+        return 0
+
+
+def cloud_load_trigger_records(signal_id: str | None = None,
+                               trigger_date: str | None = None,
+                               limit: int = 100) -> list[dict]:
+    """读云库 signal_trigger_records（可按 signal_id / 触发日期过滤，时间倒序）。
+
+    云库不可用返回 []（不抛错）。
+    """
+    if not cloud_enabled():
+        return []
+    filters = []
+    if signal_id:
+        filters.append(("signal_id", "eq", signal_id))
+    if trigger_date:
+        filters.append(("trigger_date", "eq", trigger_date))
+    try:
+        return cloud_db.select(
+            "signal_trigger_records",
+            filters=filters,
+            order="trigger_date.desc,trigger_time.desc",
+            limit=limit,
+        )
+    except Exception:
+        return []
+
+
+# ── 盘中检查记录（2026-09-24 新增：每次盘中检查对每条信号的检查结果落库）────────
+# 表 signal_check_records：一行 = 一条信号 × 一个检查点（check_time）。
+# 与 signal_trigger_records 的区别：触发记录只记"已触发"事件；本表记**每次检查**的
+# 完整结果（现价 vs 交易价、触发判定、状态流转、检查摘要），供 Dashboard「今日信号」
+# 页点击信号行展开查看盘中检查轨迹。由盘中检查 prompt 写入（§5.2b）。
+
+_CHECK_RECORD_COLUMNS = [
+    "signal_id", "check_date", "check_time", "check_point", "ticker", "name",
+    "price", "trade_price", "condition_met", "status_before", "status_after", "note",
+]
+
+
+def to_check_row(rec: dict) -> dict:
+    """检查记录 dict → 云表行（跳过 None 列，upsert 互补不覆盖）。"""
+    row = {}
+    for c in _CHECK_RECORD_COLUMNS:
+        val = rec.get(c)
+        if val is not None:
+            row[c] = val
+    if not row.get("signal_id") or not row.get("check_time"):
+        return {}
+    row.setdefault("created_at", date.today().isoformat())
+    row["updated_at"] = date.today().isoformat()
+    return row
+
+
+def cloud_upsert_check_records(records: list[dict]) -> int:
+    """把盘中每次检查的记录 upsert 到云库 signal_check_records 表。
+
+    幂等键：signal_id + check_date + check_time（同信号同检查点只一条，同检查点重跑不重复）。
+    返回成功条数；云库不可用/异常返回 0（不抛错，调用方降级记录日志）。
+    """
+    if not records:
+        return 0
+    if not cloud_enabled():
+        return 0
+    rows = [to_check_row(r) for r in records]
+    rows = [r for r in rows if r]
+    if not rows:
+        return 0
+    try:
+        return cloud_db.upsert_many(
+            "signal_check_records", rows, on_conflict="signal_id,check_date,check_time"
+        )
+    except Exception:
+        return 0
+
+
+def cloud_load_check_records(signal_id: str | None = None,
+                             check_date: str | None = None,
+                             limit: int = 200) -> list[dict]:
+    """读云库 signal_check_records（可按 signal_id / 检查日期过滤，时间倒序）。
+
+    云库不可用返回 []（不抛错）。
+    """
+    if not cloud_enabled():
+        return []
+    filters = []
+    if signal_id:
+        filters.append(("signal_id", "eq", signal_id))
+    if check_date:
+        filters.append(("check_date", "eq", check_date))
+    try:
+        return cloud_db.select(
+            "signal_check_records",
+            filters=filters,
+            order="check_date.desc,check_time.desc",
+            limit=limit,
+        )
+    except Exception:
         return []
 
 

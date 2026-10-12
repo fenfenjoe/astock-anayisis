@@ -151,6 +151,8 @@ def render_req_markdown(fields: dict) -> str:
 
     必填建议字段: id / title / created_at / priority / scope / status /
     description / expected_result / constraints
+    进化契约字段（P2）: metric_ref（关联指标）/ baseline（基线值）/
+    expected_improve（预期改善）/ observation_weeks（观察期，缺省降级 N/A）
     """
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
     f = {
@@ -163,6 +165,10 @@ def render_req_markdown(fields: dict) -> str:
         'description': fields.get('description', ''),
         'expected_result': fields.get('expected_result', ''),
         'constraints': fields.get('constraints', ''),
+        'metric_ref': fields.get('metric_ref', 'N/A'),
+        'baseline': fields.get('baseline', 'N/A'),
+        'expected_improve': fields.get('expected_improve', 'N/A'),
+        'observation_weeks': fields.get('observation_weeks', 'N/A'),
     }
     lines = [
         f'# {f["id"]}: {f["title"]}',
@@ -171,6 +177,13 @@ def render_req_markdown(fields: dict) -> str:
         f'- **优先级**: {f["priority"]}',
         f'- **影响范围**: {f["scope"]}',
         f'- **状态**: {f["status"]}',
+        '',
+        '## 进化契约（P2）',
+        '',
+        f'- **关联指标**: {f["metric_ref"]}',
+        f'- **基线值**: {f["baseline"]}',
+        f'- **预期改善**: {f["expected_improve"]}',
+        f'- **观察期**: {f["observation_weeks"]} 周',
         '',
         '## 开发流程（强制）',
         '',

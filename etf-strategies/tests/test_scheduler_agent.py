@@ -351,6 +351,51 @@ def test_was_stopped_flag_lifecycle(monkeypatch):
     assert "task_y" not in sa._running_tasks
 
 
+# ═════════════════════════════════════════════════════════════════
+# BUG-FIX(2026-09-21): current_task 泄漏 subprocess proc 对象
+# → /api/agent/status 500 ('_thread.lock' object is not iterable)
+# ═════════════════════════════════════════════════════════════════
+
+def test_current_task_strips_proc_field(monkeypatch):
+    """任务运行中（_running_tasks 条目含 proc=Popen）→ current_task() 返回的
+    dict 不含 proc，且可被 json.dumps 序列化（FastAPI 响应不再 500）。"""
+    import json
+
+    class FakeProc:
+        def __init__(self):
+            self._lock = __import__("threading").Lock()
+        pid = 999
+
+    with sa._running_lock:
+        sa._running_tasks.clear()
+        sa._running_tasks["task_x"] = {
+            "task_id": "task_x", "name": "X", "started_at": "10:00", "proc": FakeProc(),
+        }
+    try:
+        task = sa.current_task()
+        assert task is not None
+        assert task["task_id"] == "task_x"
+        assert "proc" not in task          # proc 不得泄漏到响应
+        assert list(task) == ["task_id", "name", "started_at"]
+        json.dumps(task)                   # 必须可序列化
+    finally:
+        with sa._running_lock:
+            sa._running_tasks.pop("task_x", None)
+
+
+def test_current_task_without_proc_unchanged(monkeypatch):
+    """无 proc 的条目（空闲态/旧数据）行为不变——只返回 task_id/name/started_at。"""
+    with sa._running_lock:
+        sa._running_tasks.clear()
+        sa._running_tasks["task_x"] = {"task_id": "task_x", "name": "X", "started_at": "10:00"}
+    try:
+        task = sa.current_task()
+        assert task == {"task_id": "task_x", "name": "X", "started_at": "10:00"}
+    finally:
+        with sa._running_lock:
+            sa._running_tasks.pop("task_x", None)
+
+
 def test_run_dsh_once_stop_flag_yields_failed(monkeypatch):
     """停止标志已设时，即便子进程退出码为 0，也返回 failed（防止误报成功）。"""
     import subprocess

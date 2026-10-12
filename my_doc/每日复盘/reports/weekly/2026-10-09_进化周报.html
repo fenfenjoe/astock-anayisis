@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>进化周报 · 2026-10-09</title>
+<style>
+.rp-report {
+  --rp-bg: #0e1117; --rp-surface: #161b22; --rp-border: #2a3140;
+  --rp-text: #edf2f7; --rp-text-2: #a8b3c4; --rp-text-3: #6b7686;
+  --rp-blue: #5ea2f7; --rp-cyan: #6fd3e8; --rp-green: #4cd98b;
+  --rp-red: #f2655c; --rp-amber: #f2b544; --rp-purple: #b48ae0;
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  font-size: 14px; line-height: 1.6; color: var(--rp-text);
+  max-width: 1000px; margin: 0 auto; padding: 20px; background: var(--rp-bg);
+}
+.rp-hero { border-bottom: 1px solid var(--rp-border); padding-bottom: 14px; margin-bottom: 18px; }
+.rp-hero-title { font-size: 24px; font-weight: 800; letter-spacing: 0.5px; }
+.rp-hero-meta { color: var(--rp-text-2); font-size: 12px; margin-top: 6px; }
+.rp-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 16px 0 24px; }
+.rp-kpi-card { background: var(--rp-surface); border: 1px solid var(--rp-border); border-left: 4px solid var(--rp-blue); border-radius: 10px; padding: 12px 14px; }
+.rp-kpi-card[data-tone="up"] { border-left-color: var(--rp-green); }
+.rp-kpi-card[data-tone="down"] { border-left-color: var(--rp-red); }
+.rp-kpi-card[data-tone="warn"] { border-left-color: var(--rp-amber); }
+.rp-kpi-label { font-size: 12px; color: var(--rp-text-3); letter-spacing: 1px; }
+.rp-kpi-value { font-size: 20px; font-weight: 700; margin: 4px 0 2px; }
+.rp-kpi-sub { font-size: 12px; color: var(--rp-text-2); }
+.rp-section-title { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; margin: 28px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--rp-border); }
+.rp-section-num { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: var(--rp-blue); color: #0e1117; font-size: 13px; font-weight: 800; }
+.rp-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.rp-badge.up { background: rgba(76, 217, 139, .15); color: var(--rp-green); border: 1px solid rgba(76,217,139,.4); }
+.rp-badge.warn { background: rgba(242, 181, 68, .15); color: var(--rp-amber); border: 1px solid rgba(242,181,68,.4); }
+.rp-badge.down { background: rgba(242, 101, 92, .15); color: var(--rp-red); border: 1px solid rgba(242,101,92,.4); }
+.rp-badge.info { background: rgba(94, 162, 247, .15); color: var(--rp-blue); border: 1px solid rgba(94,162,247,.4); }
+.rp-callout { border: 1px solid var(--rp-border); border-left: 5px solid var(--rp-blue); background: var(--rp-surface); border-radius: 8px; padding: 12px 16px; margin: 10px 0; }
+.rp-callout[data-tone="green"] { border-left-color: var(--rp-green); }
+.rp-callout[data-tone="red"] { border-left-color: var(--rp-red); }
+.rp-callout[data-tone="amber"] { border-left-color: var(--rp-amber); }
+.rp-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+.rp-table th { background: var(--rp-surface); color: var(--rp-text-2); text-align: left; padding: 8px 10px; border: 1px solid var(--rp-border); font-weight: 600; }
+.rp-table td { padding: 8px 10px; border: 1px solid var(--rp-border); }
+.rp-table tr:hover td { background: rgba(94,162,247,.06); }
+.rp-row-up td:first-child { border-left: 3px solid var(--rp-green); }
+.rp-row-warn td:first-child { border-left: 3px solid var(--rp-amber); }
+.rp-row-down td:first-child { border-left: 3px solid var(--rp-red); }
+.rp-tone-green { color: var(--rp-green); }
+.rp-tone-red { color: var(--rp-red); }
+.rp-tone-amber { color: var(--rp-amber); }
+.rp-tone-muted { color: var(--rp-text-3); }
+.rp-summary { background: var(--rp-surface); border: 1px solid var(--rp-border); border-radius: 8px; padding: 10px 14px; margin: 8px 0; font-size: 13px; color: var(--rp-text-2); }
+</style>
+</head>
+<body>
+<div class="rp-report">
+  <header class="rp-hero">
+    <div class="rp-hero-title">🧬 进化周报</div>
+    <div class="rp-hero-meta">生成时间：2026-10-09（周五）｜ 自进化框架周度全景（结算 → 差距 → REQ → 验证 → 负反馈）</div>
+  </header>
+
+  <section class="rp-kpi">
+    <div class="rp-kpi-card" data-tone="up">
+      <div class="rp-kpi-label">目标达标</div>
+      <div class="rp-kpi-value rp-tone-green">1 / 4</div>
+      <div class="rp-kpi-sub">G-B 报告质量总分达标（17.0≥16.0）</div>
+    </div>
+    <div class="rp-kpi-card" data-tone="down">
+      <div class="rp-kpi-label">目标未达标</div>
+      <div class="rp-kpi-value rp-tone-red">3 / 4</div>
+      <div class="rp-kpi-sub">G-A / G-A2 / G-A3 仍为 shortfall</div>
+    </div>
+    <div class="rp-kpi-card" data-tone="warn">
+      <div class="rp-kpi-label">REQ 总数 / 进行中</div>
+      <div class="rp-kpi-value rp-tone-amber">10 / 8</div>
+      <div class="rp-kpi-sub">OPEN 7 · IMPLEMENTED 1 · CLOSED 2</div>
+    </div>
+    <div class="rp-kpi-card" data-tone="up">
+      <div class="rp-kpi-label">负反馈 halt</div>
+      <div class="rp-kpi-value rp-tone-green">0</div>
+      <div class="rp-kpi-sub">本周验证 2 项均 improved</div>
+    </div>
+  </section>
+
+  <main>
+
+    <section>
+      <div class="rp-section-title"><span class="rp-section-num">01</span> 本周指标概览</div>
+      <table class="rp-table">
+        <thead><tr><th>周</th><th>信号 T+3 命中率</th><th>信号触发率</th></tr></thead>
+        <tbody>
+          <tr class="rp-row-down"><td>2026-W38</td><td class="rp-tone-red">0.0</td><td>50.0</td></tr>
+        </tbody>
+      </table>
+      <div class="rp-summary">报告质量分（近 2 期）：<span class="rp-tone-green">15 → 19</span>（+4，质量持续改善，已越 16 分目标线）</div>
+    </section>
+
+    <section>
+      <div class="rp-section-title"><span class="rp-section-num">02</span> 目标达成进度</div>
+      <table class="rp-table">
+        <thead><tr><th>目标</th><th>当前</th><th>目标值</th><th>缺口</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr class="rp-row-down"><td>信号T+3命中率</td><td>0.0</td><td>45.0</td><td class="rp-tone-red">45.0</td><td><span class="rp-badge down">shortfall</span></td></tr>
+          <tr class="rp-row-down"><td>早盘信号触发率</td><td>0.0</td><td>40.0</td><td class="rp-tone-red">40.0</td><td><span class="rp-badge down">shortfall</span></td></tr>
+          <tr class="rp-row-warn"><td>P0信号执行数</td><td>0.0</td><td>3.0</td><td class="rp-tone-amber">3.0</td><td><span class="rp-badge warn">shortfall</span></td></tr>
+          <tr class="rp-row-up"><td>报告质量总分</td><td>17.0</td><td>16.0</td><td class="rp-tone-green">-1.0</td><td><span class="rp-badge up">met</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <div class="rp-section-title"><span class="rp-section-num">03</span> REQ 进展</div>
+      <div class="rp-summary">REQ 总数（open/ 扫描）：<b>10</b> ｜ <span class="rp-tone-green">CLOSED 2</span> · <span class="rp-tone-amber">IMPLEMENTED 1</span> · <span class="rp-tone-red">OPEN 7</span></div>
+      <div class="rp-summary">本周（10/08-10/09）：REQ-010、REQ-011 验证后 CLOSED；REQ-013（跨实例运行锁）今日实施完成 IMPLEMENTED。</div>
+    </section>
+
+    <section>
+      <div class="rp-section-title"><span class="rp-section-num">04</span> 对照验证结果</div>
+      <table class="rp-table">
+        <thead><tr><th>REQ</th><th>判定</th><th>建议</th></tr></thead>
+        <tbody>
+          <tr class="rp-row-up"><td>REQ-010</td><td><span class="rp-badge up">improved</span></td><td>close</td></tr>
+          <tr class="rp-row-up"><td>REQ-011</td><td><span class="rp-badge up">improved</span></td><td>close</td></tr>
+        </tbody>
+      </table>
+      <div class="rp-summary">说明：REQ-010（P0 显式放弃交互）与 REQ-011（条件单执行通道）于 10-08 经测试 + 复盘确认验证为 improved → CLOSED。REQ-013 今日刚实施（无观察期定义），尚未进入到期验证。</div>
+    </section>
+
+    <section>
+      <div class="rp-section-title"><span class="rp-section-num">05</span> 负反馈状态</div>
+      <table class="rp-table">
+        <thead><tr><th>REQ</th><th>连续无改善轮次</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr class="rp-row-up"><td>REQ-010</td><td>0</td><td><span class="rp-badge up">🟢 normal</span></td></tr>
+          <tr class="rp-row-up"><td>REQ-011</td><td>0</td><td><span class="rp-badge up">🟢 normal</span></td></tr>
+        </tbody>
+      </table>
+      <div class="rp-summary">本周无 halt（红色警示）项 —— 两项验证 REQ 均无改善障碍，负反馈健康。</div>
+    </section>
+
+    <section>
+      <div class="rp-section-title"><span class="rp-section-num">06</span> 下周建议</div>
+      <div class="rp-callout" data-tone="amber"><b>[req]</b> 目标「信号T+3命中率」缺口 45.0（当前 0.0），建议创建定向 REQ —— 优先打通 P0 执行机制（REQ-010/011 已闭环，等待执行落地）。</div>
+      <div class="rp-callout" data-tone="amber"><b>[req]</b> 目标「早盘信号触发率」缺口 40.0（当前 0.0，连续两周 0 触发），建议创建定向 REQ —— 早盘信号生成逻辑可量化化。</div>
+    </section>
+
+  </main>
+</div>
+</body>
+</html>

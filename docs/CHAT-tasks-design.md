@@ -1,6 +1,6 @@
 # CHAT.md 任务执行设计方案（修订版）
 
-> 设计时间：2026-09-11 | 修订：2026-09-14（对照 CHAT.md 需求与代码现状复核）| 版本：v1.2 | 状态：**已复核**
+> 设计时间：2026-09-11 | 修订：2026-09-14（对照 CHAT.md 需求与代码现状复核）| 版本：v1.3 | 状态：**已复核**
 
 > 修订说明：v1.0 由前序 Agent 编写。本次修订基于对 `CHAT.md` 的逐条复核与代码实测，修正以下问题：
 > 1. 任务1：`scheduler_state.json` 中三个任务的幂等键不是"3 条"而是**上百条**（每小时一条，实测 126 条）；删除后剩余任务数应为 **18**（原文档误写 16）。
@@ -282,3 +282,41 @@ SchedulerEngine._tick()  (L969)
 | 18 | signal_quality_weekly | 周三 16:30 | 每周 |
 
 > 修正：v1.0 附录称"保留 16 个任务"有误（按 21−3=18 应为 18）；且附录当时列出的行数(18)与实际(18)一致，仅文字"16"错误。
+
+---
+
+## 六、2026-09-21 Dashboard 续优化（v1.3 追加）
+
+> 两个改动：① 修复盘中检查覆盖已执行信号状态；② 信号触发记录落库 + 每日信号页点击展开。
+
+### 6.1 终态状态保护（BUG-FIX）
+
+**背景事故**（2026-09-21）：通信ETF/创新药ETF 两条信号用户已在 Dashboard「一键执行」（云库 `status=executed`），盘中检查 §5.3 用 `parse_signal_rows_all` 重新解析 markdown 后整体 `cloud_upsert_signals`，把 executed 覆盖成 expired/triggered。
+
+**修复（双保险）**：
+1. **数据层硬保护**（`lib/signal_tracking_cloud.py`）：
+   - 新增终态等级 `_STATUS_FINALITY`：open(0) < triggered(1) < expired(2) < executed(3)=partial_executed(3) < settled(4)；
+   - `cloud_upsert_signals` upsert 前先查云库既有状态（`_protect_existing_terminal`），若既有终态等级 ≥ 新状态等级 → 保留既有状态；
+   - `cloud_update_fields` 同样保护（fields 含 status 时先取既有状态）。
+   - 升级流转（triggered→executed、executed→settled）不受影响。
+2. **prompt 指引**（`auto_intraday_check.md`）：
+   - §3.0 新增"已执行信号保护"：验证前先加载云库当日信号状态（`cloud_load_signals`），终态信号（executed/partial_executed/settled）跳过——不验证、不改 markdown 状态列、不追加触发记录、不写云库降级；
+   - §5.1/5.2/特别说明 同步标注终态信号不可改。
+
+### 6.2 信号触发记录落库 + 前端展开
+
+**需求**：盘中生成的"信号触发记录"落库并通过 signal_id 关联；每日信号页点击某条信号，在数据下方展开关联触发记录表格。
+
+**实现**：
+1. **新云表 `signal_trigger_records`**（`scripts/cloud_schema_signal_trigger_records.sql` + 并入 `cloud_schema_pg.sql`）：
+   - 列：signal_id / trigger_date / trigger_time / priority / ticker / name / action_type / condition / status / suggest / result / created_at / updated_at；
+   - 幂等键：`UNIQUE(signal_id, trigger_time)`（同信号同触发时间只一条，同检查点重跑不重复）。
+2. **lib**（`lib/signal_tracking_cloud.py`）：
+   - `to_trigger_row(rec)` / `cloud_upsert_trigger_records(records)`（on_conflict=signal_id,trigger_time）/ `cloud_load_trigger_records(signal_id, trigger_date)`；
+3. **盘中 prompt**（`auto_intraday_check.md` §5.2）：触发记录追加 markdown 行的同时，调用 `cloud_upsert_trigger_records` 落库（终态信号不追加）。
+4. **API**（`api_daily.py`）：`GET /api/signal-trigger-records?signal_id=&date=&limit=` → `{items}`。
+5. **前端**（`daily.js` + `dashboard.css`）：信号行「信号ID」单元格可点击展开（▸/▾），下方插入 colspan 明细行，内嵌触发记录表格（触发时间|优先级|标的|操作类型|触发条件摘要|状态|建议操作|用户操作），带缓存（视图进入时清空）。
+
+**DDL 已应用到 live pg 库**（pgdirect 后端，GRANT 仅 Supabase 生效，pg 端不需 GRANT）。
+
+---

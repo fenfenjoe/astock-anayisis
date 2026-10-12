@@ -45,12 +45,17 @@ def test_get_kline_caches(tmp_path, monkeypatch):
 
 
 def test_get_kline_raises_on_empty(tmp_path, monkeypatch):
-    """东财返回空数据时明确报错（不静默编造）"""
+    """东财+腾讯均返回空数据且无缓存时明确报错（不静默编造）"""
     cache_dir = tmp_path / "cache"
     monkeypatch.setattr("backtest.data.CACHE_DIR", cache_dir)
     monkeypatch.setattr("backtest.data.eastmoney_kline",
                         lambda code, **kw: [])
-    with pytest.raises(RuntimeError, match="东财返回空数据"):
+    class _EmptyTencent:
+        def tencent_daily_kline(self, code, start=None, end=None):
+            import pandas as pd
+            return pd.DataFrame(columns=["open", "close", "high", "low", "vol"])
+    monkeypatch.setattr("backtest.data.tencent_client", _EmptyTencent())
+    with pytest.raises(RuntimeError, match="所有行情源均不可用"):
         get_kline("510300", start="2026-01-01", end="2026-06-30", refresh=True)
 
 
@@ -105,15 +110,113 @@ def test_cache_fallback(tmp_path, monkeypatch):
     monkeypatch.setattr("backtest.data.eastmoney_kline",
                         lambda code, **kw: fake_rows)
     get_kline("510300", start="2026-01-01", end="2026-06-30", refresh=True)
-    # 第二步：API 抛异常 → 应降级读缓存，而非抛错
+    # 第二步：东财+腾讯均失败 → 应降级读缓存，而非抛错
     def boom(code, **kw):
         raise ConnectionError("API down")
     monkeypatch.setattr("backtest.data.eastmoney_kline", boom)
+    class _BoomTencent:
+        def tencent_daily_kline(self, code, start=None, end=None):
+            raise ConnectionError("tencent down")
+    monkeypatch.setattr("backtest.data.tencent_client", _BoomTencent())
     df = get_kline("510300", start="2026-01-01", end="2026-06-30", refresh=True)
     assert len(df) == 2
     assert (df["close"] > 0).all()
     # 第三步：API 异常 + 无缓存 → 抛 RuntimeError
     empty_dir = tmp_path / "no_cache"
     monkeypatch.setattr("backtest.data.CACHE_DIR", empty_dir)
-    with pytest.raises(RuntimeError, match="东财API请求失败且无本地缓存"):
+    with pytest.raises(RuntimeError, match="所有行情源均不可用"):
         get_kline("510300", start="2026-01-01", end="2026-06-30", refresh=True)
+
+
+# ═══════════════════════════════════════════════════════════════
+# REQ-004：多源容错（东财 → 腾讯 → 缓存）
+# ═══════════════════════════════════════════════════════════════
+
+def _fake_rows():
+    return [
+        {"date": "2026-01-02", "open": 3.50, "close": 3.52, "high": 3.53,
+         "low": 3.49, "vol": 1.0e6, "amount": 3.5e6, "amp": 1.1},
+        {"date": "2026-01-03", "open": 3.52, "close": 3.55, "high": 3.56,
+         "low": 3.51, "vol": 1.2e6, "amount": 4.2e6, "amp": 1.4},
+    ]
+
+
+def _fake_tencent_df():
+    import pandas as pd
+    idx = pd.to_datetime(["2026-01-02", "2026-01-03"])
+    return pd.DataFrame({
+        "open": [3.50, 3.52], "close": [3.52, 3.55],
+        "high": [3.53, 3.56], "low": [3.49, 3.51],
+        "vol": [1.0e6, 1.2e6],
+    }, index=idx)
+
+
+def test_get_kline_falls_back_to_tencent(tmp_path, monkeypatch):
+    """REQ-004: 东财失败 → 自动切腾讯日K，返回数据且打 WARN"""
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setattr("backtest.data.CACHE_DIR", cache_dir)
+    monkeypatch.setattr("backtest.data.eastmoney_kline",
+                        lambda code, **kw: (_ for _ in ()).throw(ConnectionError("eastmoney down")))
+    calls = []
+    monkeypatch.setattr("backtest.data.tencent_client",
+                        MagicMockWithDaily(calls))
+    df = get_kline("510300", start="2026-01-01", end="2026-06-30", refresh=True)
+    assert len(df) == 2
+    assert (df["close"] > 0).all()
+    assert calls  # 腾讯被调用
+
+
+class MagicMockWithDaily:
+    """mock tencent_client 模块：仅提供 tencent_daily_kline，其余抛 AttributeError"""
+    def __init__(self, calls):
+        self._calls = calls
+    def tencent_daily_kline(self, code, start=None, end=None):
+        self._calls.append((code, start, end))
+        return _fake_tencent_df()
+
+
+def test_get_kline_tencent_also_fails_uses_cache(tmp_path, monkeypatch):
+    """REQ-004: 东财失败 + 腾讯失败 → 降级读本地缓存"""
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setattr("backtest.data.CACHE_DIR", cache_dir)
+    # 第一步：正常生成缓存
+    monkeypatch.setattr("backtest.data.eastmoney_kline", lambda code, **kw: _fake_rows())
+    get_kline("510300", start="2026-01-01", end="2026-06-30", refresh=True)
+    # 第二步：东财失败
+    monkeypatch.setattr("backtest.data.eastmoney_kline",
+                        lambda code, **kw: (_ for _ in ()).throw(ConnectionError("down")))
+    # 腾讯也失败
+    class _FailTencent:
+        def tencent_daily_kline(self, code, start=None, end=None):
+            raise ConnectionError("tencent down")
+    monkeypatch.setattr("backtest.data.tencent_client", _FailTencent())
+    df = get_kline("510300", start="2026-01-01", end="2026-06-30", refresh=True)
+    assert len(df) == 2
+    assert (df["close"] > 0).all()
+
+
+def test_get_kline_all_sources_fail_no_cache(tmp_path, monkeypatch):
+    """REQ-004: 东财+腾讯+缓存全失败 → 抛 RuntimeError"""
+    empty_dir = tmp_path / "no_cache"
+    monkeypatch.setattr("backtest.data.CACHE_DIR", empty_dir)
+    monkeypatch.setattr("backtest.data.eastmoney_kline",
+                        lambda code, **kw: (_ for _ in ()).throw(ConnectionError("down")))
+    class _FailTencent:
+        def tencent_daily_kline(self, code, start=None, end=None):
+            raise ConnectionError("tencent down")
+    monkeypatch.setattr("backtest.data.tencent_client", _FailTencent())
+    with pytest.raises(RuntimeError, match="所有行情源均不可用"):
+        get_kline("510300", start="2026-01-01", end="2026-06-30", refresh=True)
+
+
+def test_get_kline_tencent_when_eastmoney_empty(tmp_path, monkeypatch):
+    """REQ-004: 东财返回空数据 → 切腾讯"""
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setattr("backtest.data.CACHE_DIR", cache_dir)
+    monkeypatch.setattr("backtest.data.eastmoney_kline", lambda code, **kw: [])
+    calls = []
+    monkeypatch.setattr("backtest.data.tencent_client", MagicMockWithDaily(calls))
+    df = get_kline("510300", start="2026-01-01", end="2026-06-30", refresh=True)
+    assert len(df) == 2
+    assert calls
+

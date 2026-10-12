@@ -5,6 +5,16 @@
 - **影响范围**: 早盘分析 | 盘中检查 | 收盘复盘 | 周度回顾 | 经验健康 | 其他
 - **状态**: OPEN
 
+## 进化契约（P2，gap_analysis 生成定向 REQ 时必填；普通 REQ 可留 N/A）
+
+> 对照验证依据：IMPLEMENTED 后进入观察期，观察期结束对比"实施前 vs 实施后"指标均值。
+> 改善 → CLOSED；无改善 → 标记"无效进化" + 回滚建议（人工确认）。
+
+- **关联指标**: {metric_id}: {field}（如 G-A: dims.overall.target_hit_rate；无则 N/A）
+- **基线值**: {before}（实施前 N 周均值；无则 N/A）
+- **预期改善**: {target}（目标值，通常=goals.md 目标；无则 N/A）
+- **观察期**: {4} 周（IMPLEMENTED 后等待周数再对比）
+
 ## 开发流程（强制）
 
 > 本需求实施**必须走 superpowers 流程**。不要在生成需求后直接裸写代码。

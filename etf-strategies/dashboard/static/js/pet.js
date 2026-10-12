@@ -115,8 +115,8 @@
     moods: null,             // 表情分类结果 { happy, surprise }
     greeted: false,          // 本会话已打招呼
     miniAuto: false,         // 因窄屏自动收起
-    sessionHidden: false,    // 用户点 × 隐藏（本会话）
     ro: null,                // 画布容器 ResizeObserver（尺寸沉降后重新布局）
+    fitBounds: null,         // 首次成功布局时缓存的模型视觉包围盒 {w,h}（免疫召唤后 bounds 异常）
   };
 
   function isCollapsed() {
@@ -431,7 +431,10 @@
 
   function layoutModel() {
     var m = state.model;
-    if (!m || !state.app) return;
+    if (!m || !state.app) return false;
+    // 收起=缩小（transform scale），不改变画布布局尺寸 → 收起态跳过重算无副作用
+    // （布局基准已缓存于首次成功布局；展开时 setCollapsed 会补一帧 layoutModel+forceRender）。
+    if (isCollapsed()) return false;
     try {
       var w = el.canvas ? el.canvas.clientWidth || CFG.stageW : CFG.stageW;
       var h = el.canvas ? el.canvas.clientHeight || CFG.stageH : CFG.stageH;
@@ -440,23 +443,34 @@
       // （v6.5.10），与当前 scale 自反馈 → scale' = K/scale 每次调用都在「适配缩放」与
       // 「原生尺寸 1.0」间翻转；隐藏(display:none)→ResizeObserver 重布局后奇偶错位，
       // 模型停在原生尺寸 → 头顶飞出画布被 overflow:hidden 裁掉（"看不到头"，必现）。
-      // getLocalBounds 对 Live2DModel 恒返回 internalModel 的固定画布尺寸 → 幂等稳定。
-      var lb = m.getLocalBounds();
-      var bw = lb.width, bh = lb.height;
-      if (!bh || !isFinite(bh) || bh <= 0) return;
-      if (!bw || !isFinite(bw) || bw <= 0) return;
+      // 2026-09-21 补充（第 2 轮）：真实 GPU 浏览器下 display:none 期间 Cubism 更新
+      // 暂停，召唤后 getLocalBounds 可能返回【非 0 但异常】的 bounds（SwiftShader 复现
+      // 不出）→ 仅判空会误以为布局成功 → 模型停在异常尺寸 → 头被裁（用户环境必现）。
+      // 防御：首次成功布局后缓存正确 bounds（state.fitBounds），后续布局优先用缓存值，
+      // 彻底免疫召唤后 bounds 异常；仅当无缓存时才实时取 getLocalBounds 并写缓存。
+      var bw = 0, bh = 0;
+      if (state.fitBounds && state.fitBounds.w > 0 && state.fitBounds.h > 0) {
+        bw = state.fitBounds.w; bh = state.fitBounds.h;
+      } else {
+        var lb = m.getLocalBounds();
+        bw = lb.width; bh = lb.height;
+        if (!bh || !isFinite(bh) || bh <= 0) return false;
+        if (!bw || !isFinite(bw) || bw <= 0) return false;
+        state.fitBounds = { w: bw, h: bh };
+      }
       // 完整放入画布：顶部对齐（anchor.y=0）+ 高度=画布高×fitFactor，
       // 宽度也做适配（取两者较小者）—— 头顶/耳朵永远在画布内，不再被裁。
       var scale = Math.min(
         (w * 0.9) / bw,                    // 横向留边，防模型过宽被横裁
         (h * (CFG.fitFactor || 0.96)) / bh // 纵向 fitFactor<1，顶部留白，不裁头
       );
-      if (!isFinite(scale) || scale <= 0) return;
+      if (!isFinite(scale) || scale <= 0) return false;
       m.scale.set(scale, scale);
       m.anchor.set(0.5, 0);                 // 顶部居中锚点
       m.position.set(w / 2, 0);             // 顶部对齐画布顶
       if (w > 0 && h > 0) state.app.renderer.resize(w, h);
-    } catch (e) { /* ignore */ }
+      return true;
+    } catch (e) { return false; }
   }
 
   function resizeRenderer() {
@@ -694,8 +708,7 @@
     }
     el.pet.addEventListener('pointerdown', onDown);
 
-    $('xm-pet-btn-min').addEventListener('click', function () { minimize(); });
-    $('xm-pet-btn-hide').addEventListener('click', function () { hidePet(); });
+    $('xm-pet-btn-min').addEventListener('click', function () { toggleCollapse(); });
     el.mini.addEventListener('click', function () { summon(); });
     // 状态手动切换：随机 / 阅读 / 摸鱼（走 /api/agent/state，落库后端并记入"做过的事"）
     if (el.modes) {
@@ -707,28 +720,81 @@
     }
   }
 
-  function minimize() {
+  // ── 收起 / 展开 ──
+  // 2026-10-10 改版：收起≠隐藏。收起仅将桌宠缩小（.is-min → transform: scale 0.58，
+  // 锚定右下角），角色仍可见、LIVE2D 渲染循环不中断 → 从根本上消除
+  // "隐藏(display:none)→召唤后头部被裁"的 bug 路径（渲染/布局状态不丢失）。
+  // 原「隐藏 ×」按钮删除：与收起重复，且 display:none 是头部 bug 的诱因。
+  function setCollapsed(on) {
     if (!el.pet) return;
-    // 不覆盖 sessionHidden：hidePet() 置 true 后不得被 minimize() 重置为 false，
-    // 否则页面 remount（auth 刷新等）时 applyVisibility 会把桌宠重新放出来
-    // （2026-09-15 BUG-FIX：原 minimize 无脑置 false，掩盖"用户点 × 隐藏"意图）。
     hideBubble();
-    el.pet.classList.add('is-min');
-    el.mini.classList.add('show');
+    if (on) {
+      el.pet.classList.add('is-min');
+    } else {
+      el.pet.classList.remove('is-min');
+    }
+    paintBtnLabel();
+    // 缩小/放大不改变画布尺寸（transform 缩放），布局无需重建；
+    // 但补一帧重绘确保 WebGL viewport 与 CSS 一致。
+    if (state.model && state.renderer === 'ready') {
+      requestAnimationFrame(function () { layoutModel(); forceRender(); });
+    }
   }
-  function hidePet() {
-    state.sessionHidden = true;
-    minimize();
+  function isCollapsed() {
+    return !el.pet || el.pet.classList.contains('is-min');
   }
+  function toggleCollapse() { setCollapsed(!isCollapsed()); }
+  // 从迷你点召回（移动端窄屏自动收起后，点 🌾 恢复）；桌面"收起"用按钮展开即可
   function summon() {
-    state.sessionHidden = false;
     state.miniAuto = false;
-    if (el.pet) el.pet.classList.remove('is-min');
+    if (el.pet) {
+      el.pet.classList.remove('is-min');
+      el.pet.style.display = '';
+    }
     if (el.mini) el.mini.classList.remove('show');
+    paintBtnLabel();
+    if (state.model && state.renderer === 'ready') {
+      requestAnimationFrame(function () { layoutModel(); forceRender(); });
+    }
   }
+  // 缩小/放大后补一帧强制重绘（transform 不改变画布尺寸，但确保 WebGL viewport 与 CSS 一致）
+  function forceRender() {
+    if (!state.app) return;
+    try {
+      var cvs = el.canvas && el.canvas.querySelector('canvas');
+      if (cvs && cvs.width > 0 && cvs.height > 0) {
+        state.app.renderer.resize(cvs.width, cvs.height);
+      }
+      try { state.app.start(); } catch (e) { /* ignore */ }
+      state.app.renderer.render(state.app.stage);
+    } catch (e) { /* ignore */ }
+  }
+  function paintBtnLabel() {
+    var b = $('xm-pet-btn-min');
+    if (!b) return;
+    if (isCollapsed()) {
+      b.textContent = '展开';
+      b.title = '恢复小满原始大小';
+      b.setAttribute('aria-label', '展开小满');
+    } else {
+      b.textContent = '收起';
+      b.title = '缩小小满（再次点击恢复）';
+      b.setAttribute('aria-label', '收起小满');
+    }
+  }
+  // 移动端窄屏自动收起：无空间展示 → 显示小圆点召回入口（CSS media query 隐藏桌宠本体）
   function autoCollapse(on) {
-    if (on) { if (!el.pet.classList.contains('is-min')) { state.miniAuto = true; minimize(); } }
-    else if (state.miniAuto) { state.miniAuto = false; summon(); }
+    if (on) {
+      if (!el.pet.classList.contains('is-min')) {
+        state.miniAuto = true;
+        setCollapsed(true);
+      }
+      if (el.mini) el.mini.classList.add('show');
+    } else if (state.miniAuto) {
+      state.miniAuto = false;
+      setCollapsed(false);
+      if (el.mini) el.mini.classList.remove('show');
+    }
   }
 
   // ═══════════ 轮询（唯一状态源）═══════════
@@ -772,8 +838,11 @@
     buildScene();
     bindInteractions();
     applyStoredPos();
-    if (state.sessionHidden) { el.pet.classList.add('is-min'); el.mini.classList.add('show'); }
-    else { el.pet.classList.remove('is-min'); el.mini.classList.remove('show'); }
+    // 收起=缩小（is-min），不隐藏；迷你点仅窄屏 autoCollapse 时用
+    el.pet.style.display = '';
+    el.pet.classList.remove('is-min');
+    if (el.mini) el.mini.classList.remove('show');
+    paintBtnLabel();
     el.pet.setAttribute('aria-hidden', 'false');
     autoCollapse(window.innerWidth < CFG.minWidth);
     tick();                                    // 立即拉一次
@@ -793,7 +862,8 @@
     if (state.ro) { try { state.ro.disconnect(); } catch (e) { /* ignore */ } state.ro = null; }
     window.removeEventListener('resize', onResize);
     if (state.app) { try { state.app.stop(); } catch (e) { /* ignore */ } }    // 暂停渲染循环
-    if (el.pet) { el.pet.classList.add('is-min'); el.pet.setAttribute('aria-hidden', 'true'); }
+    // 卸载（登出）时真正隐藏：用 display:none（与"收起=缩小"的 is-min 语义分离）
+    if (el.pet) { el.pet.style.display = 'none'; el.pet.classList.remove('is-min'); el.pet.setAttribute('aria-hidden', 'true'); }
     if (el.mini) el.mini.classList.remove('show');
     hideBubble();
   }

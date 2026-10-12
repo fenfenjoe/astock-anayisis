@@ -71,7 +71,11 @@ def main():
     out = {}
     for t in tables:
         try:
-            rows = cloud_db.select(t, columns="*", order="id.asc")
+            # 优先按 id 排序；部分表无 id 列（主键为其他列）→ 降级无排序全量读
+            try:
+                rows = cloud_db.select(t, columns="*", order="id.asc")
+            except Exception:
+                rows = cloud_db.select(t, columns="*")
         except Exception as e:
             print(f"  - {t}: 跳过（{e}）")
             continue

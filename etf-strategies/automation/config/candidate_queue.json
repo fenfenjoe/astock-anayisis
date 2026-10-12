@@ -461,8 +461,147 @@
       "yellow_reason": "年化20.74%/回撤-10.13%/回测7.5年/Calmar 2.05均优秀、逻辑非常清晰（趋势质量+市场状态自适应+反转修复），但为机构研报无源码；市场状态识别（强势/震荡/危险）是KB尚无的新机制，有价值但需自研",
       "added": "2026-09-15",
       "last_eval": "2026-09-15"
+    },
+    {
+      "id": "2026-09-22-01",
+      "source": {
+        "platform": "bigquant",
+        "url": "https://bigquant.com/square/ai/926df6df-eb57-0354-80bd-967dd101159e",
+        "author": "BigQuant AI策略广场（更新2026-08-25）",
+        "title": "趋势增强因子ETF策略（年化收益率36.97%）"
+      },
+      "strategy": {
+        "name": "岭回归趋势增强+止盈轮动",
+        "type": "etf_rotation"
+      },
+      "metrics": {
+        "annual_return": 0.3734,
+        "sharpe": 1.23,
+        "max_drawdown": -0.2057,
+        "backtest_years": 5.7
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化37.34%/夏普1.23/回撤-20.57%/回测5.7年(2021-2026)均绿灯且源码可用，但岭回归特征工程（线性+二次+三角函数）逻辑可解释性中等、参数4-5个处于绿灯-黄灯边界；与S4的25日×R²思想部分同源但叠加岭回归趋势增强为差异化扩展",
+      "added": "2026-09-22",
+      "last_eval": "2026-09-22"
+    },
+    {
+      "id": "2026-09-22-02",
+      "source": {
+        "platform": "bigquant",
+        "url": "https://bigquant.com/wiki/doc/ySSnil1iwd",
+        "author": "xiaoshao / qxiao（BigQuant Wiki）",
+        "title": "ETF滚动择时优化策略"
+      },
+      "strategy": {
+        "name": "趋势评分+均值方差优化轮动",
+        "type": "etf_rotation"
+      },
+      "metrics": {
+        "annual_return": 0.2715,
+        "sharpe": 1.41,
+        "max_drawdown": -0.11,
+        "backtest_years": 4.75
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化27.15%/夏普1.41/回撤-11%均绿灯且源码可用，但回测约4.75年(2021初~2025-10)落3-5年黄灯、参数6-8个黄灯；25日×R²与S4/REQ-003部分重叠但叠加经典均值-方差优化(MVO)为权重层差异化，120日协方差需框架支持",
+      "added": "2026-09-22",
+      "last_eval": "2026-09-22"
+    },
+    {
+      "id": "2026-09-22-03",
+      "source": {
+        "platform": "other",
+        "url": "https://junquant.com/",
+        "author": "JunQuant（产品化策略站）",
+        "title": "ETF动量策略（v5.3.2.11，10年回测）"
+      },
+      "strategy": {
+        "name": "全市场ETF动量轮动+单仓集中",
+        "type": "etf_rotation"
+      },
+      "metrics": {
+        "annual_return": 0.4165,
+        "sharpe": 1.468,
+        "max_drawdown": -0.2206,
+        "backtest_years": 10
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "指标极优秀（年化41.65%/夏普1.468/回撤-22.06%/完整10年回测且无负收益年份），但代码未披露（产品化策略站）、核心公式未披露；上轮(09-15)记为数据不足，本轮指标完整升级为黄灯",
+      "added": "2026-09-22",
+      "last_eval": "2026-09-22"
+    },
+    {
+      "id": "2026-09-22-04",
+      "source": {
+        "platform": "other",
+        "url": "https://www.baogaobox.com/insights/260527000027745.html",
+        "author": "西部证券研发中心（研报）",
+        "title": "扩散指标+RRG行业轮动策略（指数化配置系列研究6）"
+      },
+      "strategy": {
+        "name": "扩散指标+RRG行业轮动映射ETF",
+        "type": "industry_rotation"
+      },
+      "metrics": {
+        "annual_return": 0.206,
+        "sharpe": 0.79,
+        "max_drawdown": -0.2982,
+        "backtest_years": 7.3
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化20.60%/回撤-29.82%/回测7.3年均绿灯且逻辑清晰（RRG是KB新机制），但夏普0.79略低于0.8绿灯线、机构研报无源码；行业暴露打分映射到ETF需自研+行业ETF数据扩展",
+      "added": "2026-09-22",
+      "last_eval": "2026-09-22"
+    },
+    {
+      "id": "2026-09-22-05",
+      "source": {
+        "platform": "other",
+        "url": "https://m.sohu.com/a/1003998400_121751103/",
+        "author": "两融小顾问（Ptrade教程）",
+        "title": "Ptrade量化交易教程：ETF组合轮动策略"
+      },
+      "strategy": {
+        "name": "MACD多因子+五档仓位管理轮动",
+        "type": "multi_factor"
+      },
+      "metrics": {
+        "annual_return": null,
+        "sharpe": null,
+        "max_drawdown": -0.0984,
+        "backtest_years": 5.75
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "回测5.75年(2020-2025)绿灯、逻辑清晰（五档仓位管理是KB新机制）、2022年回撤仅-9.84%优秀，但年化/夏普/整体回撤未披露具体数值、教程型代码部分披露",
+      "added": "2026-09-22",
+      "last_eval": "2026-09-22"
+    },
+    {
+      "id": "2026-09-22-06",
+      "source": {
+        "platform": "zhihu",
+        "url": "https://xueqiu.com/3057591219/381811152",
+        "author": "Zorya-Penta（雪球）",
+        "title": "年化63.87% ETF动量策略"
+      },
+      "strategy": {
+        "name": "20日动量+乖离率+溢价率过滤轮动",
+        "type": "etf_rotation"
+      },
+      "metrics": {
+        "annual_return": 0.6387,
+        "sharpe": null,
+        "max_drawdown": -0.2663,
+        "backtest_years": 5
+      },
+      "traffic_light": "yellow",
+      "yellow_reason": "年化63.87%落50%-100%黄灯区间、回撤-26.63%绿灯、回测约5年；溢价率<5%过滤+5%止盈+卖出冷却为KB新机制，但夏普未披露、代码未披露",
+      "added": "2026-09-22",
+      "last_eval": "2026-09-22"
     }
   ],
-  "last_updated": "2026-09-15",
+  "last_updated": "2026-09-22",
+  "note_2026_09_22": "本轮(09-22)新增6个黄灯候选（2026-09-22-01~06）：BigQuant趋势增强因子、BigQuant ETF滚动择时优化(MVO)、JunQuant全市场动量(10年无负收益年份，上轮数据不足升级)、西部证券RRG行业轮动、Ptrade五档仓位、雪球63.87%溢价率过滤。本轮无新增绿灯（REQ-003仍OPEN未实施）、无黄灯升降级；S4年化×R²家族再次命中4处，继续直接跳过。",
   "note_2026_09_15": "09-08 黄灯候选 2026-09-08-09（综合评分+EPO权重，29.8%）与本次绿灯 openhe EPO 疑似同源且 openhe 为最早来源/指标更完整，已并入 REQ-003（绿灯转化），从队列移除避免重复追踪。09-01/09-08 其余候选均保持黄灯无升降级。"
 }

@@ -1246,16 +1246,18 @@ def scheduler_runs_list(task_id: str | None = None, limit: int = 50) -> list[dic
     if USE_CLOUD:
         # BUG-FIX(2026-09-07)：列表只取轻量元数据列，不拉完整 output（可能几千字符，
         # 每刷一次后台页下载 15+ 份 → 慢）。完整 output 由 /scheduler/runs/{id}/log 按需返回。
+        # BUG-FIX(2026-09-22)：排序从 id.desc 改为 run_time.desc —— pgdirect 迁移后
+        # id 序列重置为低值而遗留行保留高 id，id.desc 会把旧运行排最前（页面看似不刷新）。
         cols = "id,task_id,trigger,status,window_key,run_time,duration_sec,completed_at"
         filters = [("task_id", "eq", task_id)] if task_id else None
         return _cd_select("scheduler_runs", columns=cols, filters=filters,
-                          order="id.desc", limit=limit)
+                          order="run_time.desc,id.desc", limit=limit)
     sql = "SELECT id,task_id,trigger,status,window_key,run_time,duration_sec,completed_at FROM scheduler_runs"
     params: list = []
     if task_id:
         sql += " WHERE task_id=?"
         params.append(task_id)
-    sql += " ORDER BY id DESC LIMIT ?"
+    sql += " ORDER BY run_time DESC, id DESC LIMIT ?"
     params.append(limit)
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
@@ -1318,42 +1320,47 @@ def scheduler_window_done(task_id: str, window_key: str,
 def scheduler_latest(task_id: str) -> dict | None:
     if USE_CLOUD:
         # BUG-FIX(2026-09-07)：latest 供任务表"最近运行"状态展示，同样不拉 output。
+        # BUG-FIX(2026-09-22)：排序 run_time.desc（见 scheduler_runs_list 注释）。
         cols = "id,task_id,trigger,status,window_key,run_time,duration_sec,completed_at"
         return _cd_select_one("scheduler_runs", columns=cols,
-                              filters=[("task_id", "eq", task_id)], order="id.desc")
+                              filters=[("task_id", "eq", task_id)],
+                              order="run_time.desc,id.desc")
     with get_conn() as conn:
         r = conn.execute(
             "SELECT id,task_id,trigger,status,window_key,run_time,duration_sec,completed_at "
-            "FROM scheduler_runs WHERE task_id=? ORDER BY id DESC LIMIT 1",
+            "FROM scheduler_runs WHERE task_id=? ORDER BY run_time DESC, id DESC LIMIT 1",
             (task_id,),
         ).fetchone()
         return dict(r) if r else None
 
 
 def scheduler_latest_map(task_ids: list[str]) -> dict[str, dict]:
-    """批量取多个任务各自的最近一次运行（每组 task_id 取 id 最大一条）。
+    """批量取多个任务各自的最近一次运行（每组 task_id 取 run_time 最新一条）。
 
     BUG-FIX(2026-09-07)：任务表端点原对每个 task_id 单独查一次云（N+1，~19 次
-    往返拖慢后台页）。改为一次查询：拉最近 N 条元数据（id desc 最新在前），
+    往返拖慢后台页）。改为一次查询：拉最近 N 条元数据（run_time desc 最新在前），
     每个 task_id 保留第一条即其最近运行。N 取 task 数 * 每任务可能运行数，
     兜底取 500（scheduler_runs 行数量级小，够用且只取元数据列）。
+    BUG-FIX(2026-09-22)：排序从 id.desc 改为 run_time.desc —— pgdirect 迁移后
+    id 序列重置为低值而遗留行保留高 id，id.desc 会取到旧的"最近"（页面看似不刷新）。
     """
     if not task_ids:
         return {}
     if USE_CLOUD:
         cols = "id,task_id,trigger,status,window_key,run_time,duration_sec,completed_at"
-        rows = _cd_select("scheduler_runs", columns=cols, order="id.desc", limit=500)
+        rows = _cd_select("scheduler_runs", columns=cols,
+                          order="run_time.desc,id.desc", limit=500)
     else:
         qmarks = ",".join("?" for _ in task_ids)
         with get_conn() as conn:
             rows = conn.execute(
                 "SELECT id,task_id,trigger,status,window_key,run_time,duration_sec,completed_at "
-                f"FROM scheduler_runs WHERE task_id IN ({qmarks}) ORDER BY id DESC LIMIT 500",
+                f"FROM scheduler_runs WHERE task_id IN ({qmarks}) ORDER BY run_time DESC, id DESC LIMIT 500",
                 task_ids,
             ).fetchall()
             rows = [dict(r) for r in rows]
     result: dict[str, dict] = {}
-    for r in rows:  # id desc → 每个 task_id 第一次出现即最新
+    for r in rows:  # run_time desc → 每个 task_id 第一次出现即最新
         tid = r.get("task_id")
         if tid in task_ids and tid not in result:
             result[tid] = r

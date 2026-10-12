@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # setup_etf_scheduled_tasks.ps1
 # Windows Scheduled Tasks migration: dsh-trigger-* -> etf-trigger-*
 # ============================================================
@@ -14,7 +14,7 @@
 #   powershell -ExecutionPolicy Bypass -File setup_etf_scheduled_tasks.ps1 -Cleanup   # remove ALL tasks -> engine-only mode
 #
 # Notes:
-#   - Task list is generated from .claude/scripts/task_schedule.json (scoped to
+#   - Task list is generated from scripts/task_schedule.json (scoped to
 #     my_doc/每日复盘/ prompts), so future schedule edits just re-run with -Apply.
 #   - Trading-day / weekday / idempotency gates are enforced inside scheduler_cli
 #     (same semantics as the dashboard engine); the Scheduled Task only fires the
@@ -36,7 +36,7 @@ $ErrorActionPreference = "Stop"
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path      # .../etf-strategies/scripts
 $EtfDir      = Split-Path -Parent $ScriptDir                        # .../etf-strategies
 $RepoRoot    = Split-Path -Parent $EtfDir                           # repo root
-$ScheduleFile = Join-Path $RepoRoot ".claude\scripts\task_schedule.json"
+$ScheduleFile = Join-Path $RepoRoot "scripts\task_schedule.json"
 $PythonExe    = (Get-Command python -ErrorAction SilentlyContinue).Source
 if (-not $PythonExe) { $PythonExe = "D:\miniconda3\python.exe" }
 if (-not (Test-Path $PythonExe)) { throw "python not found: $PythonExe" }

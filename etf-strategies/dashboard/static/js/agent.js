@@ -539,6 +539,7 @@
     x: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24h-6.66l-5.21-6.82L5 21.75H1.68l7.73-8.84L1.25 2.25h6.83l4.71 6.23 5.45-6.23zm-1.16 17.52h1.83L7.08 4.13H5.12l11.96 15.64z"/></svg>',
     zhihu: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.45 2.5h7.3c.6 0 1.1.5 1.1 1.1v16.8c0 .6-.5 1.1-1.1 1.1h-7.3l-2.2 1.3c-.5.3-1.1-.1-1.1-.7v-.6H4.35c-.6 0-1.1-.5-1.1-1.1V3.6c0-.6.5-1.1 1.1-1.1h7.3l.8-.5v.5zm-1.7 2.2H4.6a.9.9 0 00-.9.9v15.6a.9.9 0 00.9.9h2.7v.4l1.6-.9v.5h1.4l.45-.3v-16.4a.5.5 0 00-.5-.7zm8.6 0h-6.5v17.2h6.5a.9.9 0 00.9-.9V5.6a.9.9 0 00-.9-.9z"/></svg>',
     xueqiu: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5c1.9 0 3.6.6 5 1.7 1.5 1.1 2.5 2.8 2.5 4.7 0 1.4-.4 2.7-1.1 3.9.8.6 1.4 1.5 1.7 2.5.3 1.1.2 2.3-.4 3.3-.6 1.1-1.5 1.9-2.7 2.4-.8.3-1.7.5-2.6.5-.9 0-1.8-.2-2.5-.5-1-.3-1.8-.9-2.4-1.7-.5-.7-.8-1.6-.7-2.5l.1-.9c-1.6.6-3 .4-4.1-.5-1-.9-1.5-2.2-1.4-3.6.1-1.3.6-2.5 1.4-3.4.8-1 1.9-1.6 3.2-1.8.5-2.4 1.9-4.3 3.9-5.4.7-.4 1.5-.6 2.3-.6zm0 2.1c-1.4 0-2.7.4-3.7 1.2-1.6 1.2-2.5 3.2-2.5 5.5v.2c-.9.3-1.6.8-2.1 1.5-.5.7-.8 1.5-.7 2.4 0 .9.4 1.8 1 2.4.7.7 1.7 1 2.9.8-.1 1-.2 1.9-.7 2.5-.6.8-1.7 1.4-3 1.4.2-1 .8-1.9 1.6-2.5.6-.5 1.4-.8 2.2-.8.3 0 .5 0 .8.1-.3 1.3 0 2.6.9 3.5.6.6 1.4 1 2.3 1.3.8.3 1.7.4 2.5.4 1.9 0 3.7-.7 5-2 .9-1 1.4-2.3 1.3-3.7-.1-1.2-.6-2.3-1.4-3.1-.4-.4-.9-.7-1.4-.9.2-.8.1-1.6-.4-2.3-.5-.7-1.4-1.1-2.4-1.2l-.2-.1v-.1c0-2.3-.8-4.3-2.2-5.6-.7-.6-1.5-1-2.3-1.2l-.3-.1z"/></svg>',
+    joinquant: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h2.4v6.2L10 7.1l3.2 2.9 3.6-3.3.3 2.2 2.5-1.4v9.9c.7-.2 1.2-.7 1.2-1.4V4H22v10.4c0 1.7-1.4 3.1-3.1 3.1H5.1C3.4 17.5 2 16.1 2 14.4V4h2zm0 10.4c0 .6.5 1.1 1.1 1.1h13.6v-2.5l-2.9 1.7-3.6-2.9-3.2 2.9-2.7-2.5v3.3H4z" transform="scale(0.92) translate(1 1)"/></svg>',
     cls: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M13.2 6.5l-4.6 5.6h3.1l-1.4 5.4 5-5.8h-3.2l1.1-5.2z" fill="var(--bg-deep, #1a140f)"/></svg>',
     wallstreetcn: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h4.2l3.8 6.6L15.8 4H20l-6.4 9.3V20h-3.2v-6.7L4 4z"/></svg>',
   };
@@ -553,14 +554,58 @@
       var icon = PLATFORM_ICONS[s.icon] || PLATFORM_FALLBACK;
       var reachable = !!s.reachable;
       var tip = s.reason || (reachable ? '可访问' : '暂不可访问');
-      return '<a class="xm-social-item ' + (reachable ? 'is-on' : 'is-off') + '" ' +
-        'href="' + esc(s.url) + '" target="_blank" rel="noopener" ' +
+      // 不可达的 Cookie 类平台 → 提供「去登录」入口（打开小满专属浏览器窗口登录）
+      var loginBtn = (!reachable && s.needs_cookie)
+        ? '<button class="xm-social-login" data-pid="' + esc(s.id) + '" title="在小满的浏览器里登录' + esc(s.name) + '">去登录</button>'
+        : '';
+      return '<div class="xm-social-item ' + (reachable ? 'is-on' : 'is-off') + '" ' +
         'title="' + esc(s.name + ' · ' + tip) + '" aria-label="' + esc(s.name) + '">' +
-        '<span class="xm-social-icon">' + icon + '</span>' +
-        '<span class="xm-social-name">' + esc(s.name) + '</span>' +
-        (reachable ? '<span class="xm-social-dot" title="小满可以逛这里"></span>' : '') +
-        '</a>';
+        '<a class="xm-social-link" href="' + esc(s.url) + '" target="_blank" rel="noopener">' +
+          '<span class="xm-social-icon">' + icon + '</span>' +
+          '<span class="xm-social-name">' + esc(s.name) + '</span>' +
+          (reachable ? '<span class="xm-social-dot" title="小满可以逛这里"></span>' : '') +
+        '</a>' +
+        loginBtn +
+        '</div>';
     }).join('');
+  }
+
+  // ── 爱逛的地方：刷新可达性 ──
+  async function refreshSocial() {
+    const btn = document.getElementById('xm-social-refresh');
+    if (btn) { btn.disabled = true; btn.textContent = '检测中…'; }
+    try {
+      const resp = await Auth.fetchPost('/api/agent/reachability/refresh', {});
+      const d = await resp.json();
+      // 重新拉 profile（可达性缓存已更新）
+      await loadProfile();
+      if (d.ok) {
+        toast('已刷新：' + (d.reachable_count || 0) + '/' + (d.total || 0) + ' 个平台可访问', 'success');
+      } else {
+        toast('刷新失败：' + (d.error || '未知错误'), 'error');
+      }
+    } catch (e) {
+      toast('刷新失败：' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '↻ 刷新'; }
+    }
+  }
+
+  // ── 爱逛的地方：打开小满浏览器窗口登录平台 ──
+  async function openPlatformLogin(pid) {
+    if (!pid) return;
+    const btn = document.querySelector('.xm-social-login[data-pid="' + pid + '"]');
+    const label = btn ? btn.textContent : '登录';
+    if (btn) { btn.disabled = true; btn.textContent = '打开中…'; }
+    try {
+      const resp = await Auth.fetchPost('/api/agent/browser/open-login', { platform_id: pid });
+      const d = await resp.json();
+      toast(d.ok ? (d.message || '已打开浏览器窗口') : ('打开失败：' + (d.message || 'Agent 不可达')), d.ok ? 'success' : 'error');
+    } catch (e) {
+      toast('打开失败：' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = label; }
+    }
   }
 
   function renderProfile(p) {
@@ -574,6 +619,12 @@
     const basicLi = (p.basic || []).map(function (b) {
       return '<li class="xm-basic-item"><b>' + esc(b.k) + '</b>' + esc(b.v) + '</li>';
     }).join('');
+
+    // 「关于我」：优先展示精简版自我介绍（about_me，100~200 字，不复刻人设卡字段）；
+    // 仅当 about_me 缺失时回退到人设卡基本节列表
+    const aboutMeHtml = (p.about_me)
+      ? '<p class="xm-about-me">' + esc(p.about_me) + '</p>'
+      : (basicLi ? '<ul class="xm-basic">' + basicLi + '</ul>' : '<p class="muted">（人设卡暂无「基本」节）</p>');
 
     // ── 爱逛的地方（方案 v1.10 §9.4 + 2026-09 合并）：社交平台 + 财联社/华尔街见闻 ──
     const social = renderSocialPlatforms(p.social_platforms);
@@ -590,7 +641,7 @@
           '</div>' +
           '<section class="xm-card">' +
             '<h3 class="em-title">🌙 关于我</h3>' +
-            (basicLi ? '<ul class="xm-basic">' + basicLi + '</ul>' : '<p class="muted">（人设卡暂无「基本」节）</p>') +
+            aboutMeHtml +
           '</section>' +
           '<section class="xm-card">' +
             '<h3 class="em-title">💛 爱好</h3>' +
@@ -598,10 +649,13 @@
             '<div class="xm-chip-row"><span class="xm-chip-label">生活</span>' + chips(p.hobbies, 'xm-chip-warm') + '</div>' +
           '</section>' +
           (social
-            ? '<section class="xm-card">' +
-                '<h3 class="em-title">🌐 爱逛的地方</h3>' +
+            ? '<section class="xm-card" id="xm-social-card">' +
+                '<div class="xm-card-head">' +
+                  '<h3 class="em-title">🌐 爱逛的地方</h3>' +
+                  '<button id="xm-social-refresh" class="xm-social-refresh" title="重新检测各平台可访问性（会检查本机浏览器 Cookie）">↻ 刷新</button>' +
+                '</div>' +
                 '<div class="xm-social">' + social + '</div>' +
-                '<p class="xm-social-note muted">置灰 = 小满暂时逛不了这里（可点击仍可人工访问）</p>' +
+                '<p class="xm-social-note muted">置灰 = 小满暂时逛不了这里（可点击仍可人工访问）；不可达的 Cookie 平台可点「去登录」打开小满的浏览器登录</p>' +
               '</section>'
             : '') +
         '</aside>' +
@@ -635,6 +689,17 @@
       document.getElementById('xm-act-date-filter').value = '';
       loadActivities(1);
     });
+
+    // ── 爱逛的地方：刷新按钮 + 「去登录」事件委托 ──
+    const refreshBtn = document.getElementById('xm-social-refresh');
+    if (refreshBtn) refreshBtn.addEventListener('click', refreshSocial);
+    const socialBox = document.getElementById('xm-social-card');
+    if (socialBox) {
+      socialBox.addEventListener('click', function (ev) {
+        const btn = ev.target.closest('.xm-social-login');
+        if (btn) openPlatformLogin(btn.getAttribute('data-pid'));
+      });
+    }
   }
 
   var _actPage = 1;
@@ -732,16 +797,59 @@
   var _noticesPage = 1;
   var _noticesTotalPages = 1;
   var _NOTICES_PAGE_SIZE = 5;
+  var _sidebarTab = 'sessions';  // 会话侧边栏当前 Tab：'sessions' | 'notices'
+  var _selectedNoticeId = null;  // 提示/待办详情当前选中项
 
   function updateNoticesBadge(unread) {
-    var badge = document.getElementById('agent-chat-badge');
-    if (!badge) return;
     unread = Number(unread) || 0;
-    if (unread > 0) {
-      badge.textContent = unread > 99 ? '99+' : String(unread);
-      badge.hidden = false;
-    } else {
-      badge.hidden = true;
+    // 顶部「和小满聊天」tab 徽章（进入前提示）
+    var topBadge = document.getElementById('agent-chat-badge');
+    if (topBadge) {
+      if (unread > 0) {
+        topBadge.textContent = unread > 99 ? '99+' : String(unread);
+        topBadge.hidden = false;
+      } else {
+        topBadge.hidden = true;
+      }
+    }
+    // 会话侧边栏「提示与待办」tab 徽章
+    var sideBadge = document.getElementById('agent-notices-badge');
+    if (sideBadge) {
+      if (unread > 0) {
+        sideBadge.textContent = unread > 99 ? '99+' : String(unread);
+        sideBadge.hidden = false;
+      } else {
+        sideBadge.hidden = true;
+      }
+    }
+  }
+
+  // ── 会话侧边栏双 Tab 切换（会话 / 提示与待办）──
+  function switchSidebarTab(tab) {
+    _sidebarTab = tab;
+    var isSessions = tab === 'sessions';
+    document.querySelectorAll('.agent-sidebar-tab').forEach(function (b) {
+      var active = b.getAttribute('data-sbtab') === tab;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    // 侧边栏：会话头 + 会话列表 vs 提示标题列表
+    var sessionsHead = document.getElementById('agent-sessions-head');
+    var sessionList = document.getElementById('agent-session-list');
+    var titleList = document.getElementById('agent-notice-title-list');
+    if (sessionsHead) sessionsHead.hidden = !isSessions;
+    if (sessionList) sessionList.hidden = !isSessions;
+    if (titleList) titleList.hidden = isSessions;
+    // 主区：聊天消息 + 输入行 vs 提示/待办详情
+    var messages = document.getElementById('agent-messages');
+    var inputRow = document.getElementById('agent-input-row');
+    var detail = document.getElementById('agent-notice-detail');
+    if (messages) messages.hidden = !isSessions;
+    if (inputRow) inputRow.hidden = !isSessions;
+    if (detail) detail.hidden = isSessions;
+    if (tab === 'notices') {
+      // 进入提示/待办：拉最新（含未读徽章）；renderNotices 会自动选中第一条
+      loadNotices();
     }
   }
 
@@ -784,9 +892,9 @@
       updateNoticesBadge(d.unread_count);
       renderNotices();
     } catch (e) {
-      // 加载失败：不阻塞聊天页，仅隐藏面板
-      const sec = document.getElementById('agent-notices');
-      if (sec) sec.hidden = true;
+      // 加载失败：不阻塞聊天页，仅提示标题列表显示错误
+      const titles = document.getElementById('agent-notice-titles');
+      if (titles) titles.innerHTML = '<p class="muted">提示与待办加载失败</p>';
     }
   }
 
@@ -844,19 +952,34 @@
     '</div>';
   }
 
-  function renderNotices() {
-    var sec = document.getElementById('agent-notices');
-    var box = document.getElementById('agent-notices-list');
-    var pager = document.getElementById('agent-notices-pager');
-    if (!sec || !box) return;
-    if (!_notices.length) {
-      sec.hidden = true;
+  // 侧边栏标题项（紧凑版：标签 + 标题 + 待办红点）
+  function noticeTitleItem(n) {
+    var isTodo = n.kind === 'todo';
+    var processed = isProcessedNotice(n);
+    var cls = ['agent-notice-title-item'];
+    if (isTodo) cls.push('is-todo'); else cls.push('is-notice');
+    if (processed) cls.push('is-processed');
+    if (!n.read && n.status !== 'dismissed') cls.push('is-unread');
+    if (n.id === _selectedNoticeId) cls.push('active');
+    var tag = isTodo ? '待办' : '提示';
+    var dot = (isTodo && n.status === 'open') ? '<span class="agent-notice-title-dot" title="待处理"></span>' : '';
+    return '<div class="' + cls.join(' ') + '" data-nid="' + n.id + '" role="button" tabindex="0">' +
+      '<span class="agent-notice-title-tag ' + (isTodo ? 'todo' : 'notice') + '">' + tag + '</span>' +
+      '<span class="agent-notice-title-name">' + esc(n.title) + '</span>' + dot +
+    '</div>';
+  }
+
+  // 右侧主区：展示选中提示/待办的完整详情（复用 noticeCard）
+  function renderNoticeDetail(n) {
+    var detail = document.getElementById('agent-notice-detail-body');
+    if (!detail) return;
+    if (!n) {
+      detail.innerHTML = '<p class="muted">还没有提示或待办～ 小满有重要的事会在这里告诉你。</p>';
       return;
     }
-    sec.hidden = false;
-    box.innerHTML = _notices.map(noticeCard).join('');
-    // 待办输入框：Enter 提交
-    box.querySelectorAll('.agent-notice-reply-input').forEach(function (inp) {
+    detail.innerHTML = noticeCard(n);
+    // 待办回复输入框：Enter 提交
+    detail.querySelectorAll('.agent-notice-reply-input').forEach(function (inp) {
       inp.addEventListener('keydown', function (ev) {
         if (ev.key === 'Enter') {
           ev.preventDefault();
@@ -865,6 +988,42 @@
         }
       });
     });
+  }
+
+  // 点击侧边栏标题：选中并展示详情
+  function selectNotice(id) {
+    _selectedNoticeId = id;
+    document.querySelectorAll('.agent-notice-title-item').forEach(function (el) {
+      el.classList.toggle('active', Number(el.getAttribute('data-nid')) === id);
+    });
+    var n = null;
+    for (var i = 0; i < _notices.length; i++) {
+      if (_notices[i].id === id) { n = _notices[i]; break; }
+    }
+    renderNoticeDetail(n);
+  }
+
+  function renderNotices() {
+    var titles = document.getElementById('agent-notice-titles');
+    var pager = document.getElementById('agent-notices-pager');
+    if (!titles) return;
+    // 侧边栏标题列表
+    if (!_notices.length) {
+      titles.innerHTML = '<p class="muted">暂无提示或待办</p>';
+    } else {
+      titles.innerHTML = _notices.map(noticeTitleItem).join('');
+      titles.querySelectorAll('.agent-notice-title-item').forEach(function (el) {
+        el.addEventListener('click', function () {
+          selectNotice(Number(el.getAttribute('data-nid')));
+        });
+        el.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter' || ev.key === ' ') {
+            ev.preventDefault();
+            selectNotice(Number(el.getAttribute('data-nid')));
+          }
+        });
+      });
+    }
     // 分页控件
     if (pager) {
       pager.innerHTML =
@@ -874,6 +1033,19 @@
         (_noticesTotalPages || 1) + ' 页</span>' +
         '<button class="agent-notice-page-btn" onclick="Agent.noticesPage(' + (_noticesPage + 1) + ')" ' +
         (_noticesPage >= _noticesTotalPages ? 'disabled' : '') + '>下一页 ›</button>';
+    }
+    // 详情：保持选中项同步；无选中时自动选第一条
+    if (_selectedNoticeId != null) {
+      var still = null;
+      for (var i = 0; i < _notices.length; i++) {
+        if (_notices[i].id === _selectedNoticeId) { still = _notices[i]; break; }
+      }
+      if (still) renderNoticeDetail(still);
+      else { _selectedNoticeId = null; if (_notices.length) selectNotice(_notices[0].id); }
+    } else if (_notices.length) {
+      selectNotice(_notices[0].id);
+    } else {
+      renderNoticeDetail(null);
     }
   }
 
@@ -957,5 +1129,9 @@
     noticeMarkRead: noticeMarkRead,
     noticeReply: noticeReply,
     noticeDismiss: noticeDismiss,
+    switchSidebarTab: switchSidebarTab,
+    selectNotice: selectNotice,
+    refreshSocial: refreshSocial,
+    openPlatformLogin: openPlatformLogin,
   };
 })();

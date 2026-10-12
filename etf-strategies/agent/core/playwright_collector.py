@@ -184,6 +184,68 @@ def _xueqiu_hot_items(cookie, limit):
     return items
 
 
+def _joinquant_hot_items(cookie, limit):
+    """聚宽社区文章：/community/post/listV2（无需登录，匿名可用，实测 2026-10）。
+
+    聚宽社区列表 API 与微博/小红书不同——**匿名即可访问**（不带 Cookie 也返回
+    完整 JSON），Cookie 仅影响收藏/点赞等个性化字段。因此：
+    - 有 Cookie 时带上（提升个别帖子的可见性/内容完整度）
+    - 无 Cookie 也能采集（列表页内容公开）
+
+    返回 [{title, url, summary}]，每项：
+    - title: 帖子标题
+    - url:   详情页 https://www.joinquant.com/view/community/detail/{postId}
+    - summary: 标签 + 浏览量/回复 + 正文摘要（Markdown 截断）
+
+    采集参数：
+    - cate=0：全部类别（文章/问答/公告/精华）
+    - type=isNew：最新排序（isHot=最热）。BROWSE_COLLECT_LIMIT 条以内取第一页。
+    """
+    import requests
+
+    url = "https://www.joinquant.com/community/post/listV2"
+    params = {"limit": limit, "page": 1, "cate": 0, "type": "isNew"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0",
+        "Referer": "https://www.joinquant.com/view/community/list?listType=1",
+        "X-Requested-With": "XMLHttpRequest",
+        "Accept": "application/json, text/plain, */*",
+    }
+    if cookie:
+        headers["Cookie"] = cookie
+    resp = requests.get(url, params=params, headers=headers, timeout=config.BROWSE_COLLECT_TIMEOUT_SECONDS)
+    resp.raise_for_status()
+    data = resp.json()
+    if (data.get("code") or "") != "00000":
+        return []  # 系统异常/被拦 → 不阻塞状态机
+    items = []
+    for it in (data.get("data") or {}).get("list") or []:
+        title = (it.get("title") or "").strip()
+        post_id = it.get("postId") or ""
+        if not title or not post_id:
+            continue
+        tags = ",".join(t.get("name", "") for t in (it.get("tagInfo") or []) if t.get("name"))
+        content = (it.get("content") or "").strip()
+        # 摘要：标签 + 热度 + 正文前 120 字（Markdown，去掉换行）
+        excerpt = " ".join(content.split())[:120]
+        summary_bits = []
+        if tags:
+            summary_bits.append(f"[{tags}]")
+        summary_bits.append(f"浏览{it.get('viewCount') or 0}/回复{it.get('replyCount') or 0}")
+        if excerpt:
+            summary_bits.append(excerpt)
+        items.append(
+            {
+                "title": title[:80],
+                "url": f"https://www.joinquant.com/view/community/detail/{post_id}",
+                "summary": " ".join(summary_bits)[:200],
+            }
+        )
+        if len(items) >= limit:
+            break
+    return items
+
+
 def _store_items(platform_id, items, db=None):
     """入库（url 精确去重 + 标题相似度去重）。返回 {"added", "dup"}。
 
@@ -227,7 +289,9 @@ def collect_platform(platform_id, db=None):
         }
 
     cookie = db.platform_cookie_get(platform_id)
-    if not cookie:
+    # 聚宽社区 API 匿名可用（listV2 无需登录）→ 无 Cookie 也放行采集；
+    # 其他平台仍要求 Cookie（登录态采集）。
+    if not cookie and platform_id != "joinquant":
         reachability.update_after_access(platform_id, False, "无 Cookie，无法采集", db=db)
         return {
             "platform_id": platform_id,
@@ -246,6 +310,8 @@ def collect_platform(platform_id, db=None):
             items = _zhihu_hot_items(cookie, limit)
         elif platform_id == "xueqiu":
             items = _xueqiu_hot_items(cookie, limit)
+        elif platform_id == "joinquant":
+            items = _joinquant_hot_items(cookie, limit)
         else:
             items = []
         if not items:
