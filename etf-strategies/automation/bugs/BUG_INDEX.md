@@ -11,7 +11,7 @@
 |------|------|
 | OPEN | 0 |
 | IN_PROGRESS | 0 |
-| FIXED | 44 |
+| FIXED | 47 |
 | VERIFIED | 1 |
 | WONT_FIX | 1 |
 | MANUAL_REVIEW | 9 |
@@ -97,6 +97,9 @@
 | BUG-057 | 6/13活跃ETF缓存含10-08盘中partial bar(510300/510500/512010/512480/512660/512800),5只跨源>0.5%(BUG-054修复不完整+BUG-040族第8次复发,需收盘后补拉) | data | HIGH | FIXED | 2026-10-09 |
 | BUG-058 | 非活跃缓存512100缺10-08 bar(止于09-30)+4个非活跃ETF(159227/159326/159992/515880)10-08 partial(BUG-055同族复发,需收盘后补拉) | data | MEDIUM | FIXED | 2026-10-09 |
 | BUG-059 | pytest全量测试717通过但退出码=1:Windows asyncio ProactorEventLoop teardown access violation(TestClient(agent_api.app)触发,exit code污染调度判断) | tests | MEDIUM | MANUAL_REVIEW | 2026-10-09 |
+| BUG-060 | S21 WufuMomentumRotation未注册进list_strategies.py STRATEGIES列表(REG-003,元数据S21已加但类遗漏,list输出仅20个策略) | registration | MEDIUM | FIXED | 2026-10-12 |
+| BUG-061 | 6个S21池ETF缓存止于2026-08-17约2个月陈旧(159256/159509/159865/159892/513190/515170)+第四步覆盖缺口(list_strategies 13 vs daily_signal STRAT_MAP 117 ETF) | data | MEDIUM | FIXED | 2026-10-12 |
+| BUG-062 | trading_calendar.py 2026年交易日历系统性错误:TRADING_WEEKENDS_2026 4条目全错+ HOLIDAYS_2026漏3日(2/23,4/6,5/4,5/5)误1日(6/18),致第四步误报全部活跃ETF缺失 | data | HIGH | FIXED | 2026-10-12 |
 <!-- BUG_TABLE_END -->
 
 ---
@@ -165,6 +168,9 @@
 | 2026-10-09 | 自动修复 | 0 | 0 | 2 |
 | 2026-10-09 | 自动修复 | 0 | 0 | 2 |
 | 2026-10-09 | 自动修复 | 0 | 2 | 0 |
+| 2026-10-12 | 代码巡检 | 1 | 0 | 1 |
+| 2026-10-12 | 数据巡检 | 2 | 2 | 1 |
+| 2026-10-12 | 自动修复 | 0 | 1 | 0 |
 
 ---
 
