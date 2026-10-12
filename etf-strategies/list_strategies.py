@@ -25,6 +25,7 @@ from backtest.strategies.canary_defense import CanaryDefense, CanaryDefenseDaily
 from backtest.strategies.rsrs_reversal_momentum import RsrsReversalMomentum
 from backtest.strategies.low_correlation_rotation import LowCorrelationRotation
 from backtest.strategies.etf_timing_rotation import EtfTimingRotation
+from backtest.strategies.wufu_momentum_rotation import WufuMomentumRotation
 
 # 策略注册表 — 新增策略在这里加一行即可
 STRATEGIES = [
@@ -48,6 +49,7 @@ STRATEGIES = [
     RsrsReversalMomentum,
     LowCorrelationRotation,
     EtfTimingRotation,
+    WufuMomentumRotation,
 ]
 
 # 策略类别 → 颜色映射（rich 支持的颜色名）
