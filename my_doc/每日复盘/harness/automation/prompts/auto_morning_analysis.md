@@ -1,9 +1,10 @@
 # 早盘分析自动执行
 
-> 定时任务: A股交易日 07:55 CST | CronCreate durable
+> 定时任务: A股交易日 09:07 CST（调度定义见 scripts/task_schedule.json）
 > 依赖: 前一交易日晚间复盘生成的 staging 文件
 > 产出: reports/{today}/早盘报告.md + reports/{today}/每日信号.md（2026-10 回退：仅 .md，Dashboard 以 markdown 渲染）
 > **{today} 格式**: `yyyyMMdd`（如 `20260727`），不是 `yyyy-MM-dd`！所有 Python 代码中必须用 `date.today().strftime("%Y%m%d")`，禁用 `date.today().isoformat()`
+> **补生成（2026-10-13 修复）**: 已过 9:30 但当日早盘报告缺失时仍继续执行（盘中检查依赖早报信号），详见 §1.2/§1.4
 
 ---
 
@@ -67,9 +68,28 @@ python my_doc/每日复盘/harness/automation/config/trading_calendar.py --statu
 - 如果是调休工作日（`is_trading_weekend` = true）→ 输出 "今日为调休工作日，正常执行" 并继续
 
 ### 1.2 时间窗口检查
+
+**补生成规则（2026-10-13 修复）：** 已过 9:30 但当日早盘报告尚未生成时，**不得退出**——
+盘中检查（auto_intraday_check §1.2）依赖 `reports/{today}/每日信号.md`，早报缺失会导致
+全天盘中检查降级为仅市场快照。因此"过 9:30 即退出"改为"过 9:30 且当日报告已存在才退出"。
+
+先检查当日报告是否已生成：
+
+```bash
+
+ls my_doc/每日复盘/reports/{today}/早盘报告.md my_doc/每日复盘/reports/{today}/每日信号.md 2>&1
+```
+
 - 如果当前时间 < 07:30 CST → 输出 "尚未到早盘分析窗口（7:30-9:30），等待中" 并**退出**（cron 调度不应触发此情况，但保留防御性检查）
-- 如果当前时间 > 09:30 CST → 输出 "已过 9:30，早盘分析已无意义" 并**退出**
 - 07:30 ~ 09:30 → 正常执行，**始终输出完整 9 节报告，不存在精简版**
+- 如果当前时间 > 09:30 CST：
+  - **当日两份报告均已存在**（上面的 ls 两个文件都命中）→ 输出 "今日早盘报告已生成，跳过（避免覆盖）" 并**退出**
+  - **任一报告缺失** → 输出 "⚠️ 已过 9:30 但今日早盘报告缺失，进入**补生成模式**" 并**继续执行**。
+    补生成模式要求：
+    1. 完整输出 9 节报告（与正常模式完全一致，不允许精简）
+    2. 报告头部标注：`> ⚠️ 补生成（已过 9:30 触发，{当前时间} 执行；盘中数据以实际时点为准）`
+    3. 数据时点标注**实际执行时间**（不是 09:25 之类的假设时点）
+    4. 盘中信号仍按正常规则生成（盘中检查将基于这些信号继续验证）
 
 ### 1.3 Staging 文件存在性检查
 检查 `my_doc/每日复盘/harness/staging/今日-早盘分析.md` 是否存在。
@@ -267,11 +287,78 @@ print(json.dumps(result, ensure_ascii=False, default=str))
 
 **重建后必做**：重新跑 1.3b 代码-名称校验 + 1.3c 持仓比对，确保重建的 staging 持仓与 config 一致。
 
+### 1.3e 报告新鲜度检查（REQ-016，🚨 自动化中断早发现）
+
+> **问题背景**：2026-09-24~09-30 连续 7 交易日自动化中断无复盘报告产出（决策盲区，节前减仓窗口丢失），
+> 直到节后周报才被人工发现。本步在每日任务执行前主动检测"连续多少交易日无复盘报告产出"，
+> 连续 ≥1 交易日即写 PENDING_CONFIRMATION.md 告警（与 auto_pending_remind 每 2h 扫描联动）。
+>
+> **口径**：检查 `previous_trading_day(today)`（不含今天）——今天的复盘报告要等收盘后才产出，
+> 早盘检查的是"最近一个已结束交易日是否有复盘报告"。非交易日（周末/节假日）不计入无报告日。
+
+```bash
+
+python -X utf8 -c "
+import sys, json
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from datetime import date, datetime
+from pathlib import Path
+from lib.report_freshness import (
+    check_freshness_alert, previous_trading_day, build_pending_entry,
+)
+
+today = date.today()
+prev_td = previous_trading_day(today)  # 默认注入 config.trading_calendar
+if prev_td is None:
+    print('FRESHNESS: SKIP 无更早交易日，跳过检查')
+else:
+    result = check_freshness_alert('my_doc/每日复盘/reports', prev_td)
+    print(f'FRESHNESS: streak={result[\"streak\"]} alert={result[\"alert\"]} last={result[\"last_review_date\"]}')
+    print(f'  detail: {result[\"detail\"]}')
+    if result['alert']:
+        # 写 PENDING_CONFIRMATION.md（先读最大序号 +1）
+        pending_path = Path('my_doc/每日复盘/harness/automation/PENDING_CONFIRMATION.md')
+        text = pending_path.read_text(encoding='utf-8') if pending_path.exists() else ''
+        import re
+        seqs = [int(m) for m in re.findall(r'^\|\s*(\d+)\s*\|', text, re.M)]
+        seq = max(seqs) + 1 if seqs else 1
+        entry = build_pending_entry(result['streak'], result['last_review_date'], today, seq)
+        # 在 ## 待确认 表首行插入（表头 |---| 之后）
+        marker = '|---|------|---------|------|:---:|---------|\n'
+        if marker in text:
+            text = text.replace(marker, marker + entry + '\n', 1)
+        else:
+            text += f'\n## 待确认 (1)\n\n| # | 日期 | 来源BUG | 事项 | 优先级 | 截止时间 |\n|---|------|---------|------|:---:|---------|\n{entry}\n'
+        pending_path.write_text(text, encoding='utf-8')
+        print(f'  PENDING 已写入: seq={seq}')
+" 2>&1
+```
+
+**判断规则**（严格按输出）：
+- `FRESHNESS: alert=True` → 已写 PENDING_CONFIRMATION 告警 + 本次执行日志标注"⚠️ 报告新鲜度告警：连续 {streak} 交易日无复盘报告产出"；**继续执行早盘分析**（告警只负责检测+通知，不阻断正常任务）
+- `FRESHNESS: alert=False` → 正常，无告警
+- `FRESHNESS: SKIP` → 无更早交易日（罕见），跳过
+
+> **与 REQ-013 的关系**：REQ-013 是"执行期并发控制"（运行锁），本步是"产出新鲜度监控"（检测+通知），二者互补不冲突。
+
 ### 1.4 幂等性检查
-读取 `my_doc/每日复盘/harness/automation/config/task_state.json`。
+读取 `my_doc/每日复盘/harness/automation/config/task_state.json`，并同时检查当日报告文件是否存在：
+
+```bash
+
+ls my_doc/每日复盘/reports/{today}/早盘报告.md my_doc/每日复盘/reports/{today}/每日信号.md 2>&1
+```
+
 - 如果是新的一天（`date` ≠ 今天）→ 重置所有任务状态，重新开始
-- 如果 `morning_analysis.status` = "completed" → 输出 "今日早盘分析已完成于 {executed_at}" 并**退出**
+- **报告存在性优先判定（2026-10-13 修复，防"假成功/异常残留"）**：
+  - **当日两份报告均已存在**（ls 两个文件都命中）→ 无论 task_state 显示什么状态（含 in_progress 残留），输出 "今日早盘报告已生成，跳过（避免覆盖）" 并**退出**
+  - 报告缺失但 `morning_analysis.status` = "completed" → **异常残留**（task_state 显示完成但文件缺失，可能被误标记或文件被清理）。输出 "⚠️ task_state 显示完成但报告缺失，视为未完成，进入补生成" 并**继续执行**（重置为可执行）
+  - 报告缺失且 `morning_analysis.status` = "in_progress" → **异常残留**（实例中断但状态未更新）。输出 "⚠️ task_state 卡 in_progress 但报告缺失（疑似中断实例残留），进入补生成" 并**继续执行**
 - 如果 `morning_analysis.status` = "failed" → 输出 "今日早盘分析之前失败，重试中..." 并继续
+- 其余情况（报告缺失 + status 非 completed/failed/in_progress 残留）→ 正常继续执行
+
+> **判定顺序铁律：先看报告文件，再看 task_state。** 报告文件是"任务真正完成"的唯一可信证据；
+> task_state 可能因进程中断（假成功 / 卡 in_progress）与实际不一致。
 
 ### 1.5 跨实例互斥运行锁（REQ-013，🚨 必须先获取再继续）
 
@@ -1010,6 +1097,50 @@ else:
 
 ---
 
+## 九、假期持仓预案（条件节 · REQ-016）
+
+> ⚠️ **仅当今天是长假前最后一个交易日（`is_holiday_eve`，下一交易日间隔 ≥4 天，即国庆/春节/中秋等长假）时输出本节约略说明或完整预案；普通周末不输出本节的完整预案（仅一行说明）。**
+
+**执行判断**（bash 确认，禁止凭推理）：
+
+```bash
+
+python -X utf8 -c "
+import sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from datetime import date
+from lib.report_freshness import is_holiday_eve
+import config.trading_calendar as tc
+
+today = date.today()
+next_td = tc.next_trading_day(today)
+if next_td is None:
+    print('HOLIDAY_EVE: False（无下一交易日）')
+else:
+    eve = is_holiday_eve(today, next_td)
+    print(f'HOLIDAY_EVE: {eve}（下一交易日 {next_td}，间隔 {(next_td - today).days} 天）')
+"
+```
+
+- `HOLIDAY_EVE: True` → 输出**完整假期持仓预案**小节：
+  ```
+  ### 假期持仓预案（{假期天数} 天）
+
+  | 持仓标的 | 是否过节 | 依据 | 假期风险变量 |
+  |---------|---------|------|------------|
+  | {逐只} | 过/兑现 | {仓位逻辑/兑现理由} | {假期期间影响该标的的变量} |
+
+  **假期操作建议**：
+  - {哪些仓位过节、哪些兑现/减仓}
+  - {假期风险变量清单：外盘/汇率/商品/政策}
+  - {节后首日开盘注意事项}
+  ```
+- `HOLIDAY_EVE: False` → 输出一行：`> 今日非长假前最后交易日，无假期持仓预案（下个交易日 {next_td}）。`（普通周末不展开预案，避免噪音）
+
+> **节后衔接**：假期后首个交易日早盘，对照本预案逐项核对"哪些兑现了/哪些过节了/结果如何"（写入前次预测回顾）。
+
+---
+
 *数据来源: mootdx/腾讯财经/东财/同花顺，详见 a-stock-data skill*
 *海外数据: WebSearch综合，美股收盘数据来自Yahoo Finance/Reuters*
 *运行提示: {仅当存在运行问题时输出，见 6.5 节；无问题则不输出此行}*
@@ -1033,7 +1164,7 @@ else:
 | 探测 `all_fail`（任务中止，无报告） | 写入执行日志 | BUG P1，`auto_fix_eligible=false`（MANUAL_REVIEW） |
 | 探测 `partial`（≥2 源不可达，或同一源连续 2 交易日不可达） | `⚠️ 数据源降级：{源列表}` | BUG P2，`auto_fix_eligible=false` |
 | staging 缺失 / 过期重建（1.3/1.3d） / 持仓过期覆写（1.3c FAIL） | `⚠️ staging {问题}，已{处理}` | BUG P2，`auto_fix_eligible=false`（复盘流程异常） |
-| 异常数据：|涨跌幅|>15% 未解释 / 成本未复权 / 份额调整 | `⚠️ 异常数据：{标的} {问题}`（持仓分析处同步标注） | BUG P2，`auto_fix_eligible=false`（MANUAL_REVIEW，涉及成本/复权） |
+| 异常数据：\|涨跌幅\|>15% 未解释 / 份额调整（除 159227/159326——两标成本已人工确认为保留底仓后的真实成本，浮亏大属正常，**不得**标注"未复权"） | `⚠️ 异常数据：{标的} {问题}`（持仓分析处同步标注） | BUG P2，`auto_fix_eligible=false`（MANUAL_REVIEW，涉及成本/复权） |
 | 自检发现结构/逻辑错误且已修正 | 无需提示 | 无需建单 |
 | 自检发现无法当场修正的系统性问题 | `⚠️ 自检发现：{问题}` | BUG P1/P2 按影响定级 |
 | 系统性框架改进机会（扫描池盲区等） | （可选一行） | REQ P1/P2，`steering/open/REQ-{NNN}.md` |
@@ -1149,3 +1280,6 @@ python my_doc/每日复盘/harness/automation/lib/run_lock.py status --task morn
 | 早盘报告生成中超时 | 输出已写内容，标记任务为 partial_complete |
 | task_state.json 损坏 | 重建为默认状态，记录 warning |
 | 1.5 检测到并行实例（LOCK_HELD） | 显式退出本次早盘分析，不写任何文件；如需接管走 --takeover（先落中间态到 logs/） |
+| 已过 9:30 且报告缺失（§1.2） | **补生成模式**：完整执行 9 节，头部标注"⚠️ 补生成"，数据时点用实际时间 |
+| task_state 显示完成但报告缺失（§1.4） | 异常残留 → 视为未完成，进入补生成 |
+| task_state 卡 in_progress 且报告缺失（§1.4） | 异常残留（中断实例）→ 进入补生成 |

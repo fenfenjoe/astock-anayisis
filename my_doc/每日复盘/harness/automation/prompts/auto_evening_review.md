@@ -150,6 +150,59 @@ python my_doc/每日复盘/harness/automation/lib/run_lock.py acquire --task eve
 
 **第十七步必须释放本锁**（见文末）。
 
+### 1.5 报告新鲜度检查（REQ-016，🚨 自动化中断早发现）
+
+> **问题背景**：2026-09-24~09-30 连续 7 交易日自动化中断无复盘报告产出（决策盲区，节前减仓窗口丢失），
+> 直到节后周报才被人工发现。本步在收盘复盘执行前主动检测"连续多少交易日无复盘报告产出"，
+> 连续 ≥1 交易日即写 PENDING_CONFIRMATION.md 告警（与 auto_pending_remind 每 2h 扫描联动）。
+>
+> **口径**：检查 `previous_trading_day(today)`（不含今天）——今天的复盘报告正在本任务产出，
+> 检查的是"最近一个已结束交易日是否有复盘报告"。非交易日（周末/节假日）不计入无报告日。
+
+```bash
+
+python -X utf8 -c "
+import sys, re
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from datetime import date
+from pathlib import Path
+from lib.report_freshness import (
+    check_freshness_alert, previous_trading_day, build_pending_entry,
+)
+
+today = date.today()
+prev_td = previous_trading_day(today)  # 默认注入 config.trading_calendar
+if prev_td is None:
+    print('FRESHNESS: SKIP 无更早交易日，跳过检查')
+else:
+    result = check_freshness_alert('my_doc/每日复盘/reports', prev_td)
+    print(f'FRESHNESS: streak={result[\"streak\"]} alert={result[\"alert\"]} last={result[\"last_review_date\"]}')
+    print(f'  detail: {result[\"detail\"]}')
+    if result['alert']:
+        # 写 PENDING_CONFIRMATION.md（先读最大序号 +1）
+        pending_path = Path('my_doc/每日复盘/harness/automation/PENDING_CONFIRMATION.md')
+        text = pending_path.read_text(encoding='utf-8') if pending_path.exists() else ''
+        seqs = [int(m) for m in re.findall(r'^\|\s*(\d+)\s*\|', text, re.M)]
+        seq = max(seqs) + 1 if seqs else 1
+        entry = build_pending_entry(result['streak'], result['last_review_date'], today, seq)
+        # 在 ## 待确认 表首行插入（表头 |---| 之后）
+        marker = '|---|------|---------|------|:---:|---------|\n'
+        if marker in text:
+            text = text.replace(marker, marker + entry + '\n', 1)
+        else:
+            text += f'\n## 待确认 (1)\n\n| # | 日期 | 来源BUG | 事项 | 优先级 | 截止时间 |\n|---|------|---------|------|:---:|---------|\n{entry}\n'
+        pending_path.write_text(text, encoding='utf-8')
+        print(f'  PENDING 已写入: seq={seq}')
+" 2>&1
+```
+
+**判断规则**（严格按输出）：
+- `FRESHNESS: alert=True` → 已写 PENDING_CONFIRMATION 告警 + 本次执行日志标注"⚠️ 报告新鲜度告警：连续 {streak} 交易日无复盘报告产出"；**继续执行复盘**（告警只负责检测+通知，不阻断正常任务）
+- `FRESHNESS: alert=False` → 正常，无告警
+- `FRESHNESS: SKIP` → 无更早交易日（罕见），跳过
+
+> **与 REQ-013 的关系**：REQ-013 是"执行期并发控制"（运行锁），本步是"产出新鲜度监控"（检测+通知），二者互补不冲突。
+
 ---
 
 ## 第二步：更新 task_state → in_progress
@@ -1205,6 +1258,8 @@ if not added and not removed and not changed: print('持仓无变化')
 
 # 覆写 config/持仓.md
 header = '# 当前持仓\n\n> 本文件由每日复盘自动同步自 每日调仓.md，反映最新持仓状态。\n> 最后更新: 自动同步\n'
+# 已人工确认的成本口径说明（2026-10-14 用户确认，防 BUG-021 类误报复现；每次同步持久化写入）
+header += '> 📌 已人工确认：航空航天(159227) 成本 2.731、电网设备(159326) 成本 1.973 为卖出保留底仓后的真实历史成本（非未复权），浮亏百分比大属正常，**不得**标注"未复权/异常"、不得创建 BUG-021 类工单。\n'
 if cash is not None:
     header += f'可用金额: {cash} 元\n'
 elif old_cash is not None:
@@ -1563,6 +1618,49 @@ else:
 > 📄 **输出说明（2026-10 回退）**：复盘报告仅产出 **`复盘报告.md`**（Dashboard 以 markdown 渲染，
 > 恢复 HTML 改造前的呈现方式）；不再产出 `.html` 版本。
 
+### 假期持仓预案（条件节 · REQ-016）
+
+> ⚠️ **仅当今天是长假前最后一个交易日（`is_holiday_eve`，下一交易日间隔 ≥4 天，即国庆/春节/中秋等长假）时输出完整预案；普通周末不输出完整预案（仅一行说明）。**
+
+**执行判断**（bash 确认，禁止凭推理）：
+
+```bash
+
+python -X utf8 -c "
+import sys
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from datetime import date
+from lib.report_freshness import is_holiday_eve
+import config.trading_calendar as tc
+
+today = date.today()
+next_td = tc.next_trading_day(today)
+if next_td is None:
+    print('HOLIDAY_EVE: False（无下一交易日）')
+else:
+    eve = is_holiday_eve(today, next_td)
+    print(f'HOLIDAY_EVE: {eve}（下一交易日 {next_td}，间隔 {(next_td - today).days} 天）')
+"
+```
+
+- `HOLIDAY_EVE: True` → 在复盘报告末尾（"核心风险与次日关注"之后）追加**假期持仓预案**小节：
+  ```
+  ## 假期持仓预案（{假期天数} 天）
+
+  | 持仓标的 | 是否过节 | 依据 | 假期风险变量 |
+  |---------|---------|------|------------|
+  | {逐只} | 过/兑现 | {仓位逻辑/兑现理由} | {假期期间影响该标的的变量} |
+
+  **假期操作建议**：
+  - {哪些仓位过节、哪些兑现/减仓}
+  - {假期风险变量清单：外盘/汇率/商品/政策}
+  - {节后首日开盘注意事项}
+  ```
+  同时将预案要点写入次日 staging（第十一步）的"特别关注"节，供节后早盘对照。
+- `HOLIDAY_EVE: False` → 不输出预案节（复盘报告末尾一行说明即可：`> 下个交易日 {next_td}，非长假，无假期预案。`）
+
+> **节后衔接**：假期后首个交易日早盘，对照本预案逐项核对"哪些兑现了/哪些过节了/结果如何"（写入前次预测回顾）。
+
 ---
 
 ## 第十三步：报告审阅（2-3轮自检）
@@ -1589,7 +1687,7 @@ else:
 | 数据源探测 `all_fail`（任务中止） | 无报告（已中止，写入执行日志） | BUG P1，`auto_fix_eligible=false`（MANUAL_REVIEW） |
 | 数据源探测 `partial`（≥2 源不可达，或同一源连续 2 交易日不可达） | `⚠️ 数据源降级：{源列表}` | BUG P2，`auto_fix_eligible=false`（需人工判断代码/网络） |
 | staging 缺失 / 过期重建 / 持仓过期 | `⚠️ staging {问题}，已{处理}` | BUG P2，`auto_fix_eligible=false`（复盘流程异常） |
-| 异常数据：|涨跌幅|>15% 未解释 / 成本未复权（如 159227 浮亏 -62.84%）/ 份额调整 | `⚠️ 异常数据：{标的} {问题}`（持仓复盘处同步标注） | BUG P2，`auto_fix_eligible=false`（涉及成本/复权修正，MANUAL_REVIEW） |
+| 异常数据：\|涨跌幅\|>15% 未解释 / 份额调整（除 159227/159326——两标成本已人工确认为保留底仓后的真实成本，浮亏大属正常，**不得**标注"未复权"） | `⚠️ 异常数据：{标的} {问题}`（持仓复盘处同步标注） | BUG P2，`auto_fix_eligible=false`（涉及成本/复权修正，MANUAL_REVIEW） |
 | 持仓同步失败（第十步报错） | `⚠️ 持仓同步失败，可能过期` | BUG P1，`auto_fix_eligible=false` |
 | 信号入库/结算异常（8.6 节） | `⚠️ 信号追踪异常：{问题}` | BUG P1/P2 按影响定级 |
 | 自检发现结构/逻辑错误且已修正 | 无需提示 | 无需建单 |

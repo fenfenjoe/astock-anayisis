@@ -669,6 +669,59 @@ except Exception as e:
 
 ---
 
+## F 组：报告新鲜度（REQ-016，1 条）
+
+> **目的**：检测"连续 N 个交易日无复盘报告产出"（决策盲区），在自动化静默失败时主动告警。
+> 2026-09-24~09-30 连续 7 交易日盲区教训。非交易日（周末/节假日）不计入无报告日。
+
+### F1: 复盘报告新鲜度检查
+
+**交易日与报告产出检查**（bash 执行，禁止凭推理）：
+
+```bash
+
+python -X utf8 -c "
+import sys, re
+sys.path.insert(0, 'my_doc/每日复盘/harness/automation')
+from datetime import date
+from pathlib import Path
+from lib.report_freshness import (
+    check_freshness_alert, build_pending_entry,
+)
+
+today = date.today()
+# 逻辑巡检 17:07 运行，检查 end_date=today：当日复盘应已产出（15:52 任务）
+result = check_freshness_alert('my_doc/每日复盘/reports', today)
+print(f'F1: streak={result[\"streak\"]} alert={result[\"alert\"]} last={result[\"last_review_date\"]}')
+print(f'F1 detail: {result[\"detail\"]}')
+if result['alert']:
+    # 写 PENDING_CONFIRMATION.md（先读最大序号 +1）
+    pending_path = Path('my_doc/每日复盘/harness/automation/PENDING_CONFIRMATION.md')
+    text = pending_path.read_text(encoding='utf-8') if pending_path.exists() else ''
+    seqs = [int(m) for m in re.findall(r'^\|\s*(\d+)\s*\|', text, re.M)]
+    seq = max(seqs) + 1 if seqs else 1
+    entry = build_pending_entry(result['streak'], result['last_review_date'], today, seq)
+    # 在 ## 待确认 表首行插入（表头 |---| 之后）
+    marker = '|---|------|---------|------|:---:|---------|\n'
+    if marker in text:
+        text = text.replace(marker, marker + entry + '\n', 1)
+    else:
+        text += f'\n## 待确认 (1)\n\n| # | 日期 | 来源BUG | 事项 | 优先级 | 截止时间 |\n|---|------|---------|------|:---:|---------|\n{entry}\n'
+    pending_path.write_text(text, encoding='utf-8')
+    print(f'F1: PENDING 已写入 seq={seq}')
+" 2>&1
+```
+
+**判定**：
+- `F1: alert=True` → **WARN**（写 PENDING_CONFIRMATION 告警 + 日志标注"报告新鲜度告警"）：
+  连续 {streak} 个交易日无复盘报告产出 → 决策盲区风险，告警只负责检测+通知（对照 BUG-019 调度问题），不自动修复
+- `F1: alert=False` → **PASS**（当日复盘已产出，或今日为交易日但复盘未到产出时点由 streak 语义自然处理）
+- 非交易日：streak 按交易日历口径计算（周末/节假日不计入），不会因假期误报
+
+> **注意**：F1 的告警写入是**幂等防重的**——同一 streak 期间重复巡检不会重复写行（每次读取最大序号 +1 追加，若同事项已存在则不重复写入；本步不自动去重，若发现重复可参照巡检汇总去重逻辑处理）。
+
+---
+
 ## 巡检汇总与 BUG 创建
 
 ### 收集所有 FAIL/WARN 结果
@@ -722,6 +775,9 @@ D 组 (数据一致性):
 
 E 组 (经验与元数据):
   ...
+
+F 组 (报告新鲜度, REQ-016):
+  F1: {PASS/WARN} — {详情}
 
 总计: {PASS} PASS, {FAIL} FAIL, {WARN} WARN
 新增 BUG: {N} | PENDING_CONFIRMATION: {M} 项
