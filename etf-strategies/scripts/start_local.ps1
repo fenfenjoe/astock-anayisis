@@ -1,25 +1,23 @@
-﻿# ============================================================
-# start_local.ps1 - Windows local startup for etf-dashboard
 # ============================================================
-# Starts the dashboard locally (python dashboard/app.py).
-# SCHEDULING MODEL: the in-app scheduler engine runs WITH the
-# web process (auto ON by default) — tasks start when web starts,
-# stop when web stops. No system Scheduled Tasks needed.
+# start_local.ps1 - Windows local startup for the quant dashboard
+# ============================================================
+# Starts the pure-quant Dashboard locally (python dashboard/app.py, :8010).
 #
-# If leftover etf-trigger-* / dsh-trigger-* Scheduled Tasks exist,
-# this script warns you to clean them up (idempotency keys are
-# shared, so double-run is safe, but engine mode should be the
-# single owner).
+# 2026-10-15 解耦改造后：
+# - Dashboard 为纯量化展示 + API（策略/持仓/信号/报告/回测/工单），不含 agent 运行时
+# - agent 运行时与定时任务自动化已迁移至 ~/.dsh/workspace/xiaoman/
+#   （agent :8020 由 ~/.dsh/workspace/xiaoman/scripts/start_all.ps1 启动）
+# - 本脚本只负责启动量化 Dashboard
 #
 # Usage:
-#   powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1         # default: engine auto ON
-#   powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1 -NoAuto # force engine auto OFF (external cron)
-#   powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1 -DryRun # only print guidance
+#   powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1         # 启动 Dashboard
+#   powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1 -DryRun # 只打印启动命令
+#   powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1 -Port 8010
 # ============================================================
 
 param(
-    [switch]$NoAuto,
-    [switch]$DryRun
+    [switch]$DryRun,
+    [int]$Port = 8010
 )
 
 $ErrorActionPreference = "Stop"
@@ -35,39 +33,17 @@ if (-not (Test-Path $PythonExe)) { throw "python not found: $PythonExe" }
 Write-Host "[etf] 目录    = $EtfDir"
 Write-Host "[etf] Python  = $PythonExe"
 
-# ---- Leftover Scheduled-Task detection (warning only) ----
-# 引擎模式不需要系统计划任务；若残留 etf-trigger-* / dsh-trigger-* 则提示清理。
-$etfTasks = @((cmd /c 'schtasks /query /tn "etf-trigger-*" /fo csv 2>nul') | Where-Object { $_ -match '"' })
-$oldTasks = @((cmd /c 'schtasks /query /tn "dsh-trigger-*" /fo csv 2>nul') | Where-Object { $_ -match '"' })
-
-if ($etfTasks.Count -gt 1 -or $oldTasks.Count -gt 1) {
-    Write-Host ""
-    Write-Host "[etf] 警告：检测到系统计划任务残留（etf-trigger-*/dsh-trigger-*）。"
-    Write-Host "[etf]   当前模式 = 引擎随 Web 启停，无需系统计划任务。"
-    Write-Host "[etf]   请以管理员运行 scripts\setup_etf_scheduled_tasks.ps1 -Cleanup 清理（幂等同 key，残留也安全但建议清理）。"
-}
-
 if ($DryRun) {
     Write-Host ""
     Write-Host "[etf] DryRun：未启动服务。实际启动命令："
     Write-Host "[etf]   $PythonExe dashboard/app.py"
+    Write-Host "[etf] 访问   = http://localhost:$Port"
     exit 0
 }
 
-# ---- Engine auto flag ----
-if ($NoAuto) {
-    # 显式关闭引擎 auto（外部 cron / scheduler_cli 精确触发场景）
-    Remove-Item Env:DASHBOARD_SCHEDULER_ENABLED -ErrorAction SilentlyContinue
-    Write-Host ""
-    Write-Host "[etf] 引擎 auto = OFF（-NoAuto；若外部无 cron，任务将不会自动执行）"
-} else {
-    # 默认：引擎 auto ON，随 Web 进程启动/停止
-    $env:DASHBOARD_SCHEDULER_ENABLED = "1"
-    Write-Host ""
-    Write-Host "[etf] 引擎 auto = ON（定时任务随 Web 启动而启动、随 Web 关闭而关闭；20s 轮询零 token）"
-}
-
-Write-Host "[etf] 启动 dashboard: python dashboard/app.py  (Ctrl+C 退出)"
+Write-Host "[etf] 启动量化 Dashboard: python dashboard/app.py  (Ctrl+C 退出)"
+Write-Host "[etf] 访问   = http://localhost:$Port"
 Write-Host ""
 
+$env:DASHBOARD_PORT = "$Port"
 & $PythonExe dashboard/app.py

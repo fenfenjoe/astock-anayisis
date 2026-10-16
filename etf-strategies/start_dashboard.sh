@@ -69,22 +69,16 @@ show_admin_hint() {
 }
 
 # ── 调度模式检测（提示，不阻断）──
-# 系统 cron / 计划任务精确触发（etf-trigger-* / dsh-trigger-*）与容器内引擎 auto 的关系：
-# - 检测到 etf-trigger-*（scheduler_cli 精确触发）→ 建议 DASHBOARD_SCHEDULER_ENABLED=0
-#   （cron 模式：由计划任务触发，引擎 auto 关闭；两者幂等同 key 互斥，双开也安全但语义不清晰）
-# - 检测到旧 dsh-trigger-* 仍启用 → 警告双跑，提示运行 setup_etf_scheduled_tasks.ps1 -Apply
+# 2026-10-15 解耦后：任务调度由 ~/.dsh/workspace/xiaoman/ 的 Agent 进程驱动，
+# 本容器只跑量化 Dashboard（展示 + API + 报告导入），不再内置调度引擎。
+# 若检测到旧 dsh-trigger-* 计划任务仍启用 → 仅提示（它们由 Agent 侧管理）。
 check_schedule_mode() {
   if command -v schtasks >/dev/null 2>&1; then
-    local etf_cnt dsh_cnt
-    etf_cnt=$(schtasks /query /tn "etf-trigger-*" /fo csv 2>/dev/null | grep -c '"' || true)
+    local dsh_cnt
     dsh_cnt=$(schtasks /query /tn "dsh-trigger-*" /fo csv 2>/dev/null | grep -c '"' || true)
-    if [ "${etf_cnt:-0}" -gt 1 ]; then
-      warn "⚠️ 检测到 etf-trigger-* 计划任务（系统精确触发模式）。"
-      warn "   建议 .env 中 DASHBOARD_SCHEDULER_ENABLED=0 —— 由计划任务调 scheduler_cli 触发，引擎 auto 关闭。"
-    fi
     if [ "${dsh_cnt:-0}" -gt 1 ]; then
-      warn "⚠️ 检测到旧 dsh-trigger-* 计划任务仍存在/启用（可能与容器调度双跑）。"
-      warn "   请运行 etf-strategies/scripts/setup_etf_scheduled_tasks.ps1 -Apply 迁移，或手动 Disable-ScheduledTask 停用。"
+      warn "ℹ️ 检测到 dsh-trigger-* 计划任务（Agent 侧调度基础设施，由 ~/.dsh/workspace/xiaoman/ 管理）。"
+      warn "   本容器只跑量化 Dashboard，任务调度由 Agent 进程驱动，无需在本容器启用调度。"
     fi
   fi
 }

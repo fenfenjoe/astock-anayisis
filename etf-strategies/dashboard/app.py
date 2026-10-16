@@ -56,9 +56,8 @@ from dashboard.auth import (
     get_secret_key_warning,
 )
 from dashboard.api_daily import router as daily_router
-from dashboard.api_agent import router as agent_router
 from dashboard.api_tickets import router as tickets_router
-from dashboard import scheduler as daily_scheduler
+from dashboard import importer as daily_importer
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -161,23 +160,17 @@ async def lifespan(app: FastAPI):
     #    若后启动引擎会错过导入期间的调度窗口（如 13:30 intraday_1330 窗口在
     #    13:34 重启后未被捕获）。引擎 start() 幂等，先启动不丢窗口。
     def _bg_restore_and_import():
-        # ── 1. 调度引擎最先启动（幂等，立即开始 tick，绝不因导入慢而错过窗口）──
-        try:
-            daily_scheduler.start()
-        except Exception as e:
-            print(f"[app]   WARNING: scheduler start failed: {e}")
-
-        # ── 2. 每日复盘集成：导入历史报告/持仓/交易（可与引擎并行）──
+        # ── 1. 每日复盘集成：导入历史报告/持仓/交易（可与后续步骤并行）──
         print("[app] Importing 每日复盘 data (reports/holdings/trades)...")
         try:
-            r = daily_scheduler.import_reports_from_disk()
+            r = daily_importer.import_reports_from_disk()
             print(f"[app]   reports imported: {r.get('imported', 0)}")
         except Exception as e:
             print(f"[app]   WARNING: reports import failed: {e}")
         try:
-            if daily_scheduler.import_holdings_from_md():
+            if daily_importer.import_holdings_from_md():
                 print("[app]   holdings imported from 持仓.md")
-            if daily_scheduler.import_trades_from_md():
+            if daily_importer.import_trades_from_md():
                 print("[app]   trades imported from 每日调仓.md")
         except Exception as e:
             print(f"[app]   WARNING: holdings/trades import failed: {e}")
@@ -198,13 +191,9 @@ async def lifespan(app: FastAPI):
     print("[app] Startup complete — server ready at http://localhost:8000")
     yield  # <== Server starts accepting requests HERE
 
-    # ── 关闭：调度引擎/通知 watcher 随 Web 进程停止（daemon 线程也会随进程退出，
-    #    这里显式 stop 让关闭更干净，避免正在 tick 的半截操作）──
+    # ── 关闭：通知 watcher 随 Web 进程停止（daemon 线程也会随进程退出，
+    #    这里显式 stop 让关闭更干净）──
     print("[app] Shutdown...")
-    try:
-        daily_scheduler.engine.stop()
-    except Exception as e:
-        print(f"[app]   WARNING: scheduler stop failed: {e}")
     try:
         from dashboard import notify as notify_mod
 
@@ -2036,9 +2025,7 @@ def _kill_existing_on_port(port: int) -> bool:
 app.include_router(protected)
 # ── 每日复盘集成 API（持仓/资产/信号/报告/调度，同样走 JWT）──
 app.include_router(daily_router)
-# ── 拟人 Agent「小满」API（聊天/文章/状态）──
-app.include_router(agent_router)
-# ── 工单管理 API ──
+# ── 工单管理 API（数据走 Dashboard db / 云库 tickets 表）──
 app.include_router(tickets_router)
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ var Tickets = {
     }
 
     var html = '<table class="sched-table"><thead><tr>' +
-      '<th>ID</th><th>类型</th><th>标题</th><th>严重度</th><th>状态</th><th>来源任务</th><th>创建时间</th><th>操作</th>' +
+      '<th>ID</th><th>类型</th><th>标题</th><th>问题摘要</th><th>严重度</th><th>状态</th><th>来源任务</th><th>创建时间</th><th>操作</th>' +
       '</tr></thead><tbody>';
 
     tickets.forEach(function(t) {
@@ -34,6 +34,7 @@ var Tickets = {
         '<td class="mono">' + t.id.substring(0, 8) + '</td>' +
         '<td>' + kindIcon + ' ' + (t.kind === 'bug' ? 'BUG' : 'REQ') + '</td>' +
         '<td>' + Tickets.esc(t.title) + '</td>' +
+        '<td class="ticket-summary" title="' + Tickets.esc(Tickets.summaryOf(t, 400)) + '">' + Tickets.esc(Tickets.summaryOf(t, 60)) + '</td>' +
         '<td>' + severityIcon + ' ' + t.severity.toUpperCase() + '</td>' +
         '<td><span class="ticket-status ticket-status-' + t.status + '">' + statusLabel + '</span></td>' +
         '<td class="mono">' + Tickets.esc(t.source_task || '—') + '</td>' +
@@ -76,7 +77,7 @@ var Tickets = {
       '</div></div>';
 
     if (t.description) {
-      html += '<div class="ticket-section"><h4>描述</h4><pre class="ticket-desc">' + this.esc(t.description) + '</pre></div>';
+      html += '<div class="ticket-section"><h4>描述</h4><div class="ticket-desc ticket-desc-md">' + marked.parse(Tickets.esc(t.description)) + '</div></div>';
     }
 
     if (logs.length > 0) {
@@ -127,6 +128,24 @@ var Tickets = {
     if (statusEl && statusEl.value) f.status = statusEl.value;
     window._ticketFilter = f;
     this.load();
+  },
+
+  // 从描述中提取「## 问题摘要」后的第一行；无则回退到标题。
+  // 老工单（BUG-064 前的泛描述）没有该节 → 返回空，列表显示「—」。
+  summaryOf: function(t, maxLen) {
+    var desc = t.description || '';
+    var idx = desc.indexOf('## 问题摘要');
+    if (idx >= 0) {
+      var after = desc.substring(idx + '## 问题摘要'.length);
+      var lines = after.split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (line) {
+          return line.length > maxLen ? line.substring(0, maxLen) + '…' : line;
+        }
+      }
+    }
+    return '';
   },
 
   esc: function(s) {

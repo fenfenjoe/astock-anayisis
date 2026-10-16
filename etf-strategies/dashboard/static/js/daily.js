@@ -100,13 +100,11 @@ function switchView(viewId) {
     b.classList.toggle('topnav-active', b.getAttribute('data-view') === viewId);
   });
   // 持仓只在首次进入加载（避免覆盖用户未保存的编辑）；
-  // 信号/报告/调度每次进入都刷新（这些内容会随时间新增）。
+  // 信号/报告每次进入都刷新（这些内容会随时间新增）。
   if (viewId === 'view-portfolio' && !_viewInit.portfolio) { _viewInit.portfolio = true; pfLoad(); }
   if (viewId === 'view-signals') { _viewInit.signals = true; sigLoad(true); sigqLoad('day'); }
   if (viewId === 'view-reports') { _viewInit.reports = true; repLoad(true); }
-  if (viewId === 'view-scheduler') { _viewInit.scheduler = true; schedLoad(true); }
   if (viewId === 'view-tickets') { _viewInit.tickets = true; Tickets.load(); }
-  if (viewId === 'view-agent') { _viewInit.agent = true; Agent.load(true); }
 }
 
 
@@ -1052,143 +1050,6 @@ async function repImport() {
 
 
 // ═══════════════════════════════════════════════════════════════
-// 定时任务
-// ═══════════════════════════════════════════════════════════════
-
-let schedAuto = false;  // 当前 auto 开关状态（schedLoad 刷新）
-
-async function schedLoad(force) {
-  if (!force && !_viewInit.scheduler) return;
-  try {
-    const [tasksData, runs] = await Promise.all([
-      apiGet('/api/scheduler/tasks'),
-      apiGet('/api/scheduler/runs?limit=15'),
-    ]);
-    const tasks = tasksData;
-    schedAuto = !!tasks.auto_enabled;
-    const online = !!tasks.online;
-    const eng = $el('sched-engine');
-    if (eng) {
-      if (!online) {
-        eng.textContent = '😴 小满未上线 · 定时任务暂停'
-          + ` · 今日交易日:${tasks.is_trading_day ? '是' : '否'}`
-          + (tasks.last_tick ? ' · 心跳:' + tasks.last_tick.slice(11, 19) : '');
-      } else {
-        eng.textContent = (schedAuto ? '👔 上班中 · 按日程表执行' : '🏖️ 请假中 · 定时任务暂停')
-          + ` · 今日交易日:${tasks.is_trading_day ? '是' : '否'}`
-          + (tasks.last_tick ? ' · 心跳:' + tasks.last_tick.slice(11, 19) : '');
-      }
-    }
-    const autoBtn = $el('sched-auto-btn');
-    if (autoBtn) {
-      if (!online) {
-        autoBtn.style.display = 'none';
-      } else {
-        autoBtn.style.display = '';
-        autoBtn.textContent = schedAuto ? '🏖️ 请假' : '👔 上班';
-        autoBtn.classList.toggle('btn-accent', schedAuto);
-        autoBtn.title = schedAuto ? '点击请假：暂停定时任务' : '点击上班：按日程表执行定时任务';
-      }
-    }
-    const stText = { success: '✅ 成功', failed: '❌ 失败', timeout: '⏱️ 超时', running: '⏳ 运行中', skipped: '⏭️ 跳过' };
-    function renderTasks(taskList, tbodyId) {
-      const tbody = $el(tbodyId);
-      if (tbody) {
-        tbody.innerHTML = taskList.map((t) => {
-          const last = t.last_run || {};
-          const running = last.status === 'running';
-          return `<tr>
-            <td class="col-name"><b>${escapeHtml(t.task_id)}</b><br><span class="muted">${escapeHtml(t.description || '')}</span></td>
-            <td class="col-num">${escapeHtml(t.target_time)}${t.hourly ? ' (每小时)' : ''}</td>
-            <td class="col-num">${t.trading_day_required ? '是' : '否'}</td>
-            <td class="col-num ${last.status === 'failed' ? 'num-danger' : ''}">${stText[last.status] || '—'}</td>
-            <td class="col-num">${last.run_time ? escapeHtml(last.run_time.slice(0, 19)) : '—'}</td>
-            <td class="col-act"><button class="btn btn-sm" onclick="schedRun('${t.task_id}')" ${running ? 'disabled' : ''}>▶ 立即运行</button></td>
-          </tr>`;
-        }).join('') || '<tr><td colspan="6" class="loading-cell">暂无任务</td></tr>';
-      }
-    }
-    renderTasks(tasks.daily_tasks || [], 'sched-daily-tbody');
-    renderTasks(tasks.other_tasks || [], 'sched-other-tbody');
-    const runsEl = $el('sched-runs');
-    if (runsEl) {
-      runsEl.innerHTML = runs.items.map((r) => {
-        const st = { success: '✅', failed: '❌', timeout: '⏱️', running: '⏳', skipped: '⏭️' }[r.status] || '·';
-        const stopBtn = r.status === 'running'
-          ? `<button class="btn btn-sm btn-danger sched-stop-btn" onclick="event.stopPropagation();schedStop('${escapeHtml(r.task_id)}')">⏹ 停止</button>`
-          : '';
-        return `<div class="sched-run" onclick="schedShowLog(${r.id})">
-          <span>${st}</span> <b>${escapeHtml(r.task_id)}</b>
-          <span class="muted">${r.trigger === 'manual' ? '手动' : '自动'} · ${escapeHtml(r.run_time || '')}</span>
-          <span class="muted">${r.duration_sec != null ? r.duration_sec + 's' : ''}</span>
-          ${stopBtn}
-        </div>`;
-      }).join('') || '<p class="muted">暂无运行记录</p>';
-    }
-  } catch (e) {
-    safeSetHTML('sched-daily-tbody', '<tr><td colspan="6" class="loading-cell">加载失败: ' + escapeHtml(e.message) + '</td></tr>');
-    safeSetHTML('sched-other-tbody', '<tr><td colspan="6" class="loading-cell">加载失败: ' + escapeHtml(e.message) + '</td></tr>');
-  }
-}
-
-async function schedToggleAuto() {
-  const btn = $el('sched-auto-btn');
-  if (btn) btn.disabled = true;
-  try {
-    const r = await apiPost('/api/scheduler/auto', { enabled: !schedAuto });
-    schedAuto = !!r.auto_enabled;
-    toast(r.message || (schedAuto ? '👔 小满上班了，开始按日程表工作' : '🏖️ 小满请假了，定时任务暂停'), 'success');
-    schedLoad(true);
-  } catch (e) {
-    toast('切换失败: ' + e.message, 'error');
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-
-async function schedRun(taskId) {
-  try {
-    const r = await apiPost('/api/scheduler/run/' + encodeURIComponent(taskId), {});
-    toast('已启动 ' + taskId + '（run#' + r.run_id + '）', 'success');
-    setTimeout(() => schedLoad(true), 4000);
-  } catch (e) {
-    toast('运行失败: ' + e.message, 'error');
-  }
-}
-
-async function schedStop(taskId) {
-  if (!confirm('确定停止任务「' + taskId + '」吗？正在进行的分析会被中断。')) return;
-  try {
-    const r = await apiPost('/api/scheduler/stop/' + encodeURIComponent(taskId), {});
-    toast('已请求停止 ' + taskId, 'success');
-    setTimeout(() => schedLoad(true), 2000);
-  } catch (e) {
-    toast('停止失败: ' + e.message, 'error');
-  }
-}
-
-async function schedShowLog(runId) {
-  try {
-    const r = await apiGet('/api/scheduler/runs/' + runId + '/log');
-    const out = (r.output || '(无输出)').slice(-4000);
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `<div class="modal-card">
-      <div class="modal-head"><b>run#${r.id} · ${escapeHtml(r.task_id)}</b>
-        <span class="muted">${escapeHtml(r.run_time || '')} · ${r.status} · ${r.duration_sec != null ? r.duration_sec + 's' : '—'}</span>
-        <button class="btn-icon-only" onclick="this.closest('.modal-overlay').remove()">✕</button>
-      </div>
-      <pre class="modal-body">${escapeHtml(out)}</pre>
-    </div>`;
-    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-    document.body.appendChild(modal);
-  } catch (e) {
-    toast('读取日志失败: ' + e.message, 'error');
-  }
-}
-
-
-// ═══════════════════════════════════════════════════════════════
 // 自动轮询 — 迁移后调度器自动执行分析，报告/信号/运行状态自动刷新到页面
 // ═══════════════════════════════════════════════════════════════
 
@@ -1202,7 +1063,6 @@ function pollActiveDailyView() {
   const id = active.id;
   if (id === 'view-signals') { sigLoad(true); }
   else if (id === 'view-reports') { repLoad(true); }
-  else if (id === 'view-scheduler') { schedLoad(true); }
 }
 
 setInterval(pollActiveDailyView, POLL_INTERVAL_MS);

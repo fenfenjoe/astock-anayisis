@@ -74,24 +74,19 @@ docker compose logs -f        # 首次 admin 密码在这里
 - 修改调度：编辑 `.claude/scripts/task_schedule.json`（挂载在 /repo，容器内立即生效，无需重建）
 - 本地 Windows 启动同理：`scripts/start_local.ps1`（默认 auto ON，随 Web 启停）
 
-### 5.1 可选：外部 cron 精确触发（非默认，仅特殊场景）
+### 5.1 定时调度（2026-10-15 解耦后：由 Agent 驱动）
 
-dashboard 引擎是 **20s 纯 Python 轮询（零 token）**；若某天需要**精确时刻触发 + Web 未运行时也执行**（服务器场景），
-可用系统级定时任务调用独立触发入口，并把引擎 auto 关闭（`DASHBOARD_SCHEDULER_ENABLED=0`）：
+> **解耦后**：dashboard 内不再有调度引擎（`scheduler.py`/`scheduler_cli.py` 已随 Agent 外迁删除）。
+> 定时任务由 **Agent 进程**（`~/.dsh/workspace/xiaoman/agent`，`scheduler_agent.tick` 20s 轮询）
+> 或 **DSH 计划任务**（`dsh-trigger-*` → `~/.dsh/workspace/xiaoman/scripts/dsh_trigger.py`）驱动，
+> 执行记录写入云库 `scheduler_runs`（Dashboard「运行日志」同源）。
 
-```bash
-# 触发入口（同步执行，退出码 = 任务成败）
-python -m dashboard.scheduler_cli --task morning_analysis      # 正常（星期/交易日/幂等判定）
-python -m dashboard.scheduler_cli --task evening_review --force
-```
+- 本容器/本地 Dashboard 只做**量化展示 + 报告导入**，不再负责任务调度。
+- Agent 生成报告后通过 `POST /api/reports/import` 导入 Dashboard（见 `docs/AGENT_GUIDE.md`）。
+- 调度配置：编辑 `~/.dsh/workspace/xiaoman/scripts/task_schedule.json`（单一事实源）。
+- Agent 启动：`~/.dsh/workspace/xiaoman/scripts/start_all.ps1`。
 
-| 平台 | 配置示例 |
-|------|---------|
-| **Linux crontab** | `7 9 * * 1-5 cd /repo/etf-strategies && python -m dashboard.scheduler_cli --task morning_analysis`（盘中/盘后同理；脚本内部有交易日/幂等判定，非交易日自动跳过） |
-| **macOS launchd** | 写 plist：`ProgramArguments = [python, -m, dashboard.scheduler_cli, --task, evening_review]` + `StartCalendarInterval` 15:52（1-5 星期） |
-| **Windows 计划任务** | `scripts/setup_etf_scheduled_tasks.ps1 -Apply`（创建 `etf-trigger-*`，动作 = `python etf_trigger.py --task X`；`-Cleanup` 清除回归引擎模式） |
-
-**两种模式的幂等共用 `scheduler_runs.window_key`**（cron 触发与引擎 auto 同 key），即使误开也互斥不重复执行。
+**两种触发方式的幂等共用 `scheduler_runs.window_key`**（Agent tick 与 dsh 计划任务同 key），即使误开也互斥不重复执行。
 
 ## 6. 日常运维
 
@@ -137,10 +132,7 @@ git pull                        # 拉取最新代码（prompt/代码均在 /repo
 ### 8.1 本地启动与调度模式
 
 - **Windows 本地启动**：`powershell -ExecutionPolicy Bypass -File scripts/start_local.ps1`
-  - 自动检测宿主计划任务并提示调度模式：检测到 `etf-trigger-*`（精确触发）→ 建议引擎 auto 关闭（默认即如此）；
-    检测到旧 `dsh-trigger-*` 仍启用 → 警告双跑
-  - 要引擎轮询触发用 `-Auto`（与计划任务共用幂等 key，互斥不重复）；`-DryRun` 只预览
-- **Linux/macOS 本地启动**：`python dashboard/app.py`（配 `DASHBOARD_SCHEDULER_ENABLED=0|1` 控制引擎 auto；
-  系统 cron 用 `python -m dashboard.scheduler_cli --task X` 精确触发，见 §5.1）
-- **Docker 启动**：`./start_dashboard.sh`（同样检测宿主计划任务：检测到 `etf-trigger-*` 时提示
-  将 `.env` 的 `DASHBOARD_SCHEDULER_ENABLED` 置 0）
+  - 纯量化 Dashboard 启动器（:8010），不再内置调度引擎；任务调度由 `~/.dsh/workspace/xiaoman/` 的 Agent 驱动
+  - `-DryRun` 只预览、`-Port` 自定义端口
+- **Linux/macOS 本地启动**：`python dashboard/app.py`（`DASHBOARD_PORT=8010`；纯量化展示 + API）
+- **Docker 启动**：`./start_dashboard.sh`（容器只跑量化 Dashboard，不跑 Agent 调度）

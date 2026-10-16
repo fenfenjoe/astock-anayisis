@@ -373,11 +373,6 @@ body {
   max-height: 480px;
   overflow-y: auto;
 }
-/* 工作日程：任务表全量展示，不出现内部纵向滚动条（整页自然滚动） */
-#view-scheduler .table-wrap {
-  max-height: none;
-  overflow-y: visible;
-}
 
 .data-table {
   width: 100%;
@@ -1456,6 +1451,10 @@ body {
 .ticket-section { margin-top: 16px; }
 .ticket-section h4 { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px; }
 .ticket-desc { white-space: pre-wrap; font-size: 0.8rem; color: var(--text-secondary); background: var(--bg-surface-2); padding: 12px; border-radius: var(--radius-sm); max-height: 200px; overflow-y: auto; }
+.ticket-desc-md { white-space: normal; line-height: 1.6; }
+.ticket-desc-md h2 { font-size: 0.9rem; color: var(--text-primary); margin: 8px 0 4px; }
+.ticket-desc-md h2:first-child { margin-top: 0; }
+.ticket-summary { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.78rem; color: var(--text-secondary); }
 .ticket-log-timeline { border-left: 2px solid var(--border-default); padding-left: 16px; }
 .ticket-log-entry { padding: 4px 0; font-size: 0.78rem; }
 .ticket-log-time { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted); margin-right: 8px; }

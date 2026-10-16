@@ -1,18 +1,37 @@
 """dashboard/api_tickets.py — 工单管理 API 路由（后台）
 
 直接读云库 public.tickets 表（数据由 Agent 进程写入），不经过 Agent 代理。
+2026-10-15 解耦：原实现依赖 agent.db（agent 运行时已外迁至 ~/.dsh），
+改为直接消费 Dashboard 侧共享的 cloud_db（同一云库 tickets 表），
+云库不可用时降级返回空列表，不再 import agent 包。
 """
 
 import os
 
-os.environ.setdefault("AGENT_DB_BACKEND", "cloud")
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from dashboard.auth import get_current_user
-from agent import db as agent_db
 
 router = APIRouter(prefix="/api/tickets", dependencies=[Depends(get_current_user)])
+
+_TICKET_COLS = "id,kind,title,description,severity,status,source_task,assignee,created_at,updated_at,result,log_entries"
+
+# 允许的筛选枚举（与 agent 侧写入口径一致）
+_KINDS = ("bug", "req")
+_SEVERITIES = ("p0", "p1", "p2", "p3")
+_STATUSES = ("open", "analyzing", "in_progress", "needs_human", "resolved", "closed")
+
+
+def _cloud() -> "object | None":
+    """返回 cloud_db 模块；云库不可用/未启用时返回 None。"""
+    try:
+        import cloud_db
+
+        if not cloud_db.enabled():
+            return None
+        return cloud_db
+    except Exception:
+        return None
 
 
 @router.get("")
@@ -23,24 +42,33 @@ def list_tickets(
     severity: str | None = Query(None),
     status: str | None = Query(None),
 ):
-    filters = {}
-    if kind and kind in ("bug", "req"):
-        filters["kind"] = kind
-    if severity and severity in ("p0", "p1", "p2", "p3"):
-        filters["severity"] = severity
-    if status and status in (
-        "open",
-        "analyzing",
-        "in_progress",
-        "needs_human",
-        "resolved",
-        "closed",
-    ):
-        filters["status"] = status
+    cd = _cloud()
+    if cd is None:
+        return {"tickets": [], "total": 0, "page": page, "page_size": page_size,
+                "total_pages": 0, "source": "unavailable"}
 
-    total = agent_db.ticket_count(**filters)
-    offset = (page - 1) * page_size
-    items = agent_db.ticket_list(limit=page_size, offset=offset, **filters)
+    filters = []
+    if kind in _KINDS:
+        filters.append(("kind", "eq", kind))
+    if severity in _SEVERITIES:
+        filters.append(("severity", "eq", severity))
+    if status in _STATUSES:
+        filters.append(("status", "eq", status))
+
+    try:
+        total = len(cd.select("tickets", columns="id", filters=filters or None) or [])
+        offset = (page - 1) * page_size
+        items = cd.select(
+            "tickets",
+            columns=_TICKET_COLS,
+            filters=filters or None,
+            order="created_at.desc",
+            limit=page_size,
+            offset=offset,
+        ) or []
+    except Exception:
+        return {"tickets": [], "total": 0, "page": page, "page_size": page_size,
+                "total_pages": 0, "source": "error"}
 
     return {
         "tickets": items,
@@ -48,12 +76,16 @@ def list_tickets(
         "page": page,
         "page_size": page_size,
         "total_pages": max((total + page_size - 1) // page_size, 0),
+        "source": "cloud",
     }
 
 
 @router.get("/{ticket_id}")
 def get_ticket(ticket_id: str):
-    t = agent_db.ticket_get(ticket_id)
+    cd = _cloud()
+    if cd is None:
+        raise HTTPException(503, "云库不可用")
+    t = cd.select_one("tickets", filters=[("id", "eq", ticket_id)])
     if not t:
         raise HTTPException(404, "工单不存在")
     return t
@@ -61,9 +93,12 @@ def get_ticket(ticket_id: str):
 
 @router.post("/{ticket_id}/retrigger")
 def retrigger_ticket(ticket_id: str):
-    import os, requests as req
+    import requests as req
 
-    t = agent_db.ticket_get(ticket_id)
+    cd = _cloud()
+    if cd is None:
+        raise HTTPException(503, "云库不可用")
+    t = cd.select_one("tickets", filters=[("id", "eq", ticket_id)])
     if not t:
         raise HTTPException(404, "工单不存在")
 

@@ -1,6 +1,6 @@
 """持仓/资产 领域逻辑 — 持仓.md 解析与回写 + 实时估值计算 + 交易账本.
 
-与 my_doc/每日复盘/harness/config/持仓.md 双向同步：
+与 my_doc/每日复盘/持仓.md 双向同步：
 - read_holdings_md()  从文件解析持仓（文件 → DB）
 - write_holdings_md() 把 DB 持仓回写文件（DB → 文件，保持 prompt 期望的表格格式）
 - read_trades_md()    从 每日调仓.md 解析调仓记录
@@ -10,7 +10,7 @@
 
 数据一致性（重要）：
 - 唯一权威数据源 = my_doc/每日复盘/每日调仓.md（§0 可用金额 + §1 当前持仓 + §2 调仓记录）；
-  harness/config/持仓.md 是其同步快照（每日复盘 4.5 也据此同步）。
+  my_doc/每日复盘/持仓.md 是其同步快照。
 - append_trade() 同时更新两个文件，口径与每日复盘任务 4.5 完全一致；
 - T+1 校验：A股/场内权益 ETF 当日买入份额当日不可卖出（跨境 513/159、债券 511 等 T+0 除外）。
 """
@@ -27,11 +27,15 @@ _env_repo_root = os.environ.get("DASHBOARD_REPO_ROOT")
 REPO_ROOT = (Path(_env_repo_root).resolve() if _env_repo_root
              else Path(__file__).resolve().parent.parent.parent)
 
-HOLDINGS_MD = REPO_ROOT / "my_doc" / "每日复盘" / "harness" / "config" / "持仓.md"
+HOLDINGS_MD = REPO_ROOT / "my_doc" / "每日复盘" / "持仓.md"
 TRADES_MD = REPO_ROOT / "my_doc" / "每日复盘" / "每日调仓.md"
 
 # 界面录入的撤销快照目录（写前快照，undo 回滚，不依赖历史可重放）
-SNAPSHOT_DIR = REPO_ROOT / ".dsh" / "trade-entry" / "undo"
+# 2026-10-15 解耦：随 .dsh 迁至用户目录 ~/.dsh/trade-entry/undo
+SNAPSHOT_DIR = (
+    Path(os.environ.get("USERPROFILE") or os.environ.get("HOME") or Path.home())
+    / ".dsh" / "trade-entry" / "undo"
+)
 
 # ── 本地文件读写（2026-09-07 移除 TOS：云权威库已迁移 Supabase，持仓/调仓以本地 md 为工作副本）──
 # key 参数仅为兼容历史签名保留（曾用于 TOS 对象 key），现本地实现不使用。

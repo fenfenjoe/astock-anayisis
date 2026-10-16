@@ -1442,8 +1442,6 @@ function showLoginPage() {
   // Clear any previous error
   const errEl = $el('login-error');
   if (errEl) errEl.style.display = 'none';
-  // 桌宠下线（pet.js 监听）
-  document.dispatchEvent(new CustomEvent('xm:auth', { detail: { authed: false } }));
 }
 
 function showApp() {
@@ -1451,14 +1449,12 @@ function showApp() {
   const app = $el('app-main');
   if (overlay) overlay.style.display = 'none';
   if (app) app.style.display = 'block';
-  // 桌宠上线（pet.js 监听；内部按角色门控 + 拉状态）
-  document.dispatchEvent(new CustomEvent('xm:auth', { detail: { authed: true } }));
 }
 
 // ═══════════════════════════════════════════════════════════════
 // 模式切换：主页（home） / 后台（admin）
 // 主页展示：策略全景 / 持仓 / 信号 / 报告
-// 后台展示：工作日程 / 角色 —— 仅管理员可见切换按钮
+// 后台展示：工单管理 —— 仅管理员可见切换按钮
 // ═══════════════════════════════════════════════════════════════
 
 let _currentMode = 'home';   // 'home' | 'admin'
@@ -1490,8 +1486,8 @@ function switchMode() {
   }
   const target = _currentMode === 'admin' ? 'home' : 'admin';
   applyModeUI(target);
-  // 进入后台默认落在“工作日程”，进入主页默认落在“策略全景”
-  switchView(target === 'admin' ? 'view-agent' : 'view-strategies');
+  // 进入后台默认落在“工单管理”，进入主页默认落在“策略全景”
+  switchView(target === 'admin' ? 'view-tickets' : 'view-strategies');
 }
 
 function setupModeUI() {

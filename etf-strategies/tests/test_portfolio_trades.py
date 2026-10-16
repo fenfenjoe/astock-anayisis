@@ -331,10 +331,11 @@ def test_api_undo_trade(api_client, ledger_paths):
 
 
 def test_api_toggle_scheduler_auto(api_client):
-    """可视化 auto 开关端点：开启/关闭自动调度。"""
+    """可视化 auto 开关端点：开启/关闭自动调度。
+
+    2026-10-15 解耦：dashboard 调度引擎（scheduler.py）已删除，auto 开关随引擎
+    外迁至 agent 侧（~/.dsh/workspace/xiaoman/agent，POST /api/agent/scheduler/*）。
+    Dashboard 不再提供 /api/scheduler/auto —— 该端点返回 404 属预期。
+    """
     r = api_client.post("/api/scheduler/auto", json={"enabled": True})
-    assert r.status_code == 200, r.text
-    assert r.json()["auto_enabled"] is True
-    r2 = api_client.post("/api/scheduler/auto", json={"enabled": False})
-    assert r2.status_code == 200, r2.text
-    assert r2.json()["auto_enabled"] is False
+    assert r.status_code == 404  # 端点已随调度引擎外迁删除

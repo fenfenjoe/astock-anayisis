@@ -19,7 +19,8 @@ from pathlib import Path
 
 import requests
 
-from dashboard import db, scheduler
+from dashboard import db
+from dashboard.importer import is_trading_day
 
 CONFIG_PATH = Path(__file__).resolve().parent / "data" / "notify_config.json"
 
@@ -314,7 +315,7 @@ class NotifyWatcher:
             return  # 未配置：静默跳过
         if cfg.get("only_trading_hours", True):
             now = datetime.now()
-            if not scheduler.is_trading_day(now.date()):
+            if not is_trading_day(now.date()):
                 return
             if not (dtime(9, 0) <= now.time() <= dtime(16, 0)):
                 return

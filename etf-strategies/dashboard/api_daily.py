@@ -1,4 +1,4 @@
-"""每日复盘集成 API — 持仓/资产/报告/信号/调度 (api_daily).
+﻿"""每日复盘集成 API — 持仓/资产/报告/信号/调度 (api_daily).
 
 路由前缀 /api，全部走 JWT 认证（依赖 get_current_user）。
 - Phase 0: 持仓/资产 配置 + 实时市值刷新 + 东财实验配置
@@ -10,6 +10,7 @@
 
 import json
 import math
+import os
 import re
 import sys
 import threading
@@ -23,7 +24,7 @@ from dashboard.auth import get_current_user
 from dashboard import db
 from dashboard import portfolio
 from dashboard import eastmoney
-from dashboard import scheduler
+from dashboard import importer
 from dashboard import notify
 
 router = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
@@ -955,8 +956,9 @@ def _load_tracking_signals() -> list[dict]:
                 return out
     except Exception:
         pass
-    # 本地兜底
-    local = Path(__file__).resolve().parent.parent.parent / "my_doc" / "每日复盘" / "harness" / "automation" / "config" / "signal_tracking.json"
+    # 本地兜底（harness 已随自动化层迁至 ~/.dsh/workspace/xiaoman/harness/）
+    _home = os.environ.get("USERPROFILE") or os.environ.get("HOME") or str(Path.home())
+    local = Path(_home) / ".dsh" / "workspace" / "xiaoman" / "harness" / "automation" / "config" / "signal_tracking.json"
     try:
         data = json.loads(local.read_text(encoding="utf-8"))
         return data.get("signals", [])
@@ -1045,8 +1047,13 @@ def _p0_execution(sigs: list[dict]) -> dict:
 
 
 def _inject_harness_lib():
-    """把 harness automation 目录加入 sys.path（导入 lib.signal_quality）。"""
-    lib_dir = Path(__file__).resolve().parent.parent.parent / "my_doc" / "每日复盘" / "harness" / "automation"
+    """把 harness automation 目录加入 sys.path（导入 lib.signal_quality）。
+
+    harness 已随自动化层迁至 ~/.dsh/workspace/xiaoman/harness/automation；不存在时
+    _quality_metrics() 会自动走内联计算（_inline_quality_metrics）。
+    """
+    _home = os.environ.get("USERPROFILE") or os.environ.get("HOME") or str(Path.home())
+    lib_dir = Path(_home) / ".dsh" / "workspace" / "xiaoman" / "harness" / "automation"
     if str(lib_dir) not in sys.path:
         sys.path.insert(0, str(lib_dir))
 
@@ -1148,193 +1155,8 @@ def get_report(report_date: str, report_type: str):
 @router.post("/reports/import")
 def post_reports_import():
     """手动重扫 reports/ 目录（幂等 upsert）。"""
-    result = scheduler.import_reports_from_disk()
+    result = importer.import_reports_from_disk()
     return {"ok": True, **result}
-
-
-# ═════════════════════════════════════════════════════════════════
-# 调度器
-# ═════════════════════════════════════════════════════════════════
-
-
-@router.get("/scheduler/tasks")
-def get_scheduler_tasks():
-    """task_schedule.json 中每日复盘任务 + 今日交易日状态 + 最近一次运行。"""
-    from agent import db as agent_db
-
-    today = datetime.now().date()
-    today_str = today.strftime("%Y-%m-%d")
-    is_td = scheduler.is_trading_day(today)
-    online = agent_db.meta_get("xiaoman_online") == "1"
-
-    def _is_daily(task):
-        """每天运行一次：非 hourly 且 days_of_week 是全部工作日或 None。"""
-        if task.get("hourly"):
-            return False
-        days = task.get("days_of_week")
-        if days is None:
-            return True
-        return len(days) >= 5
-
-    def _last_run_for_task(task, latest):
-        """构造 last_run，daily 且今天未运行 → 返回 None。"""
-        if latest is None:
-            return None
-        if _is_daily(task) and (latest["run_time"] or "").startswith(today_str):
-            return {
-                "status": latest["status"],
-                "trigger": latest["trigger"],
-                "run_time": latest["run_time"],
-                "duration_sec": latest["duration_sec"],
-                "id": latest["id"],
-            }
-        if _is_daily(task):
-            return None
-        return {
-            "status": latest["status"],
-            "trigger": latest["trigger"],
-            "run_time": latest["run_time"],
-            "duration_sec": latest["duration_sec"],
-            "id": latest["id"],
-        }
-
-    tasks = []
-    # BUG-FIX(2026-09-07)：原对每个 task 调一次 scheduler_latest（N+1 云往返，
-    # 拖慢后台页刷新）→ 改批量一次取全部 task 的最近运行。
-    scoped = scheduler.scoped_tasks()
-    latest_map = db.scheduler_latest_map([t["task_id"] for t in scoped])
-    for t in scoped:
-        latest = latest_map.get(t["task_id"])
-        tasks.append(
-            {
-                "task_id": t["task_id"],
-                "description": t.get("description", ""),
-                "target_time": t.get("target_time")
-                or f"每小时 :{t.get('target_minute', '?')}",
-                "hourly": bool(t.get("hourly")),
-                "days_of_week": t.get("days_of_week"),
-                "trading_day_required": bool(t.get("trading_day_required", False)),
-                "prompt_file": t.get("prompt_file", ""),
-                "is_daily": _is_daily(t),
-                "last_run": _last_run_for_task(t, latest),
-            }
-        )
-
-    # 拆分：每日一次 vs 其他频率，各自按时间排序
-    daily_tasks = [t for t in tasks if t["is_daily"]]
-    other_tasks = [t for t in tasks if not t["is_daily"]]
-
-    def _time_sort_key(task):
-        t = task["target_time"]
-        try:
-            h, m = t.split(":")
-            return (int(h), int(m))
-        except (ValueError, IndexError):
-            return (99, 0)
-
-    daily_tasks.sort(key=_time_sort_key)
-    other_tasks.sort(key=_time_sort_key)
-
-    return {
-        "date": today.isoformat(),
-        "is_trading_day": is_td,
-        "next_trading_day": (scheduler.next_trading_day(today) or today).isoformat(),
-        "auto_enabled": scheduler.engine.auto_enabled(),
-        "online": online,
-        "sched_running": scheduler.engine._thread is not None
-        and scheduler.engine._thread.is_alive(),
-        "last_tick": scheduler.engine.last_tick,
-        "last_error": scheduler.engine.last_error,
-        "tick_seconds": scheduler.TICK_SECONDS,
-        "current_task": scheduler.current_task(),
-        "tasks": tasks,
-        "daily_tasks": daily_tasks,
-        "other_tasks": other_tasks,
-    }
-
-
-@router.get("/scheduler/status")
-def get_scheduler_status():
-    return scheduler.engine.status()
-
-
-@router.get("/scheduler/engine")
-def get_scheduler_engine():
-    """当前执行引擎（2026-09-21 起仅 dsh，claude 兜底已移除）。"""
-    from dashboard import scheduler as sched_mod
-
-    return {
-        "engine": sched_mod.resolve_engine(),
-        "available": ["dsh"],
-        "default": sched_mod.DEFAULT_ENGINE,
-        "dsh_installed": sched_mod._find_dsh() is not None,
-    }
-
-
-@router.put("/scheduler/engine")
-def put_scheduler_engine(payload: dict):
-    """执行引擎固定为 dsh（历史 claude 值已废弃，保留端点兼容）。"""
-    from dashboard import scheduler as sched_mod
-
-    engine = str((payload or {}).get("engine", "")).strip().lower()
-    if engine != "dsh":
-        raise HTTPException(400, "仅支持引擎 dsh（claude 兜底已移除）")
-    if sched_mod._find_dsh() is None:
-        raise HTTPException(400, "本机未安装 dsh CLI，无法使用 dsh 引擎")
-    db.meta_set("scheduler_engine", engine)
-    return {"ok": True, "engine": engine}
-
-
-@router.post("/scheduler/auto")
-def post_scheduler_auto(payload: dict):
-    """切换内置调度引擎的 auto 模式（持久化到 DB，引擎每 tick 读 meta，即时生效）。
-
-    body: {"enabled": true|false}
-    """
-    enabled = bool((payload or {}).get("enabled"))
-    scheduler.engine.set_auto_enabled(enabled)
-    return {
-        "ok": True,
-        "auto_enabled": scheduler.engine.auto_enabled(),
-        "message": "自动调度已开启（引擎随 dashboard 进程运行）"
-        if enabled
-        else "自动调度已关闭（仅保留手动触发）",
-    }
-
-
-@router.post("/scheduler/run/{task_id}")
-def post_scheduler_run(task_id: str):
-    """手动立即运行任务（绕过时间/交易日门控）。同任务并发返回 409。"""
-    result = scheduler.run_task_by_id(task_id, trigger="manual")
-    if not result.get("started"):
-        code = 409 if result.get("reason") == "busy" else 400
-        raise HTTPException(code, result.get("message", "无法运行"))
-    return result
-
-
-@router.post("/scheduler/stop/{task_id}")
-def post_scheduler_stop(task_id: str):
-    """停止正在执行的任务（转发给 Agent 终止子进程）。未运行返回 409。"""
-    result = scheduler.dispatch_stop_to_agent(task_id)
-    if not result.get("stopped"):
-        code = 409 if result.get("reason") == "not_running" else 502
-        raise HTTPException(code, result.get("message", "无法停止"))
-    return result
-
-
-@router.get("/scheduler/runs")
-def get_scheduler_runs(task_id: str | None = None, limit: int = 50):
-    return {
-        "items": db.scheduler_runs_list(task_id=task_id, limit=min(max(limit, 1), 200))
-    }
-
-
-@router.get("/scheduler/runs/{run_id}/log")
-def get_scheduler_run_log(run_id: int):
-    run = db.scheduler_run_get(run_id)
-    if run is None:
-        raise HTTPException(404, f"运行记录 {run_id} 不存在")
-    return run
 
 
 # ═════════════════════════════════════════════════════════════════

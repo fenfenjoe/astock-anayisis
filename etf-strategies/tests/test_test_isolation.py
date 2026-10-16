@@ -71,7 +71,7 @@ def test_db_not_in_memory_mode_under_pytest():
 def test_lifespan_skips_side_effects_in_test_env(monkeypatch):
     """lifespan 在测试环境下必须跳过启动副作用（不调用真实导入/上传）。"""
     import dashboard.app as app_mod
-    from dashboard import scheduler as sched_mod
+    from dashboard import importer as importer_mod
 
     calls = {"import_holdings": 0, "import_trades": 0, "import_reports": 0}
 
@@ -87,9 +87,9 @@ def test_lifespan_skips_side_effects_in_test_env(monkeypatch):
         calls["import_reports"] += 1
         return {"imported": 0}
 
-    monkeypatch.setattr(sched_mod, "import_holdings_from_md", _spy_holdings)
-    monkeypatch.setattr(sched_mod, "import_trades_from_md", _spy_trades)
-    monkeypatch.setattr(sched_mod, "import_reports_from_disk", _spy_import_reports)
+    monkeypatch.setattr(importer_mod, "import_holdings_from_md", _spy_holdings)
+    monkeypatch.setattr(importer_mod, "import_trades_from_md", _spy_trades)
+    monkeypatch.setattr(importer_mod, "import_reports_from_disk", _spy_import_reports)
 
     # 模拟测试环境：即使 lifespan 被触发，副作用函数也不应被调用
     from fastapi.testclient import TestClient

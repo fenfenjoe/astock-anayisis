@@ -6,8 +6,6 @@
 <title>AStock ETF 量化策略 Dashboard</title>
 <!-- 字体：移除 Google Fonts 外链（国内不可达/阻塞渲染），改用本地字体栈（见 dashboard.css --font-* 变量） -->
 <link rel="stylesheet" href="/static/css/dashboard.css">
-<link rel="stylesheet" href="/static/css/agent.css">
-<link rel="stylesheet" href="/static/css/pet.css?v=20261010">
 <!-- echarts / marked 本地化（原 CDN 外链在国内不稳定 → 慢加载/误报失败） -->
 <script src="/static/vendor/echarts.min.js"></script>
 <script src="/static/vendor/marked.min.js"></script>
@@ -79,14 +77,12 @@
 
 <!-- ═══ TOP NAV (每日复盘集成视图) ═══
      主页模式（nav-home）：策略全景 / 持仓 / 信号 / 报告
-     后台模式（nav-admin）：工作日程 / 角色 —— 仅管理员可见，由 JS 按模式显示 -->
+     后台模式（nav-admin）：工单管理 —— 仅管理员可见，由 JS 按模式显示 -->
 <nav class="topnav" id="topnav">
   <button class="topnav-item nav-home topnav-active" data-view="view-strategies" onclick="switchView('view-strategies')">📊 策略全景</button>
   <button class="topnav-item nav-home" data-view="view-portfolio" onclick="switchView('view-portfolio')">💰 持仓/资产</button>
   <button class="topnav-item nav-home" data-view="view-signals" onclick="switchView('view-signals')">📡 每日信号</button>
   <button class="topnav-item nav-home" data-view="view-reports" onclick="switchView('view-reports')">📄 报告</button>
-  <button class="topnav-item nav-admin" data-view="view-agent" onclick="switchView('view-agent')">💬 角色</button>
-  <button class="topnav-item nav-admin" data-view="view-scheduler" onclick="switchView('view-scheduler')">🗓️ 工作日程</button>
   <button class="topnav-item nav-admin" data-view="view-tickets" onclick="switchView('view-tickets')">💼 工单管理</button>
 </nav>
 
@@ -430,60 +426,6 @@
   </section>
 </div>
 
-<!-- ═══ VIEW: 定时任务 ═══ -->
-<div class="view" id="view-scheduler">
-  <section class="panel">
-    <div class="panel-header">
-      <h2 class="panel-title">🗓️ 小满的工作日程（每日复盘等定时任务）</h2>
-      <div class="panel-controls">
-        <span class="legend-inline" id="sched-engine"></span>
-        <button class="btn btn-sm" id="sched-auto-btn" onclick="schedToggleAuto()" title="切换上班/请假">👔 上班</button>
-        <button class="btn btn-sm" onclick="schedLoad()">🔄 刷新</button>
-      </div>
-    </div>
-    <!-- 每日运行一次的任务 -->
-    <h3 class="em-title">每日任务</h3>
-    <div class="table-wrap">
-      <table class="data-table" id="sched-daily-table">
-        <thead>
-          <tr>
-            <th>任务</th>
-            <th class="col-num">时间</th>
-            <th class="col-num">需交易日</th>
-            <th class="col-num">最近状态</th>
-            <th class="col-num">最近运行</th>
-            <th class="col-act">操作</th>
-          </tr>
-        </thead>
-        <tbody id="sched-daily-tbody">
-          <tr><td colspan="6" class="loading-cell">加载中...</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <!-- 其他频率的任务 -->
-    <h3 class="em-title">其他任务</h3>
-    <div class="table-wrap">
-      <table class="data-table" id="sched-other-table">
-        <thead>
-          <tr>
-            <th>任务</th>
-            <th class="col-num">时间</th>
-            <th class="col-num">需交易日</th>
-            <th class="col-num">最近状态</th>
-            <th class="col-num">最近运行</th>
-            <th class="col-act">操作</th>
-          </tr>
-        </thead>
-        <tbody id="sched-other-tbody">
-          <tr><td colspan="6" class="loading-cell">加载中...</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <h3 class="em-title">运行日志</h3>
-    <div id="sched-runs" class="sched-runs"><p class="muted">加载中...</p></div>
-  </section>
-</div>
-
 <!-- ═══ VIEW: 工单管理 ═══ -->
 <div class="view" id="view-tickets">
   <section class="panel">
@@ -519,99 +461,8 @@
   </section>
 </div>
 
-<!-- ═══ VIEW: 角色（小满）═══ -->
-<div class="view" id="view-agent">
-  <!-- 小满状态栏：请假中 / 摸鱼中 / 正在做XXX -->
-  <div id="agent-status-bar" class="agent-status-bar">
-    <span class="agent-status-pill" id="agent-mood"></span>
-    <button class="btn btn-sm btn-primary" id="agent-online-btn" onclick="Agent.toggleOnline()" style="margin-left:12px">🌱 让小满上线</button>
-  </div>
-  <div class="agent-tabs">
-    <button class="agent-tab active" data-tab="profile" onclick="Agent.switchTab('profile')">👋 认识小满</button>
-    <button class="agent-tab" data-tab="chat" onclick="Agent.switchTab('chat')">💬 和小满聊天<span class="agent-tab-badge" id="agent-chat-badge" hidden aria-live="polite"></span></button>
-    <button class="agent-tab" data-tab="articles" onclick="Agent.switchTab('articles')">📄 我的动态</button>
-  </div>
-
-  <!-- 认识小满（介绍页） -->
-  <div class="agent-pane active" id="agent-pane-profile">
-    <div id="agent-profile" class="agent-profile"><p class="muted">加载中...</p></div>
-  </div>
-
-  <!-- 聊天 -->
-  <div class="agent-pane" id="agent-pane-chat">
-    <div class="agent-chat-layout">
-      <aside class="agent-sessions">
-        <!-- 📌 侧边栏双 Tab（会话 / 提示与待办） -->
-        <div class="agent-sidebar-tabs" role="tablist" aria-label="侧边栏切换">
-          <button class="agent-sidebar-tab active" data-sbtab="sessions" role="tab"
-                  aria-selected="true" onclick="Agent.switchSidebarTab('sessions')">💬 会话</button>
-          <button class="agent-sidebar-tab" data-sbtab="notices" role="tab"
-                  aria-selected="false" onclick="Agent.switchSidebarTab('notices')">📌 提示与待办<span class="agent-tab-badge agent-sidebar-badge" id="agent-notices-badge" hidden></span></button>
-        </div>
-        <!-- 会话列表 -->
-        <div class="agent-sessions-head" id="agent-sessions-head">
-          <h3 class="em-title">会话</h3>
-          <button class="btn btn-sm" onclick="Agent.newSession()">＋ 新会话</button>
-        </div>
-        <div id="agent-session-list" class="agent-session-list"><p class="muted">加载中...</p></div>
-        <!-- 提示与待办标题列表 -->
-        <div id="agent-notice-title-list" class="agent-notice-title-list" hidden>
-          <div id="agent-notice-titles" class="agent-notice-titles"><p class="muted">加载中...</p></div>
-          <div class="agent-notices-pager" id="agent-notices-pager"></div>
-        </div>
-      </aside>
-      <section class="agent-chat-main">
-        <div id="agent-messages" class="agent-messages">
-          <p class="muted">你好呀，我是小满～ 选一个会话开始聊，或者问我怎么看今天的财经大事。</p>
-        </div>
-        <!-- 提示与待办详情（右侧主区，选中标题后展示） -->
-        <div id="agent-notice-detail" class="agent-notice-detail" hidden>
-          <div class="agent-notice-detail-head">
-            <h3 class="em-title">📌 提示与待办</h3>
-            <button class="btn btn-sm" onclick="Agent.noticesReadAll()" title="全部标记已读">全部已读</button>
-          </div>
-          <div id="agent-notice-detail-body" class="agent-notice-detail-body"></div>
-        </div>
-        <div class="agent-input-row" id="agent-input-row">
-          <textarea id="agent-input" rows="2"
-            placeholder="和小满聊聊… 例如：你怎么看今天的 MLF 操作？"
-            onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();Agent.send();}"></textarea>
-          <button class="btn btn-primary" id="agent-send-btn" onclick="Agent.send()">发送</button>
-        </div>
-      </section>
-    </div>
-  </div>
-
-  <!-- 动态（时间线） -->
-  <div class="agent-pane" id="agent-pane-articles">
-    <div id="agent-articles" class="agent-articles"><p class="muted">加载中...</p></div>
-  </div>
-</div>
-
 <!-- Toast Container -->
 <div class="toast-container" id="toast-container"></div>
-
-<!-- ═══ 小满 LIVE2D 桌宠（看板娘：全局右下角 fixed，滚动不位移）
-     状态驱动：working / slack / sleep / leave / offline / thinking（见 pet.js 状态机）
-     渲染层(LIVE2D)由 pet.js 装配；资产缺失时降级为占位形态 -->
-<div class="xm-pet" id="xm-pet" data-state="unknown" aria-hidden="true">
-  <div class="xm-pet-stage" id="xm-pet-stage">
-    <div class="xm-pet-canvas" id="xm-pet-canvas"></div>
-    <div class="xm-pet-fallback" id="xm-pet-fallback" hidden>🌾</div>
-    <div class="xm-pet-bubble" id="xm-pet-bubble" hidden></div>
-    <div class="xm-pet-zzz" id="xm-pet-zzz" hidden><span>Z</span><span>z</span><span>z</span></div>
-  </div>
-  <div class="xm-pet-modes" id="xm-pet-modes" role="group" aria-label="小满状态切换">
-    <button type="button" class="xm-pet-mode" data-mode="random" title="让状态机立刻随机一个状态">随机</button>
-    <button type="button" class="xm-pet-mode" data-mode="reading" title="切到阅读（阅读执行由常驻进程调度）">阅读</button>
-    <button type="button" class="xm-pet-mode" data-mode="slack" title="切到摸鱼状态">摸鱼</button>
-  </div>
-  <div class="xm-pet-bar">
-    <button type="button" class="xm-pet-btn" id="xm-pet-btn-min" title="收起小满（再次点击恢复）" aria-label="收起小满">收起</button>
-  </div>
-</div>
-<!-- 小圆点：仅移动端窄屏自动收起时作为召回入口（桌面"收起"仅缩小不隐藏，不走小圆点） -->
-<button class="xm-pet-mini" id="xm-pet-mini" hidden title="召唤小满" aria-label="召唤小满">🌾</button>
 
 </div><!-- /#app-main -->
 
@@ -620,7 +471,5 @@
 <script src="/static/js/dashboard.js"></script>
 <script src="/static/js/daily.js"></script>
 <script src="/static/js/tickets.js"></script>
-<script src="/static/js/agent.js"></script>
-<script src="/static/js/pet.js?v=20261010a"></script>
 </body>
 </html>
