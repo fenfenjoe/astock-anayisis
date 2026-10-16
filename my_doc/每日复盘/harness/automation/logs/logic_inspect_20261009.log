@@ -1,9 +1,0 @@
-﻿[2026-10-09 17:13:49] LOGIC_INSPECT 开始 | 交易日=是
-[2026-10-09 17:26:17] ===== 巡检汇总开始 =====
-[2026-10-09 17:26:17] 交易日=是 | A组: A1 FAIL (archive/20261009/早盘分析-staging.md 巡检时不存在 — evening_review 晚启动 17:08:58 进行中, 复盘 11.0 归档尚未执行; 巡检期间复盘已自行补齐归档) / A2 FAIL (同 A1: 复盘分析-staging.md 巡检时不存在, 期间已补齐)
-[2026-10-09 17:26:17] B组: B1 PASS (早盘staging 章节完整) / B2 PASS (复盘staging 章节+教训≥2+变量≥3) / B3 PASS (ETF代码-名称一致) / B4 PASS (evening_review 未完成 → staging 新鲜度豁免, 属预期行为)
-[2026-10-09 17:26:17] C组: C1 PASS (早盘报告 7节) / C2 PASS (每日信号 7节, 含 P0执行追踪) / C3 FAIL (reports/20261009/复盘报告.md 巡检时不存在 — 同 BUG-023 根因: evening_review 晚启动进行中) / C4 PASS (task_state 与报告产出一致)
-[2026-10-09 17:26:17] D组: D1 PASS (持仓 7只一致) / D2 PASS (date=20261009 trading_day=True) / D3 PASS (无孤立信号 43条) / D4 PASS (信号模型 7文件一致, BUG-036 修复后持续 PASS)
-[2026-10-09 17:26:17] E组: E1 PASS (经验库无矛盾: OpenViking 检索投资/短线/审阅三域, 跨领域规则均有场景限定—做T反T放宽4条件/跷跷板vs普跌前置条件+交叉引用/普跌日不豁免P0减仓显式区分) / E2 PASS (BUG_INDEX OPEN=18/FIXED=14/WONT_FIX=1 与实际一致)
-[2026-10-09 17:26:17] 新增BUG=0 (A1/A2/C3 按去重铁律并入 BUG-023 第3次复现, 未新建) | 更新BUG=1 (BUG-023: evening_review 17:08:58 晚启动 76 分钟, 晚于 logic_inspect 17:07, 复盘运行中待完成后复核) | PENDING_CONFIRMATION #9 更新 (BUG-023 第3次复现) + 沿用 #8/#16/#17
-[2026-10-09 17:26:17] LOGIC_INSPECT 结束

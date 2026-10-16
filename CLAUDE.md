@@ -122,18 +122,22 @@
 
 ## 六、每日复盘 Harness 层
 
-`my_doc/每日复盘/` 采用 Harness Engineering 架构，将"厨房"与"菜"严格分离：
+> **2026-10-15 解耦后**：harness（厨房）已整体迁移至 `~/.dsh/workspace/xiaoman/harness/`；
+> 仓库 `my_doc/每日复盘/` 只保留**菜**（`reports/` 报告输出、`持仓.md`、`每日调仓.md`）。
 
 ```
-每日复盘/
-├── harness/          # 厨房 — 模板/经验/配置/工具
-│   ├── prompts/      #   永久模板（早盘分析+复盘分析方法论框架）
-│   ├── experience/   #   经验沉淀（投资经验/短线经验/报告审阅标准）
-│   ├── config/       #   日度配置（当前持仓快照）
-│   ├── staging/      #   当日可执行 prompt（每日覆盖，仅 2 个文件）
-│   └── archive/      #   历史 prompt 归档
-├── reports/          # 菜 — 仅报告产出（不含 prompt 副本）
-└── 每日调仓.md       #   调仓历史日志
+~/.dsh/workspace/xiaoman/harness/   # 厨房 — 模板/经验/配置/工具（已外迁）
+├── prompts/      #   永久模板（早盘分析+复盘分析方法论框架）
+├── experience/   #   经验沉淀（投资经验/短线经验/报告审阅标准）
+├── config/       #   日度配置（当前持仓快照）
+├── staging/      #   当日可执行 prompt（每日覆盖）
+├── archive/      #   历史 prompt 归档
+└── automation/   #   每日复盘自动化（prompts/config/steering/logs）
+
+my_doc/每日复盘/   # 菜 — 仅报告产出与用户数据（保留在仓库）
+├── reports/      #   报告输出
+├── 持仓.md       #   当前持仓快照
+└── 每日调仓.md   #   调仓历史日志
 ```
 
 **编排入口**：`daily-review-harness` skill。触发方式：说"执行早盘分析"或"执行复盘分析"。
@@ -143,17 +147,20 @@
 - **Staging 机制**：每日复盘后生成次日 staging prompt（`harness/staging/今日-*.md`），执行时直接读取，每日覆盖，消灭 prompt 副本
 - **经验持续积累**：每次复盘后追加 `harness/experience/`，无日期标签，冲突则修正
 
-详见 `my_doc/每日复盘/harness/README.md` 和 `daily-review-harness` skill。
+详见 `~/.dsh/workspace/xiaoman/harness/README.md` 和 `daily-review-harness` skill。
 
 ## 七、自动化迭代系统（DSH 自动化循环）
+
+> **2026-10-15 解耦后**：自动化层整体迁移至 `~/.dsh/workspace/xiaoman/`（小满之家），
+> 仓库内不再包含 agent 调度/自动化内容。本节所有路径均为 `~/.dsh/workspace/xiaoman/` 下相对路径。
 
 本项目为 `etf-strategies` 和 `每日复盘` 两个项目构建了自动化迭代层，基于 **DSH（DeepSeek Harness）headless** + Python 调度器实现。定时任务由 **Agent 进程（`scheduler_agent.tick`）** 或 **DSH 计划任务（`dsh_trigger.py`）** 驱动，执行记录写入云库 `scheduler_runs`（Dashboard「运行日志」同源）。
 
 ### 7.1 架构概览
 
 ```
-自动化层（本section定义）
-├── scripts/                         # 调度基础设施（原 .claude/scripts/，2026-09-21 迁出）
+~/.dsh/workspace/xiaoman/             # 小满之家（自动化层）
+├── scripts/                         # 调度基础设施（原 .claude/scripts/ → scripts/ → 本目录）
 │   ├── task_schedule.json           #   任务调度定义（时间/星期/交易日等，单一事实源）
 │   ├── task_scheduler.py            #   Python调度器（时间匹配+幂等+交易日判断）
 │   ├── scheduler_state.json         #   运行时幂等状态（自动创建）
@@ -161,22 +168,25 @@
 │   ├── dsh_loop_scheduler.py        #   轮询版调度器（备用）
 │   ├── dsh_cron.py                  #   cron 表生成器
 │   ├── dsh_status.py                #   执行状态一键查看
+│   ├── start_all.ps1                #   一键启动 agent + 相关服务
 │   └── setup_dsh_loop.md            #   DSH 循环管理指南
-├── etf-strategies/automation/       # ETF策略自动化
+├── automation/                      # ETF策略自动化（原 etf-strategies/automation/）
 │   ├── prompts/                     #   巡检+发现prompts
 │   ├── config/                      #   正确性定义+发现源配置
 │   ├── bugs/                        #   BUG跟踪（open/closed + INDEX）
+│   ├── steering/                    #   优化需求Steering（REQ生命周期管理）
 │   └── archive/                     #   历史扫描/转化报告
-└── 每日复盘/harness/automation/     # 每日复盘自动化
-    ├── prompts/                     #   早盘/盘中/复盘/REQ实施/周度/经验健康prompts
-    ├── config/                      #   交易日历 + 跨任务状态 + signal_tracking
-    ├── steering/                    #   优化需求Steering（REQ生命周期管理）
-    └── logs/                        #   执行日志
+├── harness/automation/              # 每日复盘自动化（原 每日复盘/harness/automation/）
+│   ├── prompts/                     #   早盘/盘中/复盘/REQ实施/周度/经验健康prompts
+│   ├── config/                      #   交易日历 + 跨任务状态 + signal_tracking
+│   ├── steering/                    #   优化需求Steering（REQ生命周期管理）
+│   └── logs/                        #   执行日志
+└── agent/                           # 小满运行时（内嵌 HTTP API :8020）
 ```
 
 **执行引擎**：Agent 进程（`agent/core/scheduler_agent.tick()`，随 Agent 常驻运行）为**主调度器**，检查到点任务 → 派生 `dsh --profile headless` 执行任务 prompt → 写 `scheduler_runs` 表（Dashboard「运行日志」）。Windows 计划任务（`dsh-trigger-*` → `dsh_trigger.py`）为备用精确触发。每次任务都是**独立 headless 进程**（零上下文累积，崩溃自愈）。
 
-**调度精度**：任务在目标时间窗口内触发（默认 ±7 分钟，可调 `window_minutes`）。全部 18 条任务定义见 `scripts/task_schedule.json`。
+**调度精度**：任务在目标时间窗口内触发（默认 ±7 分钟，可调 `window_minutes`）。全部 20 条任务定义见 `scripts/task_schedule.json`。
 
 **闭环架构**：自动化系统形成完整的 Dev Loop：
 
@@ -189,7 +199,7 @@
   → Steering健康监控 (experience_health 第五(B)步)
 ```
 
-### 7.2 全部 18 条任务调度
+### 7.2 全部 20 条任务调度
 
 | task_id | 时间 | 星期 | 需交易日 | Prompt |
 |---------|------|------|---------|--------|
@@ -202,27 +212,29 @@
 | intraday_1400 | 14:00 | 一~五 | ✓ | `auto_intraday_check.md` |
 | intraday_1430 | 14:30 | 一~五 | ✓ | `auto_intraday_check.md` |
 | evening_review | 15:52 | 一~五 | ✓ | `auto_evening_review.md` |
-| logic_inspect | 17:07 | 每天 | ✗ | `auto_logic_inspect.md` |
-| bug_auto_fix | 每小时:07 (9-18) | 一~五 | ✗ | `bug_auto_fix.md` |
 | bug_inspect_data | 12:07 | 一~五 | ✗ | `bug_inspect_data.md` |
 | bug_inspect_code | 12:17 | 一~五 | ✗ | `bug_inspect_code.md` |
-| bug_inspect_logic | 12:23 | 周一 | ✗ | `bug_inspect_logic.md` |
+| gap_analysis | 12:27 | 周一 | ✗ | `auto_gap_analysis.md` |
 | strategy_scan_weekly | 12:37 | 周二 | ✗ | `strategy_scan_weekly.md` |
 | experience_health | 12:47 | 周三 | ✗ | `auto_experience_health.md` |
-| weekly_portfolio | 13:17 | 周四 | ✗ | `auto_weekly_portfolio.md` |
 | req_implement | 12:57 | 一~五 | ✗ | `auto_req_implement.md` |
-| pending_remind | 每2h:13 (9-21) | 每天 | ✗ | `auto_pending_remind.md` |
+| weekly_portfolio | 13:17 | 周四 | ✗ | `auto_weekly_portfolio.md` |
+| logic_inspect | 17:07 | 每天 | ✗ | `auto_logic_inspect.md` |
+| signal_quality_weekly | 16:30 | 周三 | ✗ | `auto_signal_quality_weekly.md` |
+| report_quality_review | 17:20 | 一~五 | ✓ | `auto_report_quality_review.md` |
+| evolution_weekly | 17:30 | 周五 | ✗ | `auto_evolution_weekly.md` |
 
 > 修改调度：编辑 `scripts/task_schedule.json`，下次迭代即生效。
+> BUG 修复不再自动化：2026-10-14 起 `bug_auto_fix` 定时任务已停用，BUG 修复由用户在 dsh web 上让 dsh 处理。
 
 ### 7.3 启动与停止
 
-**启动**：Agent 服务（`scripts/start_all.ps1` 启动 `agent` 常驻进程）自带调度器，随 Agent 运行即生效，无需额外启动。Windows 计划任务 `dsh-trigger-*`（→ `dsh_trigger.py`）为备用精确触发，用 `Disable-ScheduledTask` / `Enable-ScheduledTask` 启停。
+**启动**：Agent 服务（`~/.dsh/workspace/xiaoman/scripts/start_all.ps1` 启动 `agent` 常驻进程）自带调度器，随 Agent 运行即生效，无需额外启动。Windows 计划任务 `dsh-trigger-*`（→ `~/.dsh/workspace/xiaoman/scripts/dsh_trigger.py`）为备用精确触发，用 `Disable-ScheduledTask` / `Enable-ScheduledTask` 启停。
 
-**管理**：详见 `scripts/setup_dsh_loop.md`。
-- 查看状态：`python scripts/task_scheduler.py --status` 或 `python scripts/dsh_status.py`
+**管理**：详见 `~/.dsh/workspace/xiaoman/scripts/setup_dsh_loop.md`。
+- 查看状态：`python ~/.dsh/workspace/xiaoman/scripts/task_scheduler.py --status` 或 `python ~/.dsh/workspace/xiaoman/scripts/dsh_status.py`
 - 查看执行记录：Dashboard「运行日志」（云库 `scheduler_runs` 表）
-- 强制重跑：删除 `scheduler_state.json` 中对应 key
+- 强制重跑：删除 `~/.dsh/workspace/xiaoman/scripts/scheduler_state.json` 中对应 key
 
 ### 7.4 与旧方案（CronCreate / Claude /loop）的对比
 
@@ -247,14 +259,14 @@
 
 ### 7.6 优化需求 Steering
 
-用户可通过 `etf-strategies/automation/steering/` 注入优化需求，把控自动化迭代方向。自动化任务执行过程中发现的架构性改进也会自动创建 REQ 文档。
+用户可通过 `~/.dsh/workspace/xiaoman/automation/steering/` 注入优化需求，把控自动化迭代方向。自动化任务执行过程中发现的架构性改进也会自动创建 REQ 文档。
 
 - **创建需求**：在 `steering/open/` 下按 `REQ_TEMPLATE.md` 模板创建 `REQ-{NNN}.md`，并在 `REQ_INDEX.md` 中登记
 - **自动集成**：巡检/修复/发现任务执行时自动读取 `steering/open/` 中待处理需求，纳入工作范围
 - **状态管理**：OPEN → IN_PROGRESS (自动化任务自动推进) → IMPLEMENTED (代码已写) → CLOSED (测试通过+用户确认)；ADOPTED/REJECTED 为特殊终态
 - **开发流程（强制）**：REQ 实施**必须走 dev-workflow 流程** — brainstorming → writing-plans → TDD → executing-plans → code-review。禁止跳过 TDD（无测试不得推进到 CLOSED），禁止跳过 brainstorming（不假思索的实现=返工）。涉及 A 股数据的仍走 `a-stock-data` skill
 
-每日复盘项目同样有独立的 steering 目录：`my_doc/每日复盘/harness/automation/steering/`，规则同上。
+每日复盘项目同样有独立的 steering 目录：`~/.dsh/workspace/xiaoman/harness/automation/steering/`，规则同上。
 
 **闭环驱动任务**：
 | 环节 | 自动化任务 | 说明 |
@@ -266,11 +278,11 @@
 
 ### 7.7 测试基础设施（v4.0 新增）
 
-每日复盘 harness 具有独立的测试框架，与 etf-strategies 的测试体系平行运行。
+每日复盘 harness 具有独立的测试框架，与 etf-strategies 的测试体系平行运行（已随 harness 外迁至 `~/.dsh/workspace/xiaoman/harness/`）。
 
 **目录结构**：
 ```
-harness/automation/
+~/.dsh/workspace/xiaoman/harness/automation/
 ├── lib/           # 可测试 Python 纯函数库
 ├── tests/         # pytest 测试套件
 ├── bugs/          # Harness BUG 跟踪系统
@@ -279,7 +291,7 @@ harness/automation/
 
 **运行测试**：
 ```bash
-cd my_doc/每日复盘/harness/automation
+cd ~/.dsh/workspace/xiaoman/harness/automation
 python -m pytest tests/ -v              # 全量
 python -m pytest tests/test_REQ_001.py -v  # 按 REQ
 ```
@@ -287,6 +299,6 @@ python -m pytest tests/test_REQ_001.py -v  # 按 REQ
 **关键纪律**：
 - REQ 实施必须通过 TDD 门禁（auto_req_implement 第 3.5 步），无测试不得推进到 IMPLEMENTED
 - Harness BUG 写入自身 `bugs/` 目录，不跨项目到 etf-strategies
-- `harness_bug_auto_fix` 调度任务（每小时 :17）自动处理可修复 BUG
+- BUG 修复不再自动化（2026-10-14 起 `bug_auto_fix` / `harness_bug_auto_fix` 均已停用），BUG 由用户在 dsh web 上让 dsh 处理
 - 涉及金融计算/信号逻辑的 BUG 标记 MANUAL_REVIEW，需人工确认
 
