@@ -3,7 +3,7 @@
 > 本文档是**续跑交接文档**：记录改造目标、用户已确认的决策、当前进度（已完成/进行中/待办）、
 > 所有路径引用点、验证清单。另开对话续跑时，先读本文档，再按「待完成任务」顺序执行。
 >
-> 最后更新：2026-10-15（本会话暂停，待新对话续跑）
+> 最后更新：2026-10-16（§四 待完成任务已全部完成，见 §六 变更记录）
 
 ---
 
@@ -162,7 +162,10 @@ astock-anayisis (仓库) = 纯量化系统
 
 ## 四、待完成任务（按顺序执行）
 
-### 4.1 迁移 agent UI 资产出 Dashboard → 小满 Web（待建目录）
+> ✅ **全部完成（2026-10-16）**：4.1~4.7 已执行完毕，验证通过（Dashboard 导入冒烟 ✓、
+> 残留 import grep ✓、测试套件 419 passed ✓、小满 Web SPA 建成 8 tests ✓）。
+
+### 4.1 迁移 agent UI 资产出 Dashboard → 小满 Web（✅ 完成）
 **动作**：把以下 Dashboard 前端资产**移动到** `~/.dsh/workspace/xiaoman/web/`（不要删除，小满 Web 要复用）：
 ```
 etf-strategies/dashboard/static/js/agent.js         → web/static/js/agent.js
@@ -178,7 +181,7 @@ etf-strategies/dashboard/static/live2d/             → web/static/live2d/（模
 - 桌宠 UI（Live2D，~L594-614）
 - 相关 script 引用（agent.js、pet.js）
 
-### 4.2 从 dashboard.html 移除 agent 相关 UI
+### 4.2 从 dashboard.html 移除 agent 相关 UI（✅ 完成）
 在 `etf-strategies/dashboard/templates/dashboard.html` 中删除：
 - 顶部导航的「💬 角色」「🗓️ 工作日程」入口（约 L88-89）
 - `view-scheduler`、`view-agent`、桌宠 UI 三大块
@@ -186,14 +189,14 @@ etf-strategies/dashboard/static/live2d/             → web/static/live2d/（模
 - 保留：策略全景/持仓/信号/报告/回测等纯量化 view + 工单页
 - 移除后确认无 JS 引用已删除的 view/元素（避免控制台报错）
 
-### 4.3 删除 dashboard 内 agent 调度引擎残留
+### 4.3 删除 dashboard 内 agent 调度引擎残留（✅ 完成）
 - **删除** `etf-strategies/dashboard/scheduler.py`（引擎+dsh 运行器，数据导入已由 importer.py 接管）
 - **删除** `etf-strategies/dashboard/scheduler_cli.py`（agent CLI 触发工具，属 agent 自动化）
 - **删除/迁移** `etf-strategies/scripts/etf_trigger.py`（imports dashboard.scheduler_cli）
   → 迁移到 `~/.dsh/workspace/xiaoman/scripts/`（agent 自动化侧）
 - ⚠️ **测试引用需处理**（见 §五.1）
 
-### 4.4 搭建小满 Web（`~/.dsh/workspace/xiaoman/web/`）
+### 4.4 搭建小满 Web（`~/.dsh/workspace/xiaoman/web/`）（✅ 完成）
 **形态**：纯前端 SPA（HTML+JS+CSS，无后端；可用 Python `http.server` 或任意静态服务器托管，
 或小脚本起个简单服务）。**直连 agent API(:8020)**，请求头带 `X-Api-Key`（`AGENT_API_KEY` 环境变量，
 `start_all.ps1` 中为 `xiaoman-secret-key-change-me`）。
@@ -219,7 +222,7 @@ etf-strategies/dashboard/static/live2d/             → web/static/live2d/（模
 `/articles`、`/articles/{aid}`、`/scheduler/run/{task_id}`、`/scheduler/stop/{task_id}`、
 `/scheduler/status`。
 
-### 4.5 更新 .gitignore / README / CLAUDE.md / 开发手册
+### 4.5 更新 .gitignore / README / CLAUDE.md / 开发手册（✅ 完成）
 - `.gitignore`：移除 `.dsh/*` 白名单规则（.dsh 已不在仓库）；`_*.py` 规则保留（开发规范）；
   `_*.json` 规则可留可删（临时 json 已清）；新增忽略说明（如有）
 - 根 `README.md`：从「Agent+Web 糅合系统」改为**纯量化系统说明**（数据/回测/API/Dashboard 使用方式，
@@ -230,7 +233,7 @@ etf-strategies/dashboard/static/live2d/             → web/static/live2d/（模
   注明「仓库已无 agent 运行时，自动化由 ~/.dsh/workspace/xiaoman 驱动」
 - `my_doc/每日复盘/开发手册.md`：同步路径说明
 
-### 4.6 编写 `docs/AGENT_GUIDE.md`（Agent 标准化使用手册）
+### 4.6 编写 `docs/AGENT_GUIDE.md`（Agent 标准化使用手册）（✅ 完成）
 内容（给 Agent 读的量化系统说明书）：
 - 系统定位：纯量化系统，提供数据/回测/信号/报告 API 与 CLI
 - 快速开始：仓库结构、环境变量（`.env`：SUPABASE/ANTHROPIC/DASHBOARD_SCHEDULER_*）、
@@ -248,7 +251,7 @@ etf-strategies/dashboard/static/live2d/             → web/static/live2d/（模
 - **数据源纪律**：取数走 `a-stock-data` skill（mootdx/腾讯优先，东财限流）
 - 附：小满 Web 地址、agent API 地址（供 Agent 回写展示）
 
-### 4.7 验证（最终）
+### 4.7 验证（最终）（✅ 完成）
 1. `cd etf-strategies && python -c "import dashboard.app"` 导入冒烟（无 agent import 报错）
 2. 启动 Dashboard：`python app.py`（或 `DASHBOARD_PORT=8010 python app.py`），
    访问 `http://localhost:8010`，确认登录后：策略全景/持仓/信号/报告/工单正常，**无角色/工作日程/桌宠**
@@ -314,4 +317,11 @@ agent API 所有端点要求 `X-Api-Key` 头 = `AGENT_API_KEY`。小满 Web 前�
 | 2026-10-15 | 用户拍板：小满 Web 放 `~/.dsh/workspace/xiaoman/`（纯前端 SPA 直连 agent API）；工单留 Dashboard 改用 Dashboard db；Dashboard 纯量化 |
 | 2026-10-15 | 用户拍板：废弃 `~/.dsh/astock`，全部并入 `~/.dsh/workspace/xiaoman/`（已执行） |
 | 2026-10-15 | Dashboard 后端解耦：importer.py 新建、portfolio.py/app.py/api_daily.py/api_tickets.py 改造完成 |
-| 2026-10-15 | 本会话暂停（用户要求另开对话续跑），本文档交接 |
+| 2026-10-16 | §四.1 迁移 agent UI 资产 → `~/.dsh/workspace/xiaoman/web/static/`（agent.js/pet.js/agent.css/pet.css/live2d 全量） |
+| 2026-10-16 | §四.2 dashboard.html 移除角色/工作日程/桌宠 view + agent.css/pet.css + agent.js/pet.js；daily.js/dashboard.js 删相关分支 |
+| 2026-10-16 | §四.3 删除 scheduler.py/scheduler_cli.py/api_agent.py、scripts/etf_trigger.py、setup_etf_scheduled_tasks.ps1、etf-strategies/agent 目录 |
+| 2026-10-16 | §四.4 搭建小满 Web SPA（`~/.dsh/workspace/xiaoman/web/`）：index.html + api.js(直连:8020/X-Api-Key) + app.js，6 视图，8 测试通过 |
+| 2026-10-16 | §四.5 更新 .gitignore / README / CLAUDE.md / 开发手册.md / DEPLOY.md / start_dashboard.sh |
+| 2026-10-16 | §四.6 新增 docs/AGENT_GUIDE.md（Agent 标准化使用手册：量化 API/CLI/调用示例/数据纪律） |
+| 2026-10-16 | §四.7 验证通过：Dashboard 导入冒烟 ✓、残留 import grep ✓（修复 notify.py scheduler→importer）、测试 419 passed ✓ |
+| 2026-10-16 | §五.5 分批 commit 完成（3 个 commit：迁移清理 / Dashboard 解耦 / docs），工作树 clean |
