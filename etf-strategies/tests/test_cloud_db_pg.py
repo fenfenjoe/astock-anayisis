@@ -510,6 +510,43 @@ def test_pg_run_reconnects_on_execute_error():
     assert len(calls) == 2, "第一次失败后应重连（共 2 次连接）"
 
 
+def test_pg_run_reconnects_on_pg8000_interface_error():
+    """BUG-FIX(2026-10-19)：pg8000 半开连接（AIDAP workspace 挂起后服务端断会话）
+    查询抛 InterfaceError('network error') → 必须识别为连接错误并重连重试一次。
+
+    回归场景：长时间运行的 Dashboard 进程持有半开连接，任何 DB 查询 500
+    （登录/策略全景/详情），新进程正常。原判定 isinstance(e, (ConnectionError,
+    OSError, TimeoutError)) 与 connection+closed 消息均漏掉 InterfaceError。
+    """
+    import cloud_db as _cd
+    _fresh_tls()
+
+    calls = []
+
+    class _Flaky(FakeConnection):
+        def __init__(self):
+            super().__init__(result=[{"ok": 1}], rowcount=1)
+            self.failed_once = False
+
+        def cursor(self):
+            if not self.failed_once:
+                self.failed_once = True
+                class _BadCursor(FakeCursor):
+                    def execute(self, sql, params=None):
+                        from pg8000.exceptions import InterfaceError
+                        raise InterfaceError("network error")
+                return _BadCursor()
+            return self.cursor_
+
+    flaky = _Flaky()
+    good = FakeConnection(result=[{"ok": 1}], rowcount=1)
+    _cd._pg_connect = lambda: calls.append(len(calls)) or (flaky if len(calls) == 1 else good)
+
+    rows = _cd._pg_run("SELECT 1", params=(), fetch=True)
+    assert rows == [{"ok": 1}]
+    assert len(calls) == 2, "InterfaceError('network error') 也应触发重连（共 2 次连接）"
+
+
 def test_pg_run_reconnects_on_socket_closed():
     """连接 is_socket_open=False（服务端已断）→ 自动重建连接。"""
     import cloud_db as _cd

@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # start_local.ps1 - Windows local startup for the quant dashboard
 # ============================================================
 # Starts the pure-quant Dashboard locally (python dashboard/app.py, :8010).

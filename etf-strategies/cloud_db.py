@@ -374,9 +374,23 @@ def _pg_run(sql: str, params=None, *, fetch=True):
             pass
         socket_closed = getattr(conn, "is_socket_open", True) is False
         msg = str(e).lower()
-        conn_err = socket_closed or isinstance(e, (ConnectionError, OSError, TimeoutError)) or (
-            "connection" in msg and ("closed" in msg or "unexpectedly" in msg)
+        # BUG-FIX(2026-10-19)：pg8000 在半开连接（AIDAP workspace 空闲挂起后服务端
+        # 断会话、客户端 socket 仍 ESTABLISHED）上查询抛 pg8000.InterfaceError
+        # ("network error")。它 MRO 是 Error→Exception，不是 ConnectionError/OSError，
+        # 且消息不含 connection+closed —— 原判定漏掉 → 不重连直接 raise → Dashboard
+        # 全部 DB 端点 500（登录/策略全景/详情），而新进程建新连接正常。把 pg8000
+        # InterfaceError（DB-API 连接/协议层错误）与 "network error" 消息纳入重连判定。
+        conn_err = socket_closed or isinstance(
+            e, (ConnectionError, OSError, TimeoutError)
+        ) or (
+            "network error" in msg
+            or ("connection" in msg and ("closed" in msg or "unexpectedly" in msg))
         )
+        try:
+            from pg8000.exceptions import InterfaceError as _PgInterfaceError
+            conn_err = conn_err or isinstance(e, _PgInterfaceError)
+        except ImportError:  # pragma: no cover
+            pass
         if not conn_err:
             raise  # SQL/约束错误，非连接问题，不重试
         _pg_discard_conn()

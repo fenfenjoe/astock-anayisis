@@ -1,0 +1,389 @@
+[dashboard] AStock ETF Dashboard v2 starting at http://localhost:8010
+[app]   cloud DB connection pool warmed
+[app] Syncing strategy definitions (idempotent)...
+[sync] Strategy KB synced from strategy_kb.py
+[sync] Strategy definitions re-synced (idempotent).
+[app] Pre-loading strategy modules...
+[app]   daily_signal loaded (21 strategies)
+[app] Background: warming signal cache...[app] Importing 每日复盘 data (reports/holdings/trades)...[app] Startup complete — server ready at http://localhost:8000
+
+
+[app]   reports imported: 0
+[sync] K-line fetch returned empty for 159206 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] 159218: +1 K-line rows
+[sync] 159227: +1 K-line rows
+[app]   trades imported from 每日调仓.md
+[notify] watcher started
+[sync] 159256: +1 K-line rows
+[sync] 159323: +1 K-line rows
+[sync] K-line fetch returned empty for 159326 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 159363 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] 159502: +1 K-line rows
+INFO:     127.0.0.1:55010 - "POST /api/auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:55010 - "POST /api/auth/login HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:55010 - "POST /api/auth/login HTTP/1.1" 400 Bad Request
+[sync] K-line fetch returned empty for 159509 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] 159516: +1 K-line rows
+[sync] 159518: +1 K-line rows
+[sync] 159529: +1 K-line rows
+[sync] 159566: +1 K-line rows
+[sync] K-line fetch returned empty for 159583 (2026-10-17~2026-10-19), API may not have recent data available
+INFO:     127.0.0.1:55098 - "GET / HTTP/1.1" 200 OK
+[sync] 159605: +1 K-line rows
+[sync] K-line fetch returned empty for 159611 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 159638 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 159667 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 159732 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 159755 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] 159766: +1 K-line rows
+[sync] 159819: +1 K-line rows
+[sync] 159825: +1 K-line rows
+[sync] 159840: +1 K-line rows
+[sync] 159851: +1 K-line rows
+[sync] 159852: +1 K-line rows
+[sync] 159865: +1 K-line rows
+[sync] K-line fetch returned empty for 159869 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 159870 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 159883 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 159892 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] 159915: +1 K-line rows
+[sync] 159928: +1 K-line rows
+[sync] 159949: +1 K-line rows
+[sync] 159967: +1 K-line rows
+[sync] 159980: +1 K-line rows
+[sync] 159981: +1 K-line rows
+[sync] 159985: +1 K-line rows
+[sync] 159992: +1 K-line rows
+[sync] 159995: +1 K-line rows
+[sync] 159998: +1 K-line rows
+[sync] 161226: +1 K-line rows
+[sync] K-line fetch returned empty for 501018 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 510180 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 510300 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] 510500: +1 K-line rows
+[sync] 510760: +1 K-line rows
+[sync] 510880: +1 K-line rows
+[sync] 510900: +1 K-line rows
+[sync] 511260: +1 K-line rows
+[sync] 511380: +1 K-line rows
+[sync] 511880: +1 K-line rows
+[sync] 512010: +1 K-line rows
+[sync] 512050: +1 K-line rows
+[sync] 512070: +1 K-line rows
+[sync] K-line fetch returned empty for 512100 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 512170 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 512200 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 512400 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] 512480: +1 K-line rows
+[sync] 512660: +1 K-line rows
+[sync] 512670: +1 K-line rows
+[sync] 512690: +1 K-line rows
+[sync] 512710: +1 K-line rows
+[sync] K-line fetch returned empty for 512800 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 512880 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 512890 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 512980 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] 513030: +1 K-line rows
+[sync] 513090: +1 K-line rows
+[sync] K-line fetch returned empty for 513100 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] 513120: +1 K-line rows
+[sync] 513180: +1 K-line rows
+[sync] 513190: +1 K-line rows
+[sync] 513290: +1 K-line rows
+[sync] 513310: +1 K-line rows
+[sync] 513330: +1 K-line rows
+[sync] K-line fetch returned empty for 513350 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 513360 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 513400 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 513500 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] 513520: +1 K-line rows
+[sync] 513630: +1 K-line rows
+[sync] 513750: +1 K-line rows
+[sync] 513920: +1 K-line rows
+[sync] 513970: +1 K-line rows
+[sync] 515030: +1 K-line rows
+[sync] K-line fetch returned empty for 515050 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] 515120: +1 K-line rows
+[sync] 515170: +1 K-line rows
+[sync] 515210: +1 K-line rows
+[sync] 515220: +1 K-line rows
+[sync] 515400: +1 K-line rows
+[sync] 515790: +1 K-line rows
+[sync] 515880: +1 K-line rows
+[sync] K-line fetch returned empty for 515980 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] 516150: +1 K-line rows
+[sync] 516160: +1 K-line rows
+[sync] 516190: +1 K-line rows
+[sync] 516510: +1 K-line rows
+[sync] 516520: +1 K-line rows
+[sync] 517520: +1 K-line rows
+[sync] K-line fetch returned empty for 518880 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 520830 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 560860 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] 561330: +1 K-line rows
+[sync] 561360: +1 K-line rows
+[sync] 561980: +1 K-line rows
+[sync] 562500: +1 K-line rows
+[sync] 562590: +1 K-line rows
+[sync] 562800: +1 K-line rows
+[sync] 563300: +1 K-line rows
+[sync] 588080: +1 K-line rows
+[sync] 588170: +1 K-line rows
+[sync] K-line fetch returned empty for 588200 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 588220 (2026-10-17~2026-10-19), API may not have recent data available
+[sync] K-line fetch returned empty for 588790 (2026-10-17~2026-10-19), API may not have recent data available
+[app]   Signal cache ready: 21/21 strategies
+INFO:     127.0.0.1:56526 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56583 - "POST /api/auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:58842 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58843 - "GET /api/signal-quality?period=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58847 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58842 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58843 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58843 - "GET /api/reports?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58843 - "GET /api/reports/20261019/%E6%97%A9%E7%9B%98%E6%8A%A5%E5%91%8A HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58860 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58861 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58890 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58891 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58930 - "GET /api/signal-quality?period=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58929 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58929 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58929 - "GET /api/signal-check-records?signal_id=SIG-20261019-02 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58932 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58932 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59030 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59030 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59032 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59032 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59168 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59168 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59170 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59170 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59553 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59553 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59556 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59556 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59782 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59782 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59838 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59838 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59839 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59839 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59941 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59941 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59942 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59942 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60005 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60005 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60006 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60006 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60055 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60055 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60056 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60056 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60121 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60121 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60122 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60122 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60211 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60211 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60212 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60212 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60212 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60212 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60316 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60316 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60320 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60320 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60379 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60379 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60380 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60380 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60499 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60499 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60500 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60500 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60614 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60614 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60615 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60615 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60763 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60763 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60764 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60764 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60895 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60895 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60896 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60896 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61033 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61033 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61034 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61034 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61165 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61165 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61166 - "GET /api/signal-check-records?signal_id=SIG-20261019-02 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61201 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61201 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61202 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61202 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61251 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61251 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61253 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61253 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61321 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61321 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61322 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61322 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61422 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61422 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61423 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61423 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61464 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61464 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61465 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61465 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61538 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61538 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61539 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61539 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61623 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61623 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61624 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61624 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61691 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61691 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61692 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61692 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61761 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61764 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61764 - "GET /api/strategies HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:61777 - "GET /api/portfolio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61777 - "GET /api/portfolio/eastmoney/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61777 - "GET /api/signal-enums HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61778 - "GET /api/signal-quality?period=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61777 - "GET /api/daily-signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61777 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61777 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61777 - "GET /api/reports?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61777 - "GET /api/reports/20261019/%E6%97%A9%E7%9B%98%E6%8A%A5%E5%91%8A HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61777 - "GET /api/reports/20261019/%E6%B5%8B%E8%AF%95%E6%8A%A5%E5%91%8A HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61777 - "GET /api/reports/20261019/%E6%97%A9%E7%9B%98%E6%8A%A5%E5%91%8A HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61817 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61818 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61916 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61917 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61989 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61990 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62070 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62071 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62128 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62129 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62192 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62193 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62353 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62355 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62565 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62566 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62687 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62688 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62688 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62688 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62688 - "GET /api/signal-check-records?signal_id=SIG-20261019-02 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62743 - "GET /api/signal-quality?period=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62747 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62747 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62748 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62748 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62805 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62805 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62809 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62809 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62926 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62926 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62927 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62927 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62982 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62982 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62983 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62983 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63042 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63042 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63095 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63095 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63096 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63096 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63239 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63239 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63240 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63240 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63298 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63298 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63299 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63299 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63431 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63431 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63432 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63432 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63627 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63627 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63628 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63628 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63845 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63845 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63846 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63846 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63934 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63934 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63935 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63935 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64018 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64018 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64018 - "GET /api/signal-check-records?signal_id=SIG-20261019-01 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64019 - "GET /api/signal-check-records?signal_id=SIG-20261019-02 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64034 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64034 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64034 - "GET /api/signal-check-records?signal_id=SIG-20261019-02 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64036 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64036 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64076 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64076 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64077 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64077 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64143 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64143 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64251 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64251 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64252 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64252 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64445 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64445 - "GET /api/strategies HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:64756 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64756 - "GET /api/strategies HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:64757 - "GET /api/portfolio HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64757 - "GET /api/portfolio/eastmoney/config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64757 - "GET /api/signal-enums HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64757 - "GET /api/daily-signals HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64757 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64759 - "GET /api/signal-quality?period=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64759 - "GET /api/reports?limit=500 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64759 - "GET /api/reports?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64759 - "GET /api/reports/20261019/%E6%97%A9%E7%9B%98%E6%8A%A5%E5%91%8A HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64759 - "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:64759 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64868 - "GET /api/signal-quality?period=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64759 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64880 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64880 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65026 - "GET /api/strategies HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:65249 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65435 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52626 - "POST /api/auth/login HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:52681 - "POST /api/auth/login HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:52807 - "GET /api/strategies HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:52808 - "GET /api/strategies/S1 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:52944 - "GET /api/signal-quality?period=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52943 - "GET /api/daily-signals?date=20261019 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52944 - "GET /api/reports?limit=500 HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:52943 - "GET /api/signal-history?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52943 - "GET /api/tickets HTTP/1.1" 200 OK

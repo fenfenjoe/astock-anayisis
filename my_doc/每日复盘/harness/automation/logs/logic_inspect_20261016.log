@@ -1,0 +1,13 @@
+[2026-10-16T17:0x+08:00] LOGIC_INSPECT 开始 | 交易日=是（20261016 周五）
+[2026-10-16T17:2x+08:00] LOGIC_INSPECT 汇总 | 交易日=是(20261016 周五)
+[2026-10-16T17:2x+08:00] A组: A1=FAIL A2=FAIL（archive/20261016/ 不存在 → BUG-023 第6次复现: 10-15 in_progress 状态滞留 + 当日 evening_review 未启动）
+[2026-10-16T17:2x+08:00] B组: B1=PASS B2=PASS B3=PASS B4=PASS（evening_review 未 completed → staging 新鲜度豁免；staging 仍为 10/15 内容）
+[2026-10-16T17:2x+08:00] C组: C1=PASS（早盘报告章节完整）C2=FAIL（每日信号.md 补生成缺 信号与早盘报告对照/信号评价/当日信号统计 3 节 → BUG-041 新建）C3=FAIL（复盘报告缺失 → BUG-023 第6次复现）C4=PASS（task_state 与报告产出一致）
+[2026-10-16T17:2x+08:00] D组: D1=PASS(7持仓一致) D2=WARN(date=20261015 != today；早盘补生成未回写 task_state) D3=WARN(4 个 09-15 信号 open 31 天 → BUG-042 新建) D4=FAIL(SKILL.md 缺交易价/止损价 → BUG-036 复发 FIXED→OPEN)
+[2026-10-16T17:2x+08:00] E组: E1=PASS(经验库无内容矛盾，跨领域规则均有场景限定) E2=PASS(OPEN=18/FIXED=16/WONT_FIX=2 与规范 BUG_INDEX 实际一致)
+[2026-10-16T17:2x+08:00] F组: F1=WARN（报告新鲜度告警 streak=2 最近报告2026-10-14 → PENDING #21 已写入）
+[2026-10-16T17:2x+08:00] 根因: BUG-023 持续（10-15 evening_review 进程死亡+锁 stale 状态未清理，10-16 当日未启动新实例）→ A1/A2/C3 连锁 FAIL + F1 streak 升级至 2；早盘补生成（17:05-17:07 产出信号+报告）漏 3 节且未回写 task_state
+[2026-10-16T17:2x+08:00] BUG处理: 新增 BUG 2 个（BUG-041 C2 补生成缺节 / BUG-042 D3 孤立信号）；复发重开 1 个（BUG-036 D4 SKILL.md 缺交易价/止损价）；A1/A2/C3 按去重铁律并入 BUG-023（第6次复现）未新建
+[2026-10-16T17:2x+08:00] PENDING: 更新 #9（BUG-023 第6次复现）+ 新增 #21（F1 报告新鲜度告警 streak=2）
+[2026-10-16T17:2x+08:00] ⚠️ 沙箱约束: 规范 harness 位于 D:\Users\dongyz8\.dsh\workspace\xiaoman\harness\（会话写入沙箱外）→ 本次巡检产物（BUG-041/042/023/036 镜像 + BUG_INDEX + PENDING_CONFIRMATION）写入工作区镜像 my_doc/每日复盘/harness/automation/，需同步回规范位置
+[2026-10-16T17:2x+08:00] LOGIC_INSPECT 完成 | PASS=11 FAIL=4 WARN=3

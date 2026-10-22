@@ -1,0 +1,58 @@
+{
+  "status": {
+    "push2": "ok",
+    "push2his": "ok",
+    "tencent": "ok",
+    "ths": "ok",
+    "push2ex": "ok",
+    "mootdx": "ok",
+    "datacenter": "ok",
+    "timestamp": "2026-10-16 16:49:39"
+  },
+  "overall": "all_ok",
+  "ok_count": 7,
+  "total_sources": 7,
+  "paths": {
+    "industry_ranking": {
+      "primary": "东财 push2 industry_comparison",
+      "fallback": "腾讯财经批量行情自算",
+      "note": ""
+    },
+    "northbound": {
+      "primary": "东财 push2 北向数据",
+      "fallback": "同花顺 hsgtApi + 本地 CSV 缓存",
+      "note": ""
+    },
+    "fund_flow": {
+      "primary": "东财 push2his 个股资金流（日级120日）",
+      "fallback": "mootdx 量价估算 + 腾讯换手率",
+      "note": ""
+    },
+    "margin": {
+      "primary": "东财 datacenter 融资融券",
+      "fallback": "标记'数据缺失'",
+      "note": ""
+    },
+    "limit_up": {
+      "primary": "东财 push2ex 涨停/炸板/跌停池",
+      "fallback": "同花顺涨停揭秘",
+      "note": ""
+    },
+    "hot_themes": {
+      "primary": "同花顺热点 reason tags",
+      "fallback": "东财人气榜概念命中",
+      "note": ""
+    },
+    "overseas": {
+      "primary": "腾讯财经（海外指数）",
+      "fallback": "WebSearch 综合搜索",
+      "note": ""
+    },
+    "kline": {
+      "primary": "mootdx TCP",
+      "fallback": "腾讯财经日K（百度股市通兜底）",
+      "note": ""
+    }
+  },
+  "note": "数据源探测结果 — 用于 Prompt 判断数据采集路径"
+}
