@@ -90,39 +90,3 @@ def get_ticket(ticket_id: str):
         raise HTTPException(404, "工单不存在")
     return t
 
-
-@router.post("/{ticket_id}/retrigger")
-def retrigger_ticket(ticket_id: str):
-    import requests as req
-
-    cd = _cloud()
-    if cd is None:
-        raise HTTPException(503, "云库不可用")
-    t = cd.select_one("tickets", filters=[("id", "eq", ticket_id)])
-    if not t:
-        raise HTTPException(404, "工单不存在")
-
-    source_task = t.get("source_task", "")
-    if not source_task:
-        return {
-            "started": False,
-            "reason": "no_source_task",
-            "message": "该工单无关联调度任务",
-        }
-
-    agent_url = os.environ.get("AGENT_API_URL", "http://127.0.0.1:8020").rstrip("/")
-    agent_key = os.environ.get("AGENT_API_KEY", "").strip()
-    headers = {"X-Api-Key": agent_key} if agent_key else {}
-
-    try:
-        r = req.post(
-            f"{agent_url}/api/agent/scheduler/run/{source_task}",
-            json={"trigger": "manual"},
-            headers=headers,
-            timeout=10,
-        )
-        result = r.json()
-    except Exception as e:
-        return {"started": False, "reason": "agent_unreachable", "message": str(e)}
-
-    return result

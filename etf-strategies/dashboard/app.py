@@ -167,13 +167,7 @@ async def lifespan(app: FastAPI):
             print(f"[app]   reports imported: {r.get('imported', 0)}")
         except Exception as e:
             print(f"[app]   WARNING: reports import failed: {e}")
-        try:
-            if daily_importer.import_holdings_from_md():
-                print("[app]   holdings imported from 持仓.md")
-            if daily_importer.import_trades_from_md():
-                print("[app]   trades imported from 每日调仓.md")
-        except Exception as e:
-            print(f"[app]   WARNING: holdings/trades import failed: {e}")
+        # 2026-10-23：持仓/调仓以云库为唯一权威，不再从本地 md 导入（写入亦已移除）
 
         # ── 3. 企业微信信号触发通知 watcher（未配置则静默空转）──
         try:

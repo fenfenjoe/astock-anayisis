@@ -208,7 +208,7 @@ def get_portfolio():
 
 @router.put("/portfolio/holdings")
 def put_portfolio_holdings(payload: HoldingsPayload):
-    """替换持仓：写 DB + 回写 持仓.md + 用缓存收盘价重算估值。
+    """替换持仓：写云库 + 用缓存收盘价重算估值（2026-10-23 起不再回写本地 持仓.md）。
 
     不触发网络同步（refresh_prices=False）以保证保存快速响应；
     用户点「刷新市值」才做真实行情同步。
@@ -231,15 +231,6 @@ def put_portfolio_holdings(payload: HoldingsPayload):
 
     db.portfolio_holdings_replace(rows)
 
-    # 回写 持仓.md（保持 prompt 期望的表格格式；可用金额行一并写回/保留）
-    try:
-        portfolio.write_holdings_md(rows, available_cash=payload.available_cash)
-        mtime = portfolio.holdings_md_mtime()
-        if mtime is not None:
-            db.meta_set("holdings_md_mtime", str(mtime))
-    except OSError as e:
-        raise HTTPException(500, f"回写 持仓.md 失败: {e}")
-
     if payload.total_assets is not None:
         db.meta_set("total_assets", str(payload.total_assets))
     if payload.available_cash is not None:
@@ -250,10 +241,10 @@ def put_portfolio_holdings(payload: HoldingsPayload):
 
 
 def _sync_ledger_to_db(state: dict) -> None:
-    """把账本状态（来自 每日调仓.md）同步进 DB：持仓表 + 调仓记录表 + 可用金额 + 估值快照。
+    """把账本状态同步进 DB（幂等）：持仓表 + 调仓记录表 + 可用金额 + 估值快照。
 
-    append_trade/undo 都会重写 每日调仓.md 与 持仓.md，这里是让 Dashboard 的
-    DB 镜像与文件保持一致（portfolio_holdings / portfolio_trades / portfolio_meta）。
+    2026-10-23 起账本以云库为唯一存储（portfolio.py 已直接写云库），此处保留
+    幂等同步 + 估值重算，供录入/撤销后刷新展示。
     """
     db.portfolio_holdings_replace(state.get("positions") or [])
     db.portfolio_trades_replace_all(state.get("trades") or [])
@@ -268,9 +259,7 @@ def _sync_ledger_to_db(state: dict) -> None:
 
 @router.post("/portfolio/trades")
 def post_portfolio_trade(payload: TradePayload):
-    """录入一笔交易（买入/卖出/做T）→ 追加 每日调仓.md §2 + 自动重算持仓/可用金额。
-
-    写 每日调仓.md（§0 金额 + §1 持仓 + §2 记录）与 持仓.md，并同步 DB。
+    """录入一笔交易（买入/卖出/做T）→ 写云库调仓记录 + 自动重算持仓/可用金额（2026-10-23 起不写本地 md）。
     校验失败（卖出超持仓 / T+1 / 可用金额不足 / 代码-名称不一致）返回 400。
     """
     trade = {
@@ -305,7 +294,7 @@ def post_portfolio_trade(payload: TradePayload):
 
 @router.post("/portfolio/trades/undo")
 def post_portfolio_trade_undo():
-    """撤销最近一笔界面录入（回滚文件快照 + 重新同步 DB）。"""
+    """撤销最近一笔界面录入（回滚云库快照）。"""
     with _trade_lock:
         try:
             state = portfolio.undo_last_trade()
@@ -435,10 +424,6 @@ def post_eastmoney_refresh():
                 db.meta_set("available_cash", str(data["available_cash"]))
             db.meta_set("account_source", "eastmoney")
             db.meta_set("last_eastmoney_error", "")
-            try:
-                portfolio.write_holdings_md(rows)
-            except OSError:
-                pass  # 文件回写失败不阻断数据入库
             _recompute_valuation_and_store(refresh_prices=False)
         finally:
             _em_refresh_lock.release()

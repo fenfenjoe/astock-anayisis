@@ -73,22 +73,12 @@ def test_lifespan_skips_side_effects_in_test_env(monkeypatch):
     import dashboard.app as app_mod
     from dashboard import importer as importer_mod
 
-    calls = {"import_holdings": 0, "import_trades": 0, "import_reports": 0}
-
-    def _spy_holdings():
-        calls["import_holdings"] += 1
-        return False
-
-    def _spy_trades():
-        calls["import_trades"] += 1
-        return False
+    calls = {"import_reports": 0}
 
     def _spy_import_reports():
         calls["import_reports"] += 1
         return {"imported": 0}
 
-    monkeypatch.setattr(importer_mod, "import_holdings_from_md", _spy_holdings)
-    monkeypatch.setattr(importer_mod, "import_trades_from_md", _spy_trades)
     monkeypatch.setattr(importer_mod, "import_reports_from_disk", _spy_import_reports)
 
     # 模拟测试环境：即使 lifespan 被触发，副作用函数也不应被调用
@@ -98,8 +88,6 @@ def test_lifespan_skips_side_effects_in_test_env(monkeypatch):
 
     # lifespan 完成后检查：真实副作用函数不应被调用
     # （依赖 app.py lifespan 的测试免疫：PYTEST 环境检测）
-    assert calls["import_holdings"] == 0, "测试中 lifespan 不应调用 import_holdings_from_md"
-    assert calls["import_trades"] == 0, "测试中 lifespan 不应调用 import_trades_from_md"
     assert calls["import_reports"] == 0, "测试中 lifespan 不应调用 import_reports_from_disk"
 
 

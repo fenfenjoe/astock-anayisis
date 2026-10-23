@@ -53,12 +53,6 @@ def _md_exists(key: str, local: Path) -> bool:
     return local.exists()
 
 
-def _md_write(key: str, local: Path, text: str) -> None:
-    """写本地文件。key 参数保留以兼容调用方签名。"""
-    local.parent.mkdir(parents=True, exist_ok=True)
-    local.write_text(text, encoding="utf-8")
-
-
 # ═══════════════════════════════════════════════════════════════
 # 持仓.md 解析 / 回写
 # ═══════════════════════════════════════════════════════════════
@@ -121,18 +115,6 @@ def read_available_cash_md() -> float | None:
     return parse_available_cash_md(text) if text else None
 
 
-def holdings_md_mtime() -> float | None:
-    """内容指纹（变更检测守卫，替代文件 mtime）：内容变则值变。
-
-    scheduler/api_daily 只比较该值是否变化，语义不变。
-    """
-    text = _md_text(HOLDINGS_KEY, HOLDINGS_MD)
-    if text is None:
-        return None
-    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
-    return float(int(digest, 16) % (2 ** 53))
-
-
 def _fmt_shares(v) -> str:
     """数量格式化：整数带千分位（2,000 / 15,800），小数保留原值。"""
     try:
@@ -154,58 +136,6 @@ def _fmt_price(v) -> str:
     except ValueError:
         return s
 
-
-def write_holdings_md(rows: list[dict], available_cash: float | None = None) -> bool:
-    """把持仓写回 持仓.md（保持 prompt 期望的表格格式）。返回是否成功。
-
-    available_cash: 可用金额（元）。为 None 时保留文件中已有值（若存在），
-    避免 Dashboard 保存持仓时丢失「可用金额」行 — 该行是每日复盘
-    建仓份额计算（position_sync）的数据源，丢失会导致份额计算失真。
-    """
-    # 未显式提供可用金额 → 保留现有值（读写同源，防误删）
-    if available_cash is None:
-        try:
-            existing = _md_text(HOLDINGS_KEY, HOLDINGS_MD)
-            if existing:
-                parsed = parse_available_cash_md(existing)
-                if parsed is not None:
-                    available_cash = parsed
-        except OSError:
-            pass
-    lines = [
-        "# 当前持仓",
-        "",
-        "> 本文件由每日复盘自动同步自 每日调仓.md，反映最新持仓状态。",
-        "> 最后更新: 自动同步（Dashboard 持仓/资产 页面维护）",
-        "",
-    ]
-    if available_cash is not None:
-        try:
-            cash_int = int(round(float(available_cash)))
-        except (TypeError, ValueError):
-            cash_int = None
-        if cash_int is not None:
-            lines.append(f"可用金额: {cash_int} 元")
-            lines.append("")
-    lines += [
-        "| 股票名称 | 代码 | 持仓数量（份） | 成本价（元） |",
-        "| -------- | ------ | -------------- | ------------ |",
-    ]
-    for r in rows:
-        code = str(r.get("code", "")).strip()
-        if not code:
-            continue
-        name = r.get("name") or code
-        shares = _fmt_shares(r.get("shares", ""))
-        cost = _fmt_price(r.get("cost_price")) if r.get("cost_price") is not None else ""
-        lines.append(f"| {name} | {code} | {shares} | {cost} |")
-    _md_write(HOLDINGS_KEY, HOLDINGS_MD, "\n".join(lines) + "\n")
-    return True
-
-
-# ═══════════════════════════════════════════════════════════════
-# 每日调仓.md 解析
-# ═══════════════════════════════════════════════════════════════
 
 def parse_trades_md(text: str) -> list[dict]:
     """解析每日调仓.md 的"调仓记录"表 → [{trade_date, name, code, quantity, price, side, remark}]。
@@ -447,50 +377,38 @@ def parse_daily_ledger_md(text: str) -> dict:
 
 
 def read_daily_ledger() -> dict:
-    """从 每日调仓.md 读状态；§1/§0 缺失时用 持仓.md 兜底（兼容仅用过 PUT 保存的场景）。"""
-    daily_text = _md_text(TRADES_KEY, TRADES_MD)
-    daily = parse_daily_ledger_md(daily_text) if daily_text else {}
-    state = {
-        "cash": daily.get("cash"),
-        "positions": daily.get("positions") or [],
-        "trades": daily.get("trades") or [],
-    }
-    if not state["positions"] and _md_exists(HOLDINGS_KEY, HOLDINGS_MD):
-        state["positions"] = read_holdings_md() or []
-    if state["cash"] is None and _md_exists(HOLDINGS_KEY, HOLDINGS_MD):
-        state["cash"] = read_available_cash_md()
-    return state
+    """从云库读账本状态（持仓 + 可用金额 + 调仓记录）。
 
+    2026-10-23 改造：云库为唯一权威（portfolio_holdings / portfolio_meta.available_cash /
+    portfolio_trades）；本地 md 仅在云库无持仓时作「旧数据」只读兜底（不写回）。
+    """
+    positions, cash, trades = [], None, []
+    try:
+        from dashboard import db as _db
+        positions = _db.portfolio_holdings_get_all() or []
+        raw_cash = _db.meta_get("available_cash")
+        try:
+            cash = float(raw_cash) if raw_cash not in (None, "") else None
+        except (TypeError, ValueError):
+            cash = None
+        trades = _db.portfolio_trades_get_all() or []
+    except Exception:
+        positions, cash, trades = [], None, []
 
-def serialize_daily_ledger_md(state: dict) -> str:
-    """把状态序列化回 每日调仓.md（骨架与现有格式一致）。"""
-    cash = state.get("cash")
-    lines = [
-        "# 仓位",
-        "",
-        "## 0. 可用金额",
-        "",
-        f"{int(round(float(cash)))}" if cash is not None else "",
-        "",
-        "## 1. 当前持仓",
-        "",
-        "",
-        "持仓：",
-        "",
-        "| 股票名称 | 代码 | 持仓量（份） | 成本价（元） | ",
-        "| -------- | ------ | ------------ | ------------ | ",
-    ]
-    for p in sorted(state.get("positions") or [], key=lambda x: x["code"]):
-        cost = _fmt_price(p.get("cost_price")) if p.get("cost_price") is not None else ""
-        lines.append(f"| {p['name']} | {p['code']} | {_fmt_qty(p['shares'])} | {cost} | ")
-    lines += ["", "## 2. 调仓记录", "", "",
-              "| 日期 | 股票名称 | 股票代码 | 交易数量 | 交易价格 | 买入/卖出 | 备注 |",
-              "|---|---|---|---|---|---|---|"]
-    for t in state.get("trades") or []:
-        lines.append(f"| {t['trade_date']} | {t['name']} | {t['code']} | "
-                     f"{_fmt_qty(t['quantity'])} | {_fmt_price(t['price'])} | {t['side']} | {t.get('remark') or ''} |")
-    lines.append("")
-    return "\n".join(lines)
+    if not positions:
+        # 旧本地账本兜底（只读；迁移由页面保存/录入交易时写回云库）
+        daily_text = _md_text(TRADES_KEY, TRADES_MD)
+        daily = parse_daily_ledger_md(daily_text) if daily_text else {}
+        positions = daily.get("positions") or []
+        if not trades:
+            trades = daily.get("trades") or []
+        if cash is None:
+            cash = daily.get("cash")
+        if not positions and _md_exists(HOLDINGS_KEY, HOLDINGS_MD):
+            positions = read_holdings_md() or []
+        if cash is None and _md_exists(HOLDINGS_KEY, HOLDINGS_MD):
+            cash = read_available_cash_md()
+    return {"cash": cash, "positions": positions, "trades": trades}
 
 
 def validate_trade(state: dict, trade: dict) -> tuple[bool, str]:
@@ -600,69 +518,38 @@ def apply_trade(state: dict, trade: dict) -> dict:
     return {"cash": cash, "positions": positions, "trades": trades}
 
 
-def _write_files_atomic(daily_text: str, positions_text: str, before_daily: str) -> None:
-    """原子写 每日调仓.md + 持仓.md：先调仓再持仓，任一步失败回滚前一步。
-
-    本地原子写：tmp+replace；调仓失败则回滚调仓文件。
-    """
-    TRADES_MD.parent.mkdir(parents=True, exist_ok=True)
-    HOLDINGS_MD.parent.mkdir(parents=True, exist_ok=True)
-    tmp_daily = TRADES_MD.with_suffix(".tmp")
-    tmp_pos = HOLDINGS_MD.with_suffix(".tmp")
-    try:
-        tmp_daily.write_text(daily_text, encoding="utf-8")
-        tmp_daily.replace(TRADES_MD)
-    except OSError:
-        tmp_daily.unlink(missing_ok=True)
-        raise
-    try:
-        tmp_pos.write_text(positions_text, encoding="utf-8")
-        tmp_pos.replace(HOLDINGS_MD)
-    except OSError:
-        try:
-            rollback = TRADES_MD.with_suffix(".rollback")
-            rollback.write_text(before_daily, encoding="utf-8")
-            rollback.replace(TRADES_MD)
-        except OSError:
-            pass
-        tmp_pos.unlink(missing_ok=True)
-        raise
+def _write_ledger_db(state: dict) -> None:
+    """把账本状态写入云库（持仓表 + 调仓记录表 + 可用金额）。不写任何本地文件。"""
+    from dashboard import db as _db
+    _db.portfolio_holdings_replace(state.get("positions") or [])
+    _db.portfolio_trades_replace_all(state.get("trades") or [])
+    cash = state.get("cash")
+    if cash is not None:
+        _db.meta_set("available_cash", str(cash))
 
 
 def write_ledger_state(state: dict) -> None:
-    """把状态写入 每日调仓.md + 持仓.md（含撤销快照）。返回前把快照落盘。"""
-    daily_text = serialize_daily_ledger_md(state)
-    cash = state.get("cash")
-    positions_text = "\n".join([
-        "# 当前持仓",
-        "",
-        "> 本文件由每日复盘自动同步自 每日调仓.md，反映最新持仓状态。",
-        "> 最后更新: 自动同步（Dashboard 持仓/资产 页面维护）",
-        "",
-    ])
-    if cash is not None:
-        positions_text += f"可用金额: {int(round(float(cash)))} 元\n\n"
-    positions_text += (
-        "| 股票名称 | 代码 | 持仓数量（份） | 成本价（元） |\n"
-        "| -------- | ------ | -------------- | ------------ |\n"
-    )
-    for p in sorted(state.get("positions") or [], key=lambda x: x["code"]):
-        cost = _fmt_price(p.get("cost_price")) if p.get("cost_price") is not None else ""
-        positions_text += f"| {p['name']} | {p['code']} | {_fmt_qty(p['shares'])} | {cost} |\n"
-
-    # 撤销快照：写前保存两个文件原文（本地）
-    before_daily = _md_text(TRADES_KEY, TRADES_MD) or ""
-    before_pos = _md_text(HOLDINGS_KEY, HOLDINGS_MD) or ""
-    _write_files_atomic(daily_text, positions_text, before_daily)
-    snap_id = f"{int(date.today().strftime('%Y%m%d%H%M%S'))}-{os.urandom(3).hex()}"
-    snap_payload = json.dumps({
-        "daily": before_daily, "positions": before_pos,
-        "note": state.get("trades")[-1] if state.get("trades") else None,
-    }, ensure_ascii=False)
-    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
-    (SNAPSHOT_DIR / f"{snap_id}.json").write_text(snap_payload, encoding="utf-8")
-    for old in sorted(SNAPSHOT_DIR.glob("*.json"))[:-10]:
-        old.unlink(missing_ok=True)
+    """把状态写入云库（含撤销快照 JSON）。2026-10-23：不再回写任何本地 md。"""
+    # 撤销快照：写前保存旧状态（云库当前内容），仅用于 undo
+    try:
+        old = read_daily_ledger()
+        snap_id = f"{int(date.today().strftime('%Y%m%d%H%M%S'))}-{os.urandom(3).hex()}"
+        snap_payload = json.dumps({
+            "cash": old.get("cash"),
+            "positions": old.get("positions") or [],
+            "trades": old.get("trades") or [],
+            "note": state.get("trades")[-1] if state.get("trades") else None,
+        }, ensure_ascii=False)
+        SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+        (SNAPSHOT_DIR / f"{snap_id}.json").write_text(snap_payload, encoding="utf-8")
+        for oldf in sorted(SNAPSHOT_DIR.glob("*.json"))[:-10]:
+            oldf.unlink(missing_ok=True)
+    except Exception:
+        pass  # 快照失败不阻断主流程（undo 不可用而已）
+    try:
+        _write_ledger_db(state)
+    except Exception as e:  # 云库写入失败 → 视为 OSError（api 层转 500）
+        raise OSError(f"写云库账本失败: {e}") from e
 
 
 def append_trade(trade: dict) -> dict:
@@ -677,15 +564,20 @@ def append_trade(trade: dict) -> dict:
 
 
 def undo_last_trade() -> dict:
-    """撤销最近一笔界面录入（回滚本地快照）。无快照时抛 ValueError。"""
+    """撤销最近一笔界面录入（把云库状态回滚到快照）。无快照时抛 ValueError。"""
     snaps = sorted(SNAPSHOT_DIR.glob("*.json"))
     if not snaps:
         raise ValueError("没有可撤销的录入")
     latest = snaps[-1]
     snapshot = json.loads(latest.read_text(encoding="utf-8"))
-    if snapshot.get("daily"):
-        TRADES_MD.write_text(snapshot["daily"], encoding="utf-8")
-    if snapshot.get("positions"):
-        HOLDINGS_MD.write_text(snapshot["positions"], encoding="utf-8")
+    state = {
+        "cash": snapshot.get("cash"),
+        "positions": snapshot.get("positions") or [],
+        "trades": snapshot.get("trades") or [],
+    }
+    try:
+        _write_ledger_db(state)
+    except Exception as e:
+        raise OSError(f"回滚云库账本失败: {e}") from e
     latest.unlink(missing_ok=True)
-    return read_daily_ledger()
+    return state

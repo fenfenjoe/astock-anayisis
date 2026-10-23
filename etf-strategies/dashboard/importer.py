@@ -198,39 +198,4 @@ def _weekly_date(filename: str) -> str | None:
     return None
 
 
-def import_holdings_from_md() -> bool:
-    """从 持仓.md 反向解析持仓 → portfolio_holdings（mtime 守卫）。
 
-    仅当 DB 为空 或 文件 mtime 变化时执行，避免覆盖用户页面上的修改。
-    """
-    from dashboard import db, portfolio
-
-    rows = portfolio.read_holdings_md()
-    if rows is None:
-        return False
-    mtime = portfolio.holdings_md_mtime()
-    stored_mtime = db.meta_get("holdings_md_mtime")
-    if db.portfolio_holdings_count() > 0 and stored_mtime is not None:
-        try:
-            if float(stored_mtime) == float(mtime):
-                return False  # 未变化，跳过
-        except (TypeError, ValueError):
-            pass
-    db.portfolio_holdings_replace(rows)
-    # 可用金额：文件 → DB（每日复盘建仓份额计算的数据源，随持仓一起同步）
-    cash = portfolio.read_available_cash_md()
-    if cash is not None:
-        db.meta_set("available_cash", str(cash))
-    if mtime is not None:
-        db.meta_set("holdings_md_mtime", str(mtime))
-    return True
-
-
-def import_trades_from_md() -> bool:
-    from dashboard import db, portfolio
-
-    trades = portfolio.read_trades_md()
-    if trades is None:
-        return False
-    db.portfolio_trades_replace_all(trades)
-    return True

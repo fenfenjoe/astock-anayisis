@@ -1,0 +1,18 @@
+[dashboard] AStock ETF Dashboard v2 starting at http://localhost:8010
+[app]   cloud DB connection pool warmed
+[app] Syncing strategy definitions (idempotent)...
+[sync] Strategy KB synced from strategy_kb.py
+[sync] Strategy definitions re-synced (idempotent).
+[app] Pre-loading strategy modules...
+[app]   daily_signal loaded (21 strategies)
+[app] Background: warming signal cache...
+[app] Startup complete — server ready at http://localhost:8000[app] Importing 每日复盘 data (reports/holdings/trades)...
+
+[sync] 159256: +4 K-line rows
+[app]   reports imported: 0
+[notify] watcher started
+[sync] 159605: +4 K-line rows
+INFO:     127.0.0.1:53704 - "GET / HTTP/1.1" 200 OK
+[sync] K-line fetch returned empty for 159611 (2026-10-20~2026-10-23), API may not have recent data available
+[sync] K-line fetch returned empty for 512980 (2026-10-20~2026-10-23), API may not have recent data available
+INFO:     127.0.0.1:53796 - "GET / HTTP/1.1" 200 OK

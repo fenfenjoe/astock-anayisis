@@ -23,7 +23,7 @@ var Tickets = {
     }
 
     var html = '<table class="sched-table"><thead><tr>' +
-      '<th>ID</th><th>类型</th><th>标题</th><th>问题摘要</th><th>严重度</th><th>状态</th><th>来源任务</th><th>创建时间</th><th>操作</th>' +
+      '<th>ID</th><th>类型</th><th>标题</th><th>问题摘要</th><th>严重度</th><th>状态</th><th>来源任务</th><th>创建时间</th>' +
       '</tr></thead><tbody>';
 
     tickets.forEach(function(t) {
@@ -39,7 +39,6 @@ var Tickets = {
         '<td><span class="ticket-status ticket-status-' + t.status + '">' + statusLabel + '</span></td>' +
         '<td class="mono">' + Tickets.esc(t.source_task || '—') + '</td>' +
         '<td>' + (t.created_at || '').substring(0, 16) + '</td>' +
-        '<td><button class="btn-small" onclick="event.stopPropagation();Tickets.retrigger(\'' + t.id + '\')">🔄 重跑</button></td>' +
         '</tr>';
     });
 
@@ -97,25 +96,10 @@ var Tickets = {
     }
 
     html += '<div class="ticket-actions">' +
-      '<button class="btn-small" onclick="Tickets.retrigger(\'' + t.id + '\')">🔄 重新执行</button> ' +
       '<button class="btn-small btn-secondary" onclick="document.getElementById(\'ticket-detail\').innerHTML=\'\'">✕ 关闭</button>' +
       '</div></div>';
 
     detailEl.innerHTML = html;
-  },
-
-  retrigger: async function(id) {
-    try {
-      var r = await Auth.fetchPost('/api/tickets/' + id + '/retrigger', {});
-      var data = await r.json();
-      if (data.started) {
-        alert('已提交重新执行，请稍后刷新查看结果');
-      } else {
-        alert('提交失败: ' + (data.message || data.reason));
-      }
-    } catch (e) {
-      alert('重新触发失败: ' + e.message);
-    }
   },
 
   applyFilter: function() {

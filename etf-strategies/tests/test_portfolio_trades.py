@@ -88,19 +88,12 @@ def _trade(**kw):
 # Unit: 账本
 # ═══════════════════════════════════════════════════════════════
 
-def test_parse_and_roundtrip(ledger_paths):
+def test_read_ledger(ledger_paths):
     st = portfolio.read_daily_ledger()
     assert st["cash"] == 16131
     assert len(st["positions"]) == 2
     assert len(st["trades"]) == 2
     assert st["trades"][0]["side"] == "买入"
-
-    out = portfolio.serialize_daily_ledger_md(st)
-    st2 = portfolio.parse_daily_ledger_md(out)
-    assert st2["cash"] == st["cash"]
-    assert len(st2["positions"]) == len(st["positions"])
-    assert len(st2["trades"]) == len(st["trades"])
-    assert st2["trades"][0] == st["trades"][0]
 
 
 def test_append_buy_updates_cost_cash_and_files(ledger_paths):
